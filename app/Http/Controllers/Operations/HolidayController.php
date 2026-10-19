@@ -7,6 +7,7 @@ use App\Http\Controllers\Operations\Concerns\UsesWorkspace;
 use App\Models\Holiday;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
@@ -14,10 +15,14 @@ class HolidayController extends Controller
 {
     use UsesWorkspace;
 
-    public function index(Request $request): View
+    public function index(Request $request): View|RedirectResponse
     {
         $this->authorizeView();
         $year = (int) $request->input('year', now()->year);
+        $clamped = max(1990, min(2100, $year));
+        if ($clamped !== $year) {
+            return redirect()->route('holidays.index', ['year' => $clamped]);
+        }
 
         return view('operations.holidays.index', [
             'year' => $year,
@@ -28,6 +33,8 @@ class HolidayController extends Controller
                 ->orderBy('holiday_date')
                 ->get(),
             'canEdit' => $request->user()->hasPermission('employees.edit'),
+            'kindMeta' => Holiday::KINDS,
+            'kindHelp' => Holiday::KIND_HELP,
         ]);
     }
 
@@ -48,15 +55,22 @@ class HolidayController extends Controller
             'kind' => $data['kind'],
         ]);
 
-        return back()->with('success', 'Holiday added.');
+        $year = Carbon::parse($data['holiday_date'])->year;
+
+        return redirect()
+            ->route('holidays.index', ['year' => $year])
+            ->with('success', 'Holiday added.');
     }
 
-    public function destroy(Holiday $holiday): RedirectResponse
+    public function destroy(Request $request, Holiday $holiday): RedirectResponse
     {
         $this->authorizePeople();
         abort_unless((int) $holiday->company_id === $this->companyId(), 404);
+        $year = $holiday->holiday_date?->year ?? now()->year;
         $holiday->delete();
 
-        return back()->with('success', 'Holiday removed.');
+        return redirect()
+            ->route('holidays.index', ['year' => $year])
+            ->with('success', 'Holiday removed.');
     }
 }

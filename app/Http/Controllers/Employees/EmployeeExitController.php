@@ -15,7 +15,12 @@ class EmployeeExitController extends Controller
 {
     public function store(EmployeeExitRequest $request, Employee $employee): RedirectResponse
     {
-        $this->authorize('update', $employee);
+        $this->authorize('view', $employee);
+        abort_unless(
+            $request->user()->hasPermission('employee_exits.create')
+            || $request->user()->hasPermission('employee_exits.edit'),
+            403
+        );
         $status = EmploymentStatus::query()->findOrFail($request->integer('employment_status_id'));
 
         if ((int) $status->company_id !== (int) $employee->company_id || ! $status->is_exit) {

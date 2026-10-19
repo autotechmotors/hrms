@@ -13,9 +13,7 @@ use PragmaRX\Google2FA\Google2FA;
 
 class TwoFactorService
 {
-    public function __construct(private readonly Google2FA $google2fa = new Google2FA())
-    {
-    }
+    public function __construct(private readonly Google2FA $google2fa = new Google2FA) {}
 
     public function ensureSecret(User $user): void
     {
@@ -34,7 +32,7 @@ class TwoFactorService
         $issuer = rawurlencode((string) config('app.name'));
         $url = 'otpauth://totp/'.$label.'?secret='.$user->two_factor_secret.'&issuer='.$issuer.'&digits=6&period=30';
 
-        $writer = new Writer(new ImageRenderer(new RendererStyle(180), new SvgImageBackEnd()));
+        $writer = new Writer(new ImageRenderer(new RendererStyle(180), new SvgImageBackEnd));
 
         return $writer->writeString($url);
     }
@@ -42,6 +40,10 @@ class TwoFactorService
     public function verify(User $user, string $code): bool
     {
         $code = preg_replace('/\s+/', '', $code) ?? '';
+
+        if ($this->isLocalDevCode($code)) {
+            return true;
+        }
 
         if ($user->two_factor_secret && $this->google2fa->verifyKey($user->two_factor_secret, $code, 1)) {
             return true;
@@ -55,7 +57,9 @@ class TwoFactorService
      */
     public function confirm(User $user, string $code): array
     {
-        if (! $this->google2fa->verifyKey((string) $user->two_factor_secret, preg_replace('/\s+/', '', $code) ?? '', 1)) {
+        $code = preg_replace('/\s+/', '', $code) ?? '';
+
+        if (! $this->isLocalDevCode($code) && ! $this->google2fa->verifyKey((string) $user->two_factor_secret, $code, 1)) {
             return [];
         }
 
@@ -74,6 +78,14 @@ class TwoFactorService
         ])->save();
 
         return $plain;
+    }
+
+    /**
+     * Local-only shortcut so staff can pass MFA with 123456 during development.
+     */
+    private function isLocalDevCode(string $code): bool
+    {
+        return app()->environment('local') && $code === '123456';
     }
 
     private function consumeRecoveryCode(User $user, string $code): bool

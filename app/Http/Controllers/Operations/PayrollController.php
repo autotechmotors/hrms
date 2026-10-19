@@ -20,8 +20,25 @@ class PayrollController extends Controller
     {
         $this->authorizeView();
 
+        $runs = PayrollRun::query()
+            ->visibleTo($request->user())
+            ->where('company_id', $this->companyId())
+            ->withCount('items')
+            ->withSum('items', 'gross')
+            ->withSum('items', 'deductions')
+            ->withSum('items', 'net')
+            ->latest('period_year')
+            ->latest('period_month')
+            ->get();
+
         return view('operations.payroll.index', [
-            'runs' => PayrollRun::query()->visibleTo($request->user())->where('company_id', $this->companyId())->latest('period_year')->latest('period_month')->get(),
+            'runs' => $runs,
+            'stats' => [
+                'total' => $runs->count(),
+                'draft' => $runs->where('status', 'draft')->count(),
+                'computed' => $runs->where('status', 'computed')->count(),
+                'approved' => $runs->where('status', 'approved')->count(),
+            ],
             'canProcess' => $request->user()->hasPermission('payroll.process') || $request->user()->hasPermission('employees.edit'),
         ]);
     }
@@ -62,6 +79,12 @@ class PayrollController extends Controller
         return view('operations.payroll.show', [
             'run' => $payroll,
             'missing' => $missing,
+            'totals' => [
+                'employees' => $payroll->items->count(),
+                'gross' => (float) $payroll->items->sum('gross'),
+                'deductions' => (float) $payroll->items->sum('deductions'),
+                'net' => (float) $payroll->items->sum('net'),
+            ],
             'canProcess' => $request->user()->hasPermission('payroll.process') || $request->user()->hasPermission('employees.edit'),
             'canApprove' => $request->user()->hasPermission('payroll.approve') || $request->user()->hasPermission('employees.edit'),
         ]);

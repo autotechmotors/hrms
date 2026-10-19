@@ -58,7 +58,16 @@
                 @forelse($late as $row)
                     <tr>
                         <td>{{ $row->work_date->format('d M Y') }}</td>
-                        <td>{{ $row->employee?->full_name }}</td>
+                        <td>
+                            @if($row->employee)
+                                <div class="who">
+                                    <x-employee-avatar :employee="$row->employee" :size="28" />
+                                    <div><b>{{ $row->employee->full_name }}</b></div>
+                                </div>
+                            @else
+                                —
+                            @endif
+                        </td>
                         <td>{{ $row->punch_in ? \Illuminate\Support\Str::of($row->punch_in)->substr(0, 5) : '—' }}</td>
                     </tr>
                 @empty

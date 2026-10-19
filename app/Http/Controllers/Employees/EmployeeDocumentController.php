@@ -7,6 +7,7 @@ use App\Http\Requests\EmployeeDocumentRequest;
 use App\Models\Employee;
 use App\Models\EmployeeDocument;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -31,10 +32,23 @@ class EmployeeDocumentController extends Controller
         return back()->with('success', 'Document uploaded.');
     }
 
+    public function view(Employee $employee, EmployeeDocument $document): StreamedResponse|Response
+    {
+        $this->authorize('view', $employee);
+        abort_unless((int) $document->employee_id === (int) $employee->id, 404);
+        abort_unless(request()->user()->hasPermission('employee_documents.view'), 403);
+        abort_unless(Storage::disk('local')->exists($document->file_path), 404);
+
+        return Storage::disk('local')->response($document->file_path, $document->original_name, [
+            'Content-Type' => $document->mime ?: 'application/octet-stream',
+            'Content-Disposition' => 'inline; filename="'.$document->original_name.'"',
+        ]);
+    }
+
     public function download(Employee $employee, EmployeeDocument $document): StreamedResponse
     {
         $this->authorize('view', $employee);
-        abort_unless($requestUserCanView($employee, $document), 404);
+        abort_unless((int) $document->employee_id === (int) $employee->id, 404);
         abort_unless(request()->user()->hasPermission('employee_documents.view'), 403);
         abort_unless(Storage::disk('local')->exists($document->file_path), 404);
 
@@ -51,9 +65,4 @@ class EmployeeDocumentController extends Controller
 
         return back()->with('success', 'Document deleted.');
     }
-}
-
-function requestUserCanView(Employee $employee, EmployeeDocument $document): bool
-{
-    return (int) $document->employee_id === (int) $employee->id;
 }

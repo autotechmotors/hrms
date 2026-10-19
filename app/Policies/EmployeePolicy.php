@@ -32,7 +32,7 @@ class EmployeePolicy
 
     public function delete(User $user, Employee $employee): bool
     {
-        return $user->hasPermission('employees.delete')
+        return $user->isSuperAdmin()
             && app(AccessScope::class)->canAccessEmployee($user, $employee);
     }
 }

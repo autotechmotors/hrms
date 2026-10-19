@@ -10,9 +10,18 @@
     <link rel="stylesheet" href="{{ asset('assets/vendor/bootstrap/bootstrap.min.css') }}">
     <link rel="stylesheet" href="{{ asset('assets/vendor/select2/select2.min.css') }}">
     <link rel="stylesheet" href="{{ asset('assets/vendor/flatpickr/flatpickr.min.css') }}">
-    <link rel="stylesheet" href="{{ asset('assets/css/app.css') }}?v=6">
+    <link rel="stylesheet" href="{{ asset('assets/css/app.css') }}?v=34">
 </head>
 <body>
+    @php
+        $flashToasts = collect([
+            session('success') ? ['type' => 'ok', 'message' => session('success')] : null,
+            session('status') ? ['type' => 'ok', 'message' => session('status')] : null,
+            session('error') ? ['type' => 'er', 'message' => session('error')] : null,
+            session('warning') ? ['type' => 'wn', 'message' => session('warning')] : null,
+            $errors->any() ? ['type' => 'er', 'message' => $errors->first()] : null,
+        ])->filter()->values();
+    @endphp
     <aside class="sb">
         @include('partials.nav')
     </aside>
@@ -45,15 +54,12 @@
             </div>
         </header>
         <main class="pg">
-            @if (session('success'))
-                <div class="nb">{{ session('success') }}</div>
-            @endif
-            @if (session('error'))
-                <div class="nb" style="background:var(--ers);color:var(--er)">{{ session('error') }}</div>
-            @endif
             @yield('content')
         </main>
     </div>
+
+    <div class="toast-host" id="toastHost" aria-live="polite" aria-relevant="additions"></div>
+    <script>window.__TOASTS__ = @json($flashToasts);</script>
 
     <div class="modal fade" id="confirmModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog">
@@ -74,6 +80,7 @@
     <script src="{{ asset('assets/vendor/select2/select2.min.js') }}"></script>
     <script src="{{ asset('assets/vendor/flatpickr/flatpickr.min.js') }}"></script>
     <script src="{{ asset('assets/vendor/bootstrap/bootstrap.bundle.min.js') }}"></script>
-    <script src="{{ asset('assets/js/app.js') }}?v=5"></script>
+    <script src="{{ asset('assets/js/app.js') }}?v=13"></script>
+    @stack('scripts')
 </body>
 </html>

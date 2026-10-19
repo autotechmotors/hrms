@@ -31,12 +31,11 @@
                         @php
                             $status = $employee->employmentStatus?->name ?? '—';
                             $badge = $employee->employmentStatus?->is_exit ? 'er' : (str_contains(strtolower($status), 'probation') ? 'wn' : 'ok');
-                            $initials = strtoupper(collect(preg_split('/\s+/', $employee->full_name))->map(fn ($part) => mb_substr($part, 0, 1))->take(2)->join(''));
                         @endphp
                         <tr class="cl" onclick="location.href='{{ route('employees.show', $employee) }}'">
                             <td>
                                 <div class="who">
-                                    <span class="av" style="--h:{{ abs(crc32($employee->full_name)) % 360 }};width:28px;height:28px">{{ $initials }}</span>
+                                    <x-employee-avatar :employee="$employee" :size="28" />
                                     <div><b>{{ $employee->full_name }}</b><small>{{ $employee->employee_code }}</small></div>
                                 </div>
                             </td>

@@ -20,17 +20,51 @@ class SalaryController extends Controller
     {
         $this->authorizeView();
         $companyId = $this->companyId();
+        $q = trim((string) $request->input('q', ''));
+
+        $heads = SalaryHead::query()
+            ->visibleTo($request->user())
+            ->where('company_id', $companyId)
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get();
+
+        $structures = SalaryStructure::query()
+            ->visibleTo($request->user())
+            ->where('company_id', $companyId)
+            ->with('lines.head')
+            ->orderBy('name')
+            ->get();
+
+        $assignments = EmployeeSalary::query()
+            ->whereIn('employee_id', $this->activeEmployees()->pluck('id'))
+            ->with(['employee.department', 'structure'])
+            ->when($q !== '', function ($query) use ($q) {
+                $like = '%'.$q.'%';
+                $query->whereHas('employee', function ($employee) use ($like) {
+                    $employee->where('employee_code', 'like', $like)
+                        ->orWhere('first_name', 'like', $like)
+                        ->orWhere('middle_name', 'like', $like)
+                        ->orWhere('last_name', 'like', $like);
+                });
+            })
+            ->latest('effective_from')
+            ->limit(50)
+            ->get();
 
         return view('operations.salary.index', [
-            'heads' => SalaryHead::query()->visibleTo($request->user())->where('company_id', $companyId)->orderBy('sort_order')->orderBy('name')->get(),
-            'structures' => SalaryStructure::query()->visibleTo($request->user())->where('company_id', $companyId)->with('lines.head')->orderBy('name')->get(),
-            'assignments' => EmployeeSalary::query()
-                ->whereIn('employee_id', $this->activeEmployees()->pluck('id'))
-                ->with(['employee', 'structure'])
-                ->latest('effective_from')
-                ->limit(50)
-                ->get(),
-            'employees' => $this->activeEmployees()->get(),
+            'heads' => $heads,
+            'structures' => $structures,
+            'assignments' => $assignments,
+            'employees' => $this->activeEmployees()->get(['id', 'employee_code', 'first_name', 'middle_name', 'last_name']),
+            'stats' => [
+                'heads' => $heads->count(),
+                'earnings' => $heads->where('category', 'earning')->count(),
+                'deductions' => $heads->where('category', 'deduction')->count(),
+                'structures' => $structures->count(),
+                'assignments' => $assignments->count(),
+            ],
+            'filters' => ['q' => $q],
             'canEdit' => $request->user()->hasPermission('employees.edit'),
         ]);
     }
@@ -58,7 +92,7 @@ class SalaryController extends Controller
             'is_active' => true,
         ]);
 
-        return back()->with('success', 'Salary head added. Use code BASIC when a percent should be calculated from basic.');
+        return redirect()->route('salary.index')->with('success', 'Salary head added. Use code BASIC when a percent should be calculated from basic.');
     }
 
     public function storeStructure(Request $request): RedirectResponse
@@ -84,7 +118,7 @@ class SalaryController extends Controller
             $structure->lines()->create(['salary_head_id' => $head->id, 'value' => null]);
         }
 
-        return back()->with('success', 'Salary structure saved.');
+        return redirect()->route('salary.index')->with('success', 'Salary structure saved.');
     }
 
     public function assign(Request $request): RedirectResponse
@@ -106,6 +140,7 @@ class SalaryController extends Controller
             'effective_from' => $data['effective_from'],
         ]);
 
-        return back()->with('success', 'Monthly gross assigned. Payroll uses the row effective on the pay month.');
+        return redirect()->route('salary.index', array_filter(['q' => $request->input('q')]))
+            ->with('success', 'Monthly gross assigned. Payroll uses the row effective on the pay month.');
     }
 }

@@ -10,6 +10,16 @@ use App\Http\Controllers\Employees\EmployeeBankAccountController;
 use App\Http\Controllers\Employees\EmployeeController;
 use App\Http\Controllers\Employees\EmployeeDocumentController;
 use App\Http\Controllers\Employees\EmployeeExitController;
+use App\Http\Controllers\Operations\AdvanceController;
+use App\Http\Controllers\Operations\AttendanceController;
+use App\Http\Controllers\Operations\BankController;
+use App\Http\Controllers\Operations\DeviceController;
+use App\Http\Controllers\Operations\HolidayController;
+use App\Http\Controllers\Operations\LeaveController;
+use App\Http\Controllers\Operations\PayrollController;
+use App\Http\Controllers\Operations\ReportController;
+use App\Http\Controllers\Operations\SalaryController;
+use App\Http\Controllers\Operations\ShiftController;
 use App\Http\Controllers\Organization\BranchController;
 use App\Http\Controllers\Organization\BrandingController;
 use App\Http\Controllers\Organization\CompanyController;
@@ -38,54 +48,57 @@ Route::get('two-factor/recovery', [TwoFactorController::class, 'recovery'])->mid
 Route::middleware(['auth', 'mfa'])->group(function (): void {
     Route::get('/', DashboardController::class)->name('dashboard');
 
-    Route::get('attendance', [\App\Http\Controllers\Operations\AttendanceController::class, 'index'])->name('attendance.index');
-    Route::post('attendance/rule', [\App\Http\Controllers\Operations\AttendanceController::class, 'updateRule'])->name('attendance.rule');
-    Route::post('attendance/punch', [\App\Http\Controllers\Operations\AttendanceController::class, 'punch'])->name('attendance.punch');
-    Route::post('attendance/recalculate', [\App\Http\Controllers\Operations\AttendanceController::class, 'recalculate'])->name('attendance.recalculate');
+    Route::get('attendance', [AttendanceController::class, 'index'])->name('attendance.index');
+    Route::post('attendance/rule', [AttendanceController::class, 'updateRule'])->name('attendance.rule');
+    Route::post('attendance/punch', [AttendanceController::class, 'punch'])->name('attendance.punch');
+    Route::post('attendance/recalculate', [AttendanceController::class, 'recalculate'])->name('attendance.recalculate');
 
-    Route::get('shifts', [\App\Http\Controllers\Operations\ShiftController::class, 'index'])->name('shifts.index');
-    Route::post('shifts', [\App\Http\Controllers\Operations\ShiftController::class, 'store'])->name('shifts.store');
-    Route::delete('shifts/{shift}', [\App\Http\Controllers\Operations\ShiftController::class, 'destroy'])->name('shifts.destroy');
-    Route::post('shifts/roster', [\App\Http\Controllers\Operations\ShiftController::class, 'roster'])->name('shifts.roster');
+    Route::get('shifts', [ShiftController::class, 'index'])->name('shifts.index');
+    Route::post('shifts', [ShiftController::class, 'store'])->name('shifts.store');
+    Route::delete('shifts/{shift}', [ShiftController::class, 'destroy'])->name('shifts.destroy');
+    Route::post('shifts/roster', [ShiftController::class, 'roster'])->name('shifts.roster');
+    Route::post('shifts/roster/bulk', [ShiftController::class, 'rosterBulk'])->name('shifts.roster.bulk');
 
-    Route::get('leave', [\App\Http\Controllers\Operations\LeaveController::class, 'index'])->name('leave.index');
-    Route::post('leave/types', [\App\Http\Controllers\Operations\LeaveController::class, 'storeType'])->name('leave.types.store');
-    Route::post('leave', [\App\Http\Controllers\Operations\LeaveController::class, 'store'])->name('leave.store');
-    Route::post('leave/{leaveRequest}/decide', [\App\Http\Controllers\Operations\LeaveController::class, 'decide'])->name('leave.decide');
+    Route::get('leave', [LeaveController::class, 'index'])->name('leave.index');
+    Route::post('leave/types', [LeaveController::class, 'storeType'])->name('leave.types.store');
+    Route::post('leave', [LeaveController::class, 'store'])->name('leave.store');
+    Route::put('leave/{leaveRequest}', [LeaveController::class, 'update'])->name('leave.update');
+    Route::delete('leave/{leaveRequest}', [LeaveController::class, 'destroy'])->name('leave.destroy');
+    Route::post('leave/{leaveRequest}/decide', [LeaveController::class, 'decide'])->name('leave.decide');
 
-    Route::get('holidays', [\App\Http\Controllers\Operations\HolidayController::class, 'index'])->name('holidays.index');
-    Route::post('holidays', [\App\Http\Controllers\Operations\HolidayController::class, 'store'])->name('holidays.store');
-    Route::delete('holidays/{holiday}', [\App\Http\Controllers\Operations\HolidayController::class, 'destroy'])->name('holidays.destroy');
+    Route::get('holidays', [HolidayController::class, 'index'])->name('holidays.index');
+    Route::post('holidays', [HolidayController::class, 'store'])->name('holidays.store');
+    Route::delete('holidays/{holiday}', [HolidayController::class, 'destroy'])->name('holidays.destroy');
 
-    Route::get('salary', [\App\Http\Controllers\Operations\SalaryController::class, 'index'])->name('salary.index');
-    Route::post('salary/heads', [\App\Http\Controllers\Operations\SalaryController::class, 'storeHead'])->name('salary.heads.store');
-    Route::post('salary/structures', [\App\Http\Controllers\Operations\SalaryController::class, 'storeStructure'])->name('salary.structures.store');
-    Route::post('salary/assign', [\App\Http\Controllers\Operations\SalaryController::class, 'assign'])->name('salary.assign');
+    Route::get('salary', [SalaryController::class, 'index'])->name('salary.index');
+    Route::post('salary/heads', [SalaryController::class, 'storeHead'])->name('salary.heads.store');
+    Route::post('salary/structures', [SalaryController::class, 'storeStructure'])->name('salary.structures.store');
+    Route::post('salary/assign', [SalaryController::class, 'assign'])->name('salary.assign');
 
-    Route::get('payroll', [\App\Http\Controllers\Operations\PayrollController::class, 'index'])->name('payroll.index');
-    Route::post('payroll', [\App\Http\Controllers\Operations\PayrollController::class, 'store'])->name('payroll.store');
-    Route::get('payroll/{payroll}', [\App\Http\Controllers\Operations\PayrollController::class, 'show'])->name('payroll.show');
-    Route::post('payroll/{payroll}/compute', [\App\Http\Controllers\Operations\PayrollController::class, 'compute'])->name('payroll.compute');
-    Route::post('payroll/{payroll}/approve', [\App\Http\Controllers\Operations\PayrollController::class, 'approve'])->name('payroll.approve');
+    Route::get('payroll', [PayrollController::class, 'index'])->name('payroll.index');
+    Route::post('payroll', [PayrollController::class, 'store'])->name('payroll.store');
+    Route::get('payroll/{payroll}', [PayrollController::class, 'show'])->name('payroll.show');
+    Route::post('payroll/{payroll}/compute', [PayrollController::class, 'compute'])->name('payroll.compute');
+    Route::post('payroll/{payroll}/approve', [PayrollController::class, 'approve'])->name('payroll.approve');
 
-    Route::get('advances', [\App\Http\Controllers\Operations\AdvanceController::class, 'index'])->name('advances.index');
-    Route::post('advances', [\App\Http\Controllers\Operations\AdvanceController::class, 'store'])->name('advances.store');
-    Route::post('advances/{advance}/close', [\App\Http\Controllers\Operations\AdvanceController::class, 'close'])->name('advances.close');
+    Route::get('advances', [AdvanceController::class, 'index'])->name('advances.index');
+    Route::post('advances', [AdvanceController::class, 'store'])->name('advances.store');
+    Route::post('advances/{advance}/close', [AdvanceController::class, 'close'])->name('advances.close');
 
-    Route::get('devices', [\App\Http\Controllers\Operations\DeviceController::class, 'index'])->name('devices.index');
-    Route::post('devices', [\App\Http\Controllers\Operations\DeviceController::class, 'store'])->name('devices.store');
-    Route::get('devices/{device}', [\App\Http\Controllers\Operations\DeviceController::class, 'show'])->name('devices.show');
-    Route::put('devices/{device}', [\App\Http\Controllers\Operations\DeviceController::class, 'update'])->name('devices.update');
-    Route::post('devices/{device}/enroll', [\App\Http\Controllers\Operations\DeviceController::class, 'enroll'])->name('devices.enroll');
-    Route::post('device-enrollments/{enrollment}/block', [\App\Http\Controllers\Operations\DeviceController::class, 'block'])->name('devices.block');
-    Route::delete('device-enrollments/{enrollment}', [\App\Http\Controllers\Operations\DeviceController::class, 'removeEnrollment'])->name('devices.enrollment.destroy');
+    Route::get('devices', [DeviceController::class, 'index'])->name('devices.index');
+    Route::post('devices', [DeviceController::class, 'store'])->name('devices.store');
+    Route::get('devices/{device}', [DeviceController::class, 'show'])->name('devices.show');
+    Route::put('devices/{device}', [DeviceController::class, 'update'])->name('devices.update');
+    Route::post('devices/{device}/enroll', [DeviceController::class, 'enroll'])->name('devices.enroll');
+    Route::post('device-enrollments/{enrollment}/block', [DeviceController::class, 'block'])->name('devices.block');
+    Route::delete('device-enrollments/{enrollment}', [DeviceController::class, 'removeEnrollment'])->name('devices.enrollment.destroy');
 
-    Route::get('reports', [\App\Http\Controllers\Operations\ReportController::class, 'index'])->name('reports.index');
+    Route::get('reports', [ReportController::class, 'index'])->name('reports.index');
 
-    Route::get('bank', [\App\Http\Controllers\Operations\BankController::class, 'index'])->name('bank.index');
-    Route::post('bank/accounts', [\App\Http\Controllers\Operations\BankController::class, 'storeAccount'])->name('bank.accounts.store');
-    Route::post('bank/batches', [\App\Http\Controllers\Operations\BankController::class, 'storeBatch'])->name('bank.batches.store');
-    Route::get('bank/batches/{batch}/export', [\App\Http\Controllers\Operations\BankController::class, 'export'])->name('bank.export');
+    Route::get('bank', [BankController::class, 'index'])->name('bank.index');
+    Route::post('bank/accounts', [BankController::class, 'storeAccount'])->name('bank.accounts.store');
+    Route::post('bank/batches', [BankController::class, 'storeBatch'])->name('bank.batches.store');
+    Route::get('bank/batches/{batch}/export', [BankController::class, 'export'])->name('bank.export');
 
     Route::resource('companies', CompanyController::class)->except(['show']);
     Route::resource('branches', BranchController::class)->except(['show']);
@@ -107,10 +120,12 @@ Route::middleware(['auth', 'mfa'])->group(function (): void {
     Route::get('employees/import/template', [EmployeeController::class, 'template'])->name('employees.import.template');
     Route::get('employees/{employee}/photo', [EmployeeController::class, 'photo'])->name('employees.photo');
     Route::post('employees/{employee}/documents', [EmployeeDocumentController::class, 'store'])->name('employees.documents.store');
+    Route::get('employees/{employee}/documents/{document}/view', [EmployeeDocumentController::class, 'view'])->name('employees.documents.view');
     Route::get('employees/{employee}/documents/{document}', [EmployeeDocumentController::class, 'download'])->name('employees.documents.download');
     Route::delete('employees/{employee}/documents/{document}', [EmployeeDocumentController::class, 'destroy'])->name('employees.documents.destroy');
     Route::post('employees/{employee}/exit', [EmployeeExitController::class, 'store'])->name('employees.exit.store');
     Route::post('employees/{employee}/bank-accounts', [EmployeeBankAccountController::class, 'store'])->name('employees.bank-accounts.store');
+    Route::patch('employees/{employee}/blocked', [EmployeeController::class, 'toggleBlocked'])->name('employees.blocked');
     Route::resource('employees', EmployeeController::class);
 
     Route::resource('users', UserController::class)->except(['show']);

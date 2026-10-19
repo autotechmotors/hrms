@@ -17,9 +17,7 @@ use Illuminate\Validation\ValidationException;
 
 class PayrollRunner
 {
-    public function __construct(private readonly WorkCalendarResolver $calendar)
-    {
-    }
+    public function __construct(private readonly WorkCalendarResolver $calendar) {}
 
     public function compute(PayrollRun $run): PayrollRun
     {
@@ -56,6 +54,9 @@ class PayrollRunner
                     $payableGross = round(((float) $salary->gross_monthly) * ($paid / $workingDays), 2);
                     [$earnings, $deductions, $lines] = $this->lines($salary->structure->lines, $payableGross);
                     $advance = $this->plannedAdvance((int) $employee->id, $start);
+                    if ($advance > 0) {
+                        $lines[] = ['name' => 'Advance EMI', 'category' => 'deduction', 'amount' => $advance];
+                    }
                     $deductions = round($deductions + $advance, 2);
 
                     PayrollItem::query()->create([

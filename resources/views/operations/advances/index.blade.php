@@ -35,7 +35,16 @@
                 <tbody>
                 @forelse($advances as $advance)
                     <tr>
-                        <td>{{ $advance->employee?->full_name }}</td>
+                        <td>
+                            @if($advance->employee)
+                                <div class="who">
+                                    <x-employee-avatar :employee="$advance->employee" :size="28" />
+                                    <div><b>{{ $advance->employee->full_name }}</b></div>
+                                </div>
+                            @else
+                                —
+                            @endif
+                        </td>
                         <td>{{ $advance->title }}</td>
                         <td>₹{{ number_format((float) $advance->amount, 2) }}</td>
                         <td>₹{{ number_format((float) $advance->emi, 2) }}</td>

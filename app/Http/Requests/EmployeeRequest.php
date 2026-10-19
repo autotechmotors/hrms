@@ -23,7 +23,6 @@ class EmployeeRequest extends FormRequest
             'employee_type_id' => ['nullable', 'integer', 'exists:employee_types,id'],
             'employment_status_id' => ['required', 'integer', 'exists:employment_statuses,id'],
             'reporting_manager_id' => ['nullable', 'integer', 'exists:employees,id'],
-            'employee_code' => ['nullable', 'string', 'max:40'],
             'first_name' => ['required', 'string', 'max:80'],
             'middle_name' => ['nullable', 'string', 'max:80'],
             'last_name' => ['required', 'string', 'max:80'],

@@ -21,6 +21,7 @@ trait UsesWorkspace
         return Employee::query()
             ->visibleTo(request()->user())
             ->where('company_id', $this->companyId())
+            ->where('is_blocked', false)
             ->whereHas('employmentStatus', fn (Builder $query) => $query->where('is_exit', false))
             ->orderBy('first_name');
     }

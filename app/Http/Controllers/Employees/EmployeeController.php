@@ -16,7 +16,9 @@ use App\Models\Location;
 use App\Services\Employees\EmployeeExporter;
 use App\Services\Employees\EmployeeImporter;
 use App\Services\Employees\EmployeeService;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\QueryException;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -31,35 +33,28 @@ class EmployeeController extends Controller
         private readonly EmployeeService $employees,
         private readonly EmployeeImporter $importer,
         private readonly EmployeeExporter $exporter,
-    ) {
-    }
+    ) {}
 
     public function index(Request $request): View
     {
         $this->authorize('viewAny', Employee::class);
 
-        $employees = Employee::query()
-            ->with(['company', 'branch', 'department', 'designation', 'employmentStatus'])
-            ->visibleTo($request->user())
-            ->when($request->filled('company_id'), fn ($query) => $query->where('company_id', $request->integer('company_id')))
-            ->when($request->filled('branch_id'), fn ($query) => $query->where('branch_id', $request->integer('branch_id')))
-            ->when($request->filled('department_id'), fn ($query) => $query->where('department_id', $request->integer('department_id')))
-            ->when($request->filled('employment_status_id'), fn ($query) => $query->where('employment_status_id', $request->integer('employment_status_id')))
-            ->when($request->filled('q'), function ($query) use ($request): void {
-                $term = '%'.trim((string) $request->query('q')).'%';
-                $query->where(function ($inner) use ($term): void {
-                    $inner->where('employee_code', 'like', $term)
-                        ->orWhere('first_name', 'like', $term)
-                        ->orWhere('last_name', 'like', $term)
-                        ->orWhere('email', 'like', $term);
-                });
-            })
-            ->orderBy('employee_code')
-            ->paginate(15)
-            ->withQueryString();
+        $employees = $this->filteredEmployees($request);
+        $canManage = $request->user()->isSuperAdmin();
+        $canBlock = $request->user()->hasPermission('employees.edit');
+
+        if ($request->ajax() || $request->boolean('partial')) {
+            return view('employees._list', [
+                'employees' => $employees,
+                'canManage' => $canManage,
+                'canBlock' => $canBlock,
+            ]);
+        }
 
         return view('employees.index', [
             'employees' => $employees,
+            'canManage' => $canManage,
+            'canBlock' => $canBlock,
             'companies' => $this->visibleCompanies(),
             'branches' => Branch::query()->visibleTo($request->user())->orderBy('name')->get(),
             'departments' => Department::query()->visibleTo($request->user())->orderBy('name')->get(),
@@ -92,7 +87,7 @@ class EmployeeController extends Controller
         $employee->load([
             'company', 'branch', 'location', 'department', 'designation.employeeType', 'employeeType',
             'employmentStatus', 'manager', 'documents', 'events', 'exits.employmentStatus',
-            'bankAccounts', 'customValues.field',
+            'bankAccounts', 'activeBankAccount', 'latestExit.employmentStatus', 'customValues.field',
         ]);
 
         return view('employees.show', [
@@ -100,6 +95,8 @@ class EmployeeController extends Controller
             'customFields' => EmployeeCustomField::query()->where('company_id', $employee->company_id)->where('is_active', true)->orderBy('sort_order')->get(),
             'exitStatuses' => EmploymentStatus::query()->where('company_id', $employee->company_id)->where('is_exit', true)->where('is_active', true)->orderBy('name')->get(),
             'canViewAccount' => request()->user()->hasPermission('bank_accounts.view'),
+            'canManageBank' => request()->user()->hasPermission('bank_accounts.manage'),
+            'activeBank' => $employee->activeBankAccount,
         ]);
     }
 
@@ -123,16 +120,47 @@ class EmployeeController extends Controller
         return redirect()->route('employees.show', $employee)->with('success', 'Employee updated.');
     }
 
-    public function destroy(Employee $employee): RedirectResponse
+    public function toggleBlocked(Request $request, Employee $employee): JsonResponse|RedirectResponse
+    {
+        $this->authorize('update', $employee);
+
+        $employee->update([
+            'is_blocked' => $request->boolean('is_blocked', ! $employee->is_blocked),
+        ]);
+
+        if ($request->ajax()) {
+            return response()->json([
+                'message' => $employee->is_blocked ? 'Employee blocked.' : 'Employee unblocked.',
+                'is_blocked' => $employee->is_blocked,
+            ]);
+        }
+
+        return back()->with('success', $employee->is_blocked ? 'Employee blocked.' : 'Employee unblocked.');
+    }
+
+    public function destroy(Request $request, Employee $employee): RedirectResponse|JsonResponse
     {
         $this->authorize('delete', $employee);
+
+        if (! $request->user()->isSuperAdmin()) {
+            abort(403);
+        }
+
         try {
             if ($employee->photograph_path) {
                 Storage::disk('local')->delete($employee->photograph_path);
             }
             $employee->delete();
         } catch (QueryException) {
+            if ($request->ajax()) {
+                return response()->json(['message' => 'This employee has history or documents and cannot be deleted.'], 422);
+            }
+
             return back()->with('error', 'This employee has history or documents and cannot be deleted.');
+        }
+
+        if ($request->ajax()) {
+            return response()->json(['message' => 'Employee deleted.']);
         }
 
         return redirect()->route('employees.index')->with('success', 'Employee deleted.');
@@ -182,6 +210,33 @@ class EmployeeController extends Controller
         abort_unless($employee->photograph_path && Storage::disk('local')->exists($employee->photograph_path), 404);
 
         return Storage::disk('local')->response($employee->photograph_path);
+    }
+
+    private function filteredEmployees(Request $request): LengthAwarePaginator
+    {
+        return Employee::query()
+            ->with(['company', 'branch', 'department', 'designation', 'employmentStatus'])
+            ->withCount([
+                'documents',
+                'activeBankAccount as active_bank_accounts_count',
+            ])
+            ->visibleTo($request->user())
+            ->when($request->filled('company_id'), fn ($query) => $query->where('company_id', $request->integer('company_id')))
+            ->when($request->filled('branch_id'), fn ($query) => $query->where('branch_id', $request->integer('branch_id')))
+            ->when($request->filled('department_id'), fn ($query) => $query->where('department_id', $request->integer('department_id')))
+            ->when($request->filled('employment_status_id'), fn ($query) => $query->where('employment_status_id', $request->integer('employment_status_id')))
+            ->when($request->filled('q'), function ($query) use ($request): void {
+                $term = '%'.trim((string) $request->query('q')).'%';
+                $query->where(function ($inner) use ($term): void {
+                    $inner->where('employee_code', 'like', $term)
+                        ->orWhere('first_name', 'like', $term)
+                        ->orWhere('last_name', 'like', $term)
+                        ->orWhere('email', 'like', $term);
+                });
+            })
+            ->orderBy('employee_code')
+            ->paginate(15)
+            ->withQueryString();
     }
 
     /**

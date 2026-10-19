@@ -92,6 +92,20 @@ class OperationsModulesTest extends TestCase
         }
     }
 
+    public function test_holiday_calendar_exposes_clicked_and_outside_dates(): void
+    {
+        $org = $this->makeCompany('CAL');
+        $hr = $this->makeUser('hr-admin', $org['company']);
+
+        $this->actingAsScoped($hr)
+            ->get(route('holidays.index', ['year' => 2026]))
+            ->assertOk()
+            ->assertSee('data-date="2026-10-17"', false)
+            ->assertSee('data-iso="2026-10-17"', false)
+            ->assertSee('data-date="2025-12-29"', false)
+            ->assertSee('data-bs-target="#holidayModal"', false);
+    }
+
     public function test_manager_cannot_change_shifts(): void
     {
         $org = $this->makeCompany('OPS');

@@ -28,10 +28,10 @@ class DemoDataSeeder extends Seeder
         }
 
         AuditLogger::withoutAuditing(function (): void {
-            $company = Company::query()->updateOrCreate(['code' => 'NSI'], [
-                'name' => 'Northstar Industries',
-                'legal_name' => 'Northstar Industries Private Limited',
-                'email' => 'hr@northstar.test',
+            $company = Company::query()->updateOrCreate(['code' => 'AT'], [
+                'name' => 'Autotech',
+                'legal_name' => 'Autotech',
+                'email' => 'hr@autotech.test',
                 'phone' => '07940000000',
                 'city' => 'Ahmedabad',
                 'state' => 'Gujarat',
@@ -105,10 +105,10 @@ class DemoDataSeeder extends Seeder
                 'scope_id' => $company->id,
             ]);
 
-            $rahul = $this->employee($company->id, $branch->id, $location->id, $ops->id, $managerTitle->id, $permanent->id, $confirmed->id, null, 'EMP0001', 'Rahul', 'Mehta', 'rahul@northstar.test');
-            $this->employee($company->id, $branch->id, $location->id, $ops->id, $executive->id, $permanent->id, $confirmed->id, $rahul->id, 'EMP0002', 'Anita', 'Desai', 'anita@northstar.test');
-            $this->employee($company->id, $branch->id, $location->id, $ops->id, $executive->id, $permanent->id, $confirmed->id, $rahul->id, 'EMP0003', 'Kiran', 'Patel', 'kiran@northstar.test');
-            $this->employee($company->id, $branch->id, $location->id, $hr->id, $executive->id, $permanent->id, $confirmed->id, null, 'EMP0004', 'Sonal', 'Joshi', 'sonal@northstar.test');
+            $rahul = $this->employee($company->id, $branch->id, $location->id, $ops->id, $managerTitle->id, $permanent->id, $confirmed->id, null, 'AT0001', 'Rahul', 'Mehta', 'rahul@autotech.test');
+            $this->employee($company->id, $branch->id, $location->id, $ops->id, $executive->id, $permanent->id, $confirmed->id, $rahul->id, 'AT0002', 'Anita', 'Desai', 'anita@autotech.test');
+            $this->employee($company->id, $branch->id, $location->id, $ops->id, $executive->id, $permanent->id, $confirmed->id, $rahul->id, 'AT0003', 'Kiran', 'Patel', 'kiran@autotech.test');
+            $this->employee($company->id, $branch->id, $location->id, $hr->id, $executive->id, $permanent->id, $confirmed->id, null, 'AT0004', 'Sonal', 'Joshi', 'sonal@autotech.test');
 
             $managerUser = User::query()->updateOrCreate(['email' => 'manager@hrms.test'], [
                 'name' => 'Rahul Mehta',
@@ -119,7 +119,7 @@ class DemoDataSeeder extends Seeder
             $rahul->update(['user_id' => $managerUser->id]);
 
             NumberSequence::query()->updateOrCreate(['company_id' => $company->id, 'sequence_key' => 'employee'], [
-                'prefix' => 'EMP',
+                'prefix' => 'AT',
                 'padding' => 4,
                 'next_number' => 5,
             ]);

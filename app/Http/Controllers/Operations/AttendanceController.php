@@ -6,10 +6,13 @@ use App\Http\Controllers\Controller;
 use App\Http\Controllers\Operations\Concerns\UsesWorkspace;
 use App\Models\AttendanceDay;
 use App\Models\AttendanceRule;
+use App\Models\Department;
 use App\Services\Operations\AttendanceCalculator;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\View\View;
 
 class AttendanceController extends Controller
@@ -21,24 +24,46 @@ class AttendanceController extends Controller
         $this->authorizeView();
         $date = Carbon::parse($request->input('date', now()->toDateString()))->startOfDay();
         $companyId = $this->companyId();
-        $employees = $this->activeEmployees()->with(['department', 'designation'])->paginate(30)->withQueryString();
-        $picker = $this->activeEmployees()->get(['id', 'employee_code', 'first_name', 'middle_name', 'last_name']);
-        $days = AttendanceDay::query()
-            ->whereIn('employee_id', $employees->pluck('id'))
+        $canEdit = $request->user()->hasPermission('employees.edit');
+        $status = trim((string) $request->input('status', ''));
+
+        $filtered = $this->activeEmployees()->with(['department', 'designation']);
+        $this->applyEmployeeFilters($filtered, $request);
+        $scopedIds = (clone $filtered)->pluck('id');
+
+        $allDays = AttendanceDay::query()
+            ->whereIn('employee_id', $scopedIds)
             ->whereDate('work_date', $date)
             ->get()
             ->keyBy('employee_id');
 
+        if ($status === 'pending') {
+            $filtered->whereNotIn('id', $allDays->keys()->all());
+        } elseif ($status !== '') {
+            $matched = $allDays->filter(fn (AttendanceDay $day) => $day->status === $status)->keys()->all();
+            $filtered->whereIn('id', $matched ?: [0]);
+        }
+
+        $employees = $filtered->paginate(30)->withQueryString();
+        $stats = $this->dayStats($scopedIds->count(), $allDays);
+
         return view('operations.attendance.index', [
             'date' => $date,
             'employees' => $employees,
-            'picker' => $picker,
-            'days' => $days,
+            'picker' => $this->activeEmployees()->get(['id', 'employee_code', 'first_name', 'middle_name', 'last_name']),
+            'days' => $allDays,
+            'stats' => $stats,
+            'departments' => Department::query()->visibleTo($request->user())->orderBy('name')->get(),
+            'filters' => [
+                'q' => trim((string) $request->input('q', '')),
+                'department_id' => $request->input('department_id'),
+                'status' => $status,
+            ],
             'rule' => AttendanceRule::query()->firstOrCreate(
                 ['company_id' => $companyId],
                 ['grace_minutes' => 0, 'mark_absent_without_punch' => true],
             ),
-            'canEdit' => $request->user()->hasPermission('employees.edit'),
+            'canEdit' => $canEdit,
         ]);
     }
 
@@ -92,7 +117,12 @@ class AttendanceController extends Controller
         ])->save();
         $calculator->recalculate($employee, Carbon::parse($data['work_date']));
 
-        return redirect()->route('attendance.index', ['date' => $data['work_date']])->with('success', 'Punch saved.');
+        return redirect()->route('attendance.index', array_filter([
+            'date' => $data['work_date'],
+            'q' => $request->input('q'),
+            'department_id' => $request->input('department_id'),
+            'status' => $request->input('status'),
+        ]))->with('success', 'Punch saved.');
     }
 
     public function recalculate(Request $request, AttendanceCalculator $calculator): RedirectResponse
@@ -103,5 +133,53 @@ class AttendanceController extends Controller
         $this->activeEmployees()->each(fn ($employee) => $calculator->recalculate($employee, $date));
 
         return redirect()->route('attendance.index', ['date' => $date->toDateString()])->with('success', 'Attendance calculated from punches, shifts, leave, and holidays.');
+    }
+
+    protected function applyEmployeeFilters(Builder $query, Request $request): void
+    {
+        $q = trim((string) $request->input('q', ''));
+        if ($q !== '') {
+            $like = '%'.$q.'%';
+            $query->where(function (Builder $inner) use ($like) {
+                $inner->where('employee_code', 'like', $like)
+                    ->orWhere('first_name', 'like', $like)
+                    ->orWhere('middle_name', 'like', $like)
+                    ->orWhere('last_name', 'like', $like)
+                    ->orWhere('email', 'like', $like);
+            });
+        }
+
+        if ($request->filled('department_id')) {
+            $query->where('department_id', $request->integer('department_id'));
+        }
+    }
+
+    /**
+     * @param  Collection<int, AttendanceDay>  $days
+     * @return array<string, int>
+     */
+    protected function dayStats(int $totalEmployees, Collection $days): array
+    {
+        $counts = [
+            'present' => 0,
+            'late' => 0,
+            'half_day' => 0,
+            'absent' => 0,
+            'on_leave' => 0,
+            'holiday' => 0,
+            'weekly_off' => 0,
+            'unmarked' => 0,
+            'pending' => max(0, $totalEmployees - $days->count()),
+        ];
+
+        foreach ($days as $day) {
+            if (array_key_exists($day->status, $counts)) {
+                $counts[$day->status]++;
+            }
+        }
+
+        $counts['working'] = $counts['present'] + $counts['late'] + $counts['half_day'];
+
+        return $counts;
     }
 }

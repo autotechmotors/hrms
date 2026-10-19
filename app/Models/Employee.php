@@ -4,7 +4,6 @@ namespace App\Models;
 
 use App\Models\Concerns\AuditsChanges;
 use App\Models\Concerns\BelongsToCompany;
-use App\Models\User;
 use App\Services\AccessScope;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -44,6 +43,7 @@ class Employee extends Model
         'confirmation_date',
         'probation_days',
         'notice_period_days',
+        'is_blocked',
     ];
 
     protected function casts(): array
@@ -52,6 +52,7 @@ class Employee extends Model
             'date_of_birth' => 'date',
             'joining_date' => 'date',
             'confirmation_date' => 'date',
+            'is_blocked' => 'boolean',
         ];
     }
 

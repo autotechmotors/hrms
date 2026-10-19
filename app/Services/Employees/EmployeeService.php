@@ -3,6 +3,7 @@
 namespace App\Services\Employees;
 
 use App\Models\Branch;
+use App\Models\Company;
 use App\Models\Department;
 use App\Models\Designation;
 use App\Models\Employee;
@@ -25,8 +26,7 @@ class EmployeeService
     public function __construct(
         private readonly NumberSequenceService $sequences,
         private readonly AccessScope $access,
-    ) {
-    }
+    ) {}
 
     /**
      * @param  array<string, mixed>  $data
@@ -36,12 +36,8 @@ class EmployeeService
         return DB::transaction(function () use ($data, $actor, $photo): Employee {
             $this->assertPlacement($actor, $data, null);
 
-            if (blank($data['employee_code'] ?? null)) {
-                $company = \App\Models\Company::query()->findOrFail($data['company_id']);
-                $data['employee_code'] = $this->sequences->nextEmployeeCode($company);
-            }
-
-            $data['employee_code'] = strtoupper((string) $data['employee_code']);
+            $company = Company::query()->findOrFail($data['company_id']);
+            $data['employee_code'] = $this->sequences->nextEmployeeCode($company);
             $data = $this->nullBlanks($data);
 
             $employee = Employee::query()->create($data);
@@ -62,7 +58,7 @@ class EmployeeService
     {
         return DB::transaction(function () use ($employee, $data, $actor, $photo): Employee {
             $this->assertPlacement($actor, $data, $employee);
-            $data['employee_code'] = strtoupper((string) ($data['employee_code'] ?? $employee->employee_code));
+            unset($data['employee_code']);
             $data = $this->nullBlanks($data);
             $fieldValues = $data['field_values'] ?? [];
 
@@ -251,11 +247,13 @@ class EmployeeService
 
             if ($field->is_required && ($value === null || $value === '')) {
                 $errors['field_values.'.$field->id] = $field->name.' is required.';
+
                 continue;
             }
 
             if ($field->field_type === 'select' && $value !== null && $value !== '' && ! in_array($value, $field->options ?? [], true)) {
                 $errors['field_values.'.$field->id] = $field->name.' has an invalid option.';
+
                 continue;
             }
 
