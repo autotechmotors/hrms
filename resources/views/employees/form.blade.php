@@ -174,16 +174,23 @@
                     <header>
                         <div>
                             <h3>Photograph</h3>
-                            <p>Optional profile image</p>
+                            <p>Used on the attendance list and sent to the terminal</p>
                         </div>
                     </header>
                     <div class="cb">
                         @if($employee?->photograph_path)
-                            <div class="ef-thumb">
+                            <button type="button" class="att-zoom ef-thumb" data-photo="{{ route('employees.photo', $employee) }}" title="View photo">
                                 <img src="{{ route('employees.photo', $employee) }}" alt="{{ $employee->full_name }}">
-                            </div>
+                            </button>
+                        @else
+                            <p class="ed-empty">No photo uploaded yet.</p>
                         @endif
-                        <x-text-field name="photograph" label="Upload photo" type="file" accept="image/*" />
+                        <x-text-field name="photograph" label="Upload photo" type="file" accept="image/jpeg,image/png,image/webp" />
+                        @if($employee && $terminals->isNotEmpty())
+                            <p class="ef-hint">Save sends the name and this photo to {{ $terminals->pluck('name')->join(', ') }}.</p>
+                        @elseif($employee)
+                            <p class="ef-hint">Save sends the name and this photo to the company terminal.</p>
+                        @endif
                     </div>
                 </section>
 
@@ -204,9 +211,34 @@
             </aside>
         </div>
 
+        <div id="attView" class="att-view" hidden>
+            <button type="button" class="att-view-x btn" data-close>Close</button>
+            <img id="attViewImg" alt="Employee photo">
+        </div>
+
         <div class="ef-bar">
             <a class="btn" href="{{ $employee ? route('employees.show', $employee) : route('employees.index') }}">Cancel</a>
             <button class="btn pr" type="submit">{{ $employee ? 'Save changes' : 'Save employee' }}</button>
         </div>
     </form>
 @endsection
+
+@push('scripts')
+<script>
+(function ($) {
+    $(document).on('click', '#employeeForm [data-photo]', function (event) {
+        event.preventDefault();
+        const src = this.getAttribute('data-photo');
+        if (!src) return;
+        $('#attViewImg').attr('src', src);
+        $('#attView').removeAttr('hidden');
+    });
+    $('#attView').on('click', function (event) {
+        if (event.target === this || event.target.closest('[data-close]')) {
+            this.hidden = true;
+            $('#attViewImg').attr('src', '');
+        }
+    });
+})(jQuery);
+</script>
+@endpush

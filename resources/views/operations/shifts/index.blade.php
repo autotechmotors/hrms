@@ -9,7 +9,7 @@
             'q' => $filters['q'] ?: null,
             'department_id' => $filters['department_id'] ?: null,
         ]);
-        $fmt = fn ($time) => \Illuminate\Support\Str::of($time)->substr(0, 5);
+        $fmt = fn ($time) => \App\Support\Clock::time($time);
         $today = now()->toDateString();
     @endphp
 

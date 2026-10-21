@@ -10,7 +10,7 @@
     <link rel="stylesheet" href="{{ asset('assets/vendor/bootstrap/bootstrap.min.css') }}">
     <link rel="stylesheet" href="{{ asset('assets/vendor/select2/select2.min.css') }}">
     <link rel="stylesheet" href="{{ asset('assets/vendor/flatpickr/flatpickr.min.css') }}">
-    <link rel="stylesheet" href="{{ asset('assets/css/app.css') }}?v=34">
+    <link rel="stylesheet" href="{{ asset('assets/css/app.css') }}?v=42">
 </head>
 <body>
     @php
@@ -80,7 +80,7 @@
     <script src="{{ asset('assets/vendor/select2/select2.min.js') }}"></script>
     <script src="{{ asset('assets/vendor/flatpickr/flatpickr.min.js') }}"></script>
     <script src="{{ asset('assets/vendor/bootstrap/bootstrap.bundle.min.js') }}"></script>
-    <script src="{{ asset('assets/js/app.js') }}?v=13"></script>
+    <script src="{{ asset('assets/js/app.js') }}?v=14"></script>
     @stack('scripts')
 </body>
 </html>

@@ -128,6 +128,10 @@
             const formEl = this;
             if (formEl.dataset.confirmed === '1') {
                 event.preventDefault();
+                const modal = document.getElementById('confirmModal');
+                if (modal && window.bootstrap) {
+                    bootstrap.Modal.getOrCreateInstance(modal).hide();
+                }
                 const action = formEl.getAttribute('action');
                 const token = $(formEl).find('[name=_token]').val();
                 $.ajax({
@@ -139,6 +143,7 @@
                     load();
                 }).fail(function (xhr) {
                     if (window.toast) toast((xhr.responseJSON && xhr.responseJSON.message) || 'Delete failed.', 'er');
+                    if (xhr.status === 404) load();
                 });
                 return;
             }
@@ -175,13 +180,17 @@
         });
     }
 
-    $('#confirmButton').on('click.elDelete', function () {
+    document.getElementById('confirmButton')?.addEventListener('click', function () {
         const pending = window.__elPendingDelete;
         if (!pending) return;
         pending.dataset.confirmed = '1';
-        $(pending).trigger('submit');
         window.__elPendingDelete = null;
-    });
+        const modal = document.getElementById('confirmModal');
+        if (modal && window.bootstrap) {
+            bootstrap.Modal.getOrCreateInstance(modal).hide();
+        }
+        pending.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    }, true);
 
     form.on('submit', function (event) {
         event.preventDefault();
@@ -220,6 +229,67 @@
         const page = new URL(href, window.location.origin).searchParams.get('page');
         load(page ? { page: page } : {});
     });
+
+    results.on('click', 'button.ac-item', function (event) {
+        event.preventDefault();
+        event.stopPropagation();
+        const button = $(this);
+        if (button.hasClass('wait')) return;
+        const url = this.getAttribute('data-url');
+        const kind = this.getAttribute('data-kind');
+        if (!url || !kind) return;
+        const body = { kind: kind };
+        if (kind === 'password') {
+            const pin = window.prompt('Terminal password, 4 to 8 digits');
+            if (!pin) return;
+            body.password = pin;
+        }
+        button.addClass('wait');
+        $.ajax({
+            url: url,
+            method: 'POST',
+            data: body,
+            headers: { 'X-CSRF-TOKEN': csrf }
+        }).done(function (data) {
+            paintCounts(button.closest('.ac-cred'), data.counts || {});
+            if (window.toast) window.toast(data.message || 'Sent to the terminal.');
+            watchCredentials(button.closest('.ac-cred'));
+        }).fail(function (xhr) {
+            const message = xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'The terminal could not be updated.';
+            if (window.toast) window.toast(message, 'er');
+        }).always(function () {
+            button.removeClass('wait');
+        });
+    });
+
+    function paintCounts(box, counts) {
+        box.find('.ac-item').each(function () {
+            const kind = this.getAttribute('data-kind');
+            const total = counts[kind] || 0;
+            const item = $(this);
+            item.find('b').text(total);
+            item.toggleClass('on', total > 0);
+        });
+    }
+
+    function watchCredentials(box) {
+        const url = box.attr('data-state');
+        if (!url) return;
+        const previous = box.data('watchTimer');
+        if (previous) window.clearInterval(previous);
+        let tries = 0;
+        const timer = window.setInterval(function () {
+            tries += 1;
+            $.getJSON(url).done(function (data) {
+                paintCounts(box, data.counts || {});
+            });
+            if (tries >= 36) {
+                window.clearInterval(timer);
+                box.removeData('watchTimer');
+            }
+        }, 5000);
+        box.data('watchTimer', timer);
+    }
 
     bindRowActions();
 })(jQuery);

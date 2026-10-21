@@ -68,7 +68,7 @@
                                 —
                             @endif
                         </td>
-                        <td>{{ $row->punch_in ? \Illuminate\Support\Str::of($row->punch_in)->substr(0, 5) : '—' }}</td>
+                        <td>{{ \App\Support\Clock::time($row->punch_in) }}</td>
                     </tr>
                 @empty
                     <tr><td colspan="3" style="text-align:center;color:var(--mu);padding:32px">No late marks</td></tr>

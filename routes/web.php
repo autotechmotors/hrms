@@ -49,6 +49,13 @@ Route::middleware(['auth', 'mfa'])->group(function (): void {
     Route::get('/', DashboardController::class)->name('dashboard');
 
     Route::get('attendance', [AttendanceController::class, 'index'])->name('attendance.index');
+    Route::get('attendance/feed', [AttendanceController::class, 'feed'])->name('attendance.feed');
+    Route::get('attendance/punches/{punch}/photo', [AttendanceController::class, 'punchPhoto'])->name('attendance.punch.photo');
+    Route::get('attendance/credentials/{credential}/photo', [AttendanceController::class, 'credentialPhoto'])->name('attendance.credential.photo');
+    Route::get('attendance/{employee}/feed', [AttendanceController::class, 'employeeFeed'])->name('attendance.employee.feed');
+    Route::post('attendance/{employee}/day', [AttendanceController::class, 'updateDay'])->name('attendance.day.update');
+    Route::delete('attendance/{employee}/day', [AttendanceController::class, 'destroyDay'])->name('attendance.day.destroy');
+    Route::get('attendance/{employee}', [AttendanceController::class, 'show'])->name('attendance.show');
     Route::post('attendance/rule', [AttendanceController::class, 'updateRule'])->name('attendance.rule');
     Route::post('attendance/punch', [AttendanceController::class, 'punch'])->name('attendance.punch');
     Route::post('attendance/recalculate', [AttendanceController::class, 'recalculate'])->name('attendance.recalculate');
@@ -89,7 +96,10 @@ Route::middleware(['auth', 'mfa'])->group(function (): void {
     Route::post('devices', [DeviceController::class, 'store'])->name('devices.store');
     Route::get('devices/{device}', [DeviceController::class, 'show'])->name('devices.show');
     Route::put('devices/{device}', [DeviceController::class, 'update'])->name('devices.update');
+    Route::delete('devices/{device}', [DeviceController::class, 'destroy'])->name('devices.destroy');
     Route::post('devices/{device}/enroll', [DeviceController::class, 'enroll'])->name('devices.enroll');
+    Route::put('device-terminal-users/{person}', [DeviceController::class, 'updateTerminalUser'])->name('devices.terminal.update');
+    Route::delete('device-terminal-users/{person}', [DeviceController::class, 'destroyTerminalUser'])->name('devices.terminal.destroy');
     Route::post('device-enrollments/{enrollment}/block', [DeviceController::class, 'block'])->name('devices.block');
     Route::delete('device-enrollments/{enrollment}', [DeviceController::class, 'removeEnrollment'])->name('devices.enrollment.destroy');
 
@@ -119,6 +129,8 @@ Route::middleware(['auth', 'mfa'])->group(function (): void {
     Route::post('employees/import', [EmployeeController::class, 'import'])->name('employees.import.store');
     Route::get('employees/import/template', [EmployeeController::class, 'template'])->name('employees.import.template');
     Route::get('employees/{employee}/photo', [EmployeeController::class, 'photo'])->name('employees.photo');
+    Route::post('employees/{employee}/credentials', [EmployeeController::class, 'collectCredential'])->name('employees.credentials.collect');
+    Route::get('employees/{employee}/credentials', [EmployeeController::class, 'credentialState'])->name('employees.credentials.state');
     Route::post('employees/{employee}/documents', [EmployeeDocumentController::class, 'store'])->name('employees.documents.store');
     Route::get('employees/{employee}/documents/{document}/view', [EmployeeDocumentController::class, 'view'])->name('employees.documents.view');
     Route::get('employees/{employee}/documents/{document}', [EmployeeDocumentController::class, 'download'])->name('employees.documents.download');

@@ -65,6 +65,16 @@ class Employee extends Model
         ])));
     }
 
+    public function credentials(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(EmployeeCredential::class);
+    }
+
+    public function punches(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(AttendancePunch::class);
+    }
+
     public function branch(): BelongsTo
     {
         return $this->belongsTo(Branch::class);

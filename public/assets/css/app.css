@@ -212,6 +212,14 @@ body{overflow-x:clip;max-width:100%}
 .el-wrap.is-loading::after{content:"";position:absolute;inset:0;background:rgba(255,255,255,.55);backdrop-filter:blur(1px);z-index:2}
 .el-wrap[data-view="list"] .el-blocks{display:none}
 .el-wrap[data-view="block"] .el-table{display:none}
+.ac-cred{display:flex;align-items:center;gap:2px}
+.ac-item{display:inline-flex;align-items:center;gap:4px;border:0;background:transparent;color:#98a2b3;padding:4px 6px;border-radius:8px;cursor:pointer;font:inherit}
+.ac-item b{font-size:13px;font-weight:650;min-width:8px}
+.ac-item.on{color:var(--tx)}
+.ac-item:hover{background:var(--as);color:var(--ac)}
+.ac-item.wait{color:var(--wn)}
+.ac-cred-card{display:flex;align-items:center;justify-content:space-between;gap:8px;padding-top:8px}
+.ac-cred-card > span{color:var(--mu);font-size:12px;font-weight:600}
 .el-check{display:flex;flex-wrap:wrap;gap:6px}
 .el-pill{display:inline-flex;align-items:center;gap:5px;padding:3px 8px;border-radius:999px;font-size:11px;font-weight:600;border:1px solid transparent;white-space:nowrap}
 .el-pill .el-dot{width:6px;height:6px;border-radius:99px;background:currentColor}
@@ -791,3 +799,54 @@ img.ed-av{border-radius:18px;font-size:0}
   .py-modal-grid{grid-template-columns:1fr}
   .py-sum{justify-content:flex-start}
 }
+
+.att-shot{display:block;width:42px;height:42px;object-fit:cover;border-radius:8px;margin-top:6px;border:1px solid var(--bd)}
+.att-list-photo{width:48px;height:48px;margin:0;border-radius:12px}
+.att-face{width:72px;height:72px;object-fit:cover;border-radius:16px;border:1px solid var(--bd)}
+.att-face-lg{width:88px;height:88px}
+.att-punch{width:min(100%,420px);border-radius:12px;border:1px solid var(--bd)}
+.att-fresh{color:var(--mu);font-size:12px;font-weight:600}
+.att-split{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(280px,.85fr);gap:16px;align-items:start}
+.att-detail-col{display:grid;gap:16px}
+.att-day{cursor:pointer}
+.att-act{white-space:nowrap;text-align:right}
+.att-act form{display:inline}
+.att-act .ib{margin-left:4px}
+.att-day.is-on{background:var(--as)}
+.att-zoom{display:inline-flex;padding:0;border:0;background:transparent;cursor:zoom-in}
+.att-entry{margin:0;display:grid;gap:10px}
+.att-entry-frame{display:block;width:100%;padding:0;border:1px solid var(--bd);border-radius:16px;overflow:hidden;background:#0f172a;cursor:zoom-in}
+.att-entry-frame img{display:block;width:100%;max-height:320px;object-fit:contain;background:#0f172a}
+.att-entry figcaption{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.att-entry figcaption b{font-size:15px}
+.att-entry figcaption span{color:var(--mu);font-size:13px}
+.att-times{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.att-times div{min-width:0;padding:10px 12px;border:1px solid var(--bd);border-radius:12px}
+.att-times small{display:block;color:var(--mu);font-size:11px;font-weight:650;letter-spacing:.04em;text-transform:uppercase}
+.att-times b{display:block;margin-top:4px;font-size:16px}
+.att-log{list-style:none;margin:4px 0 0;padding:0;display:grid;gap:6px}
+.att-log li{display:flex;justify-content:space-between;gap:12px;padding:8px 12px;border:1px solid var(--bd);border-radius:10px}
+.att-log li span:last-child{color:var(--mu);font-weight:650}
+.att-punch-table{width:100%;margin-top:14px}
+.att-view{position:fixed;inset:0;z-index:80;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(15,23,42,.78)}
+.att-view[hidden]{display:none}
+.att-view img{max-width:min(920px,100%);max-height:86vh;border-radius:12px;background:#fff}
+.att-view-x{position:absolute;top:16px;right:16px}
+@media(max-width:900px){
+  .att-split,.att-times{grid-template-columns:1fr}
+}
+.dv-sub{display:block;color:var(--mu);font-weight:500}
+.dv-fields{display:grid;grid-template-columns:1fr 1fr;gap:12px 14px}
+.dv-fields .dv-span{grid-column:1 / -1}
+.dv-fields label{min-width:0}
+.dv-conn{display:grid;gap:14px}
+.dv-conn p{margin:0;color:var(--mu);font-size:12px}
+.dv-warn{padding:10px 12px;border-radius:10px;background:var(--wns);color:var(--wn);font-size:12.5px}
+.dv-enroll{display:grid;gap:12px}
+.dv-enroll label,.dv-act form{min-width:0;width:100%}
+.dv-enroll .btn{justify-content:center}
+.dv-act{display:grid;gap:8px}
+.dv-act .btn{width:100%;justify-content:center}
+.dv-danger{color:var(--er);border-color:#f0c9d0}
+.dv-danger:hover{background:var(--ers);color:var(--er);border-color:#f0c9d0}
+@media(max-width:700px){.dv-fields{grid-template-columns:1fr}}

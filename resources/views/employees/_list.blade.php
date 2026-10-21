@@ -1,6 +1,7 @@
 @php
     $canManage = $canManage ?? false;
     $canBlock = $canBlock ?? false;
+    $credentialCounts = $credentialCounts ?? [];
 @endphp
 <div class="el-body" data-total="{{ $employees->total() }}" data-count="{{ $employees->count() }}">
     <div class="el-table tw">
@@ -12,6 +13,7 @@
                     <th>Department</th>
                     <th>Status</th>
                     <th>Checklist</th>
+                    <th>Access Credentials</th>
                     <th>Blocked</th>
                     <th class="el-act">Actions</th>
                 </tr>
@@ -50,6 +52,9 @@
                         </div>
                     </td>
                     <td>
+                        @include('employees._credentials', ['employee' => $employee, 'counts' => $credentialCounts[$employee->id] ?? [], 'canAdd' => $canBlock])
+                    </td>
+                    <td>
                         @if($canBlock)
                             <label class="el-block-switch" title="{{ $blocked ? 'Blocked — click to unblock' : 'Active — click to block' }}">
                                 <input type="checkbox" class="el-block-toggle" data-url="{{ route('employees.blocked', $employee) }}" @checked($blocked)>
@@ -75,7 +80,7 @@
                 </tr>
             @empty
                 <tr>
-                    <td colspan="7" class="el-empty">No employees match your filters</td>
+                    <td colspan="8" class="el-empty">No employees match your filters</td>
                 </tr>
             @endforelse
             </tbody>
@@ -109,6 +114,10 @@
                     <a class="el-pill {{ $hasBank ? 'ok' : 'wn' }}" href="{{ route('employees.show', $employee) }}#bank">
                         <span class="el-dot"></span>Bank {{ $hasBank ? 'done' : 'pending' }}
                     </a>
+                </div>
+                <div class="ac-cred-card">
+                    <span>Access Credentials</span>
+                    @include('employees._credentials', ['employee' => $employee, 'counts' => $credentialCounts[$employee->id] ?? [], 'canAdd' => $canBlock])
                 </div>
                 <div class="el-card-block">
                     <span>Blocked</span>

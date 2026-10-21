@@ -8,6 +8,7 @@ use App\Http\Requests\EmployeeRequest;
 use App\Models\Branch;
 use App\Models\Department;
 use App\Models\Designation;
+use App\Models\DeviceTerminalUser;
 use App\Models\Employee;
 use App\Models\EmployeeCustomField;
 use App\Models\EmployeeType;
@@ -21,6 +22,7 @@ use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -42,12 +44,14 @@ class EmployeeController extends Controller
         $employees = $this->filteredEmployees($request);
         $canManage = $request->user()->isSuperAdmin();
         $canBlock = $request->user()->hasPermission('employees.edit');
+        $credentialCounts = $this->credentialCounts($employees->getCollection());
 
         if ($request->ajax() || $request->boolean('partial')) {
             return view('employees._list', [
                 'employees' => $employees,
                 'canManage' => $canManage,
                 'canBlock' => $canBlock,
+                'credentialCounts' => $credentialCounts,
             ]);
         }
 
@@ -59,6 +63,7 @@ class EmployeeController extends Controller
             'branches' => Branch::query()->visibleTo($request->user())->orderBy('name')->get(),
             'departments' => Department::query()->visibleTo($request->user())->orderBy('name')->get(),
             'statuses' => EmploymentStatus::query()->visibleTo($request->user())->orderBy('name')->get(),
+            'credentialCounts' => $credentialCounts,
         ]);
     }
 
@@ -77,8 +82,12 @@ class EmployeeController extends Controller
             $request->user(),
             $request->file('photograph'),
         );
+        $employee->refresh();
+        $pushed = app(\App\Services\Devices\EmployeePush::class)->sync($employee);
 
-        return redirect()->route('employees.show', $employee)->with('success', 'Employee saved.');
+        return redirect()->route('employees.show', $employee)->with('success', $pushed > 0
+            ? 'Employee saved. The terminal will add the name and photo on its next poll.'
+            : 'Employee saved.');
     }
 
     public function show(Employee $employee): View
@@ -100,6 +109,39 @@ class EmployeeController extends Controller
         ]);
     }
 
+    public function collectCredential(Request $request, Employee $employee): JsonResponse
+    {
+        $this->authorize('update', $employee);
+        $data = $request->validate([
+            'kind' => ['required', 'in:face,finger,card,password'],
+            'password' => ['required_if:kind,password', 'nullable', 'regex:/^\d{4,8}$/'],
+        ]);
+        $result = app(\App\Services\Devices\EmployeePush::class)->collect($employee, $data['kind'], $data['password'] ?? null);
+        if ($result['devices'] === 0) {
+            return response()->json(['message' => $result['message']], 422);
+        }
+
+        return response()->json([
+            'message' => $result['message'],
+            'counts' => $this->countsFor($employee),
+        ]);
+    }
+
+    public function credentialState(Employee $employee): JsonResponse
+    {
+        $this->authorize('view', $employee);
+        \App\Models\Device::query()->where('company_id', $employee->company_id)->orderBy('id')->each(function ($device): void {
+            try {
+                $push = app(\App\Services\Devices\DahuaPush::class);
+                $push->importInbox($device);
+                $push->continueCollect($device);
+            } catch (\Throwable) {
+            }
+        });
+
+        return response()->json(['counts' => $this->countsFor($employee)]);
+    }
+
     public function edit(Employee $employee): View
     {
         $this->authorize('update', $employee);
@@ -116,8 +158,13 @@ class EmployeeController extends Controller
             $request->user(),
             $request->file('photograph'),
         );
+        $employee->refresh();
+        $pushed = app(\App\Services\Devices\EmployeePush::class)->sync($employee);
+        $message = $pushed > 0
+            ? 'Employee updated. The terminal will refresh the name and photo on its next poll.'
+            : 'Employee updated.';
 
-        return redirect()->route('employees.show', $employee)->with('success', 'Employee updated.');
+        return redirect()->route('employees.show', $employee)->with('success', $message);
     }
 
     public function toggleBlocked(Request $request, Employee $employee): JsonResponse|RedirectResponse
@@ -146,11 +193,29 @@ class EmployeeController extends Controller
             abort(403);
         }
 
+        $push = app(\App\Services\Devices\EmployeePush::class);
+        $linked = $push->linked($employee);
+        $userId = trim((string) $employee->employee_code);
+
         try {
-            if ($employee->photograph_path) {
-                Storage::disk('local')->delete($employee->photograph_path);
-            }
-            $employee->delete();
+            DB::transaction(function () use ($employee, $linked, $userId): void {
+                $kept = [];
+                foreach ($linked as $device) {
+                    $row = DeviceTerminalUser::query()->updateOrCreate(
+                        ['device_id' => $device->id, 'user_id' => $userId],
+                        ['name' => $employee->full_name, 'employee_id' => $employee->id],
+                    );
+                    $kept[] = $row->id;
+                }
+                if ($employee->photograph_path) {
+                    Storage::disk('local')->delete($employee->photograph_path);
+                }
+                $employee->delete();
+                if ($kept !== []) {
+                    DeviceTerminalUser::query()->whereIn('id', $kept)->update(['dismissed_at' => now()]);
+                }
+            });
+            $push->drop($linked, $userId);
         } catch (QueryException) {
             if ($request->ajax()) {
                 return response()->json(['message' => 'This employee has history or documents and cannot be deleted.'], 422);
@@ -212,6 +277,49 @@ class EmployeeController extends Controller
         return Storage::disk('local')->response($employee->photograph_path);
     }
 
+    /**
+     * @param  \Illuminate\Support\Collection<int, Employee>  $employees
+     * @return array<int, array<string, int>>
+     */
+    private function credentialCounts($employees): array
+    {
+        if ($employees->isEmpty()) {
+            return [];
+        }
+
+        $counts = [];
+        $rows = \App\Models\EmployeeCredential::query()
+            ->whereIn('employee_id', $employees->pluck('id'))
+            ->selectRaw('employee_id, kind, COUNT(*) as total')
+            ->groupBy('employee_id', 'kind')
+            ->get();
+        foreach ($rows as $row) {
+            $counts[(int) $row->employee_id][(string) $row->kind] = (int) $row->total;
+        }
+
+        return $counts;
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    private function countsFor(Employee $employee): array
+    {
+        $counts = ['password' => 0, 'card' => 0, 'finger' => 0, 'face' => 0];
+        $rows = \App\Models\EmployeeCredential::query()
+            ->where('employee_id', $employee->id)
+            ->selectRaw('kind, COUNT(*) as total')
+            ->groupBy('kind')
+            ->get();
+        foreach ($rows as $row) {
+            if (array_key_exists((string) $row->kind, $counts)) {
+                $counts[(string) $row->kind] = (int) $row->total;
+            }
+        }
+
+        return $counts;
+    }
+
     private function filteredEmployees(Request $request): LengthAwarePaginator
     {
         return Employee::query()
@@ -262,6 +370,16 @@ class EmployeeController extends Controller
                 ->where('is_active', true)
                 ->orderBy('sort_order')
                 ->get(),
+            'terminals' => $employee
+                ? \App\Models\Device::query()
+                    ->where('company_id', $employee->company_id)
+                    ->where(function ($query) use ($employee): void {
+                        $query->whereHas('users', fn ($users) => $users->where('employee_id', $employee->id))
+                            ->orWhereHas('terminalUsers', fn ($people) => $people->where('employee_id', $employee->id));
+                    })
+                    ->orderBy('name')
+                    ->get()
+                : collect(),
         ];
     }
 }

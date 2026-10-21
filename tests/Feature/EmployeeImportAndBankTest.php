@@ -110,6 +110,26 @@ class EmployeeImportAndBankTest extends TestCase
             ->assertNotFound();
     }
 
+    public function test_a_removed_employee_post_returns_to_the_list(): void
+    {
+        $org = $this->makeCompany('GONE');
+        $hr = $this->makeUser('hr-admin', $org['company']);
+
+        $this->actingAsScoped($hr)
+            ->get('/employees/99999')
+            ->assertNotFound();
+
+        $this->actingAsScoped($hr)
+            ->post('/employees/99999', ['_method' => 'DELETE'])
+            ->assertRedirect(route('employees.index'))
+            ->assertSessionHas('error', 'This employee is no longer in the list. Refresh and try again.');
+
+        $this->actingAsScoped($hr)
+            ->postJson('/employees/99999', ['_method' => 'DELETE'])
+            ->assertNotFound()
+            ->assertJsonPath('message', 'This employee is no longer in the list. Refresh and try again.');
+    }
+
     /**
      * @param  list<list<string>>  $rows
      */

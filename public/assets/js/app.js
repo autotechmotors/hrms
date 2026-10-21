@@ -99,8 +99,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (pendingForm) {
             const form = pendingForm;
             pendingForm = null;
+            if (form.dataset.confirmed === '1') {
+                return;
+            }
             form.dataset.confirmed = '1';
-            form.submit();
+            const submitted = new Event('submit', { bubbles: true, cancelable: true });
+            if (form.dispatchEvent(submitted)) {
+                form.submit();
+            }
             return;
         }
         if (pendingResolve) {

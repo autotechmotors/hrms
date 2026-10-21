@@ -13,7 +13,7 @@
         <tbody>
         @forelse($logs as $log)
             <tr>
-                <td>{{ $log->created_at?->format('d M Y H:i') }}</td>
+                <td>{{ \App\Support\Clock::dateTime($log->created_at) }}</td>
                 <td>{{ $log->user?->name ?? 'System' }}</td>
                 <td>{{ $log->event }}</td>
                 <td>{{ class_basename((string) $log->auditable_type) }} {{ $log->auditable_id }}</td>

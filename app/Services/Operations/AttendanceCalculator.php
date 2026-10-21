@@ -43,9 +43,10 @@ class AttendanceCalculator
         if ($in && $out && $out->lessThanOrEqualTo($in)) {
             $out = $out->copy()->addDay();
         }
-        $minutes = ($in && $out && $out->greaterThan($in)) ? $in->diffInMinutes($out) : 0;
-        if ($roster?->shift && $roster->shift->break_minutes && $minutes > 0) {
-            $minutes = max(0, $minutes - (int) $roster->shift->break_minutes);
+        $minutes = ($in && $out && $out->greaterThan($in)) ? (int) round($in->diffInMinutes($out, true)) : 0;
+        $break = (int) ($roster?->shift->break_minutes ?? 0);
+        if ($break > 0 && $minutes > $break) {
+            $minutes -= $break;
         }
 
         $status = 'absent';
@@ -55,16 +56,8 @@ class AttendanceCalculator
             $status = 'on_leave';
         } elseif ($roster?->is_off || (! $roster && ! $this->calendar->isWorkingDay((int) $employee->company_id, $date))) {
             $status = 'weekly_off';
-        } elseif ($in && $out) {
+        } elseif ($in) {
             $status = 'present';
-            if ($rule->half_day_minutes && $minutes < $rule->half_day_minutes) {
-                $status = 'half_day';
-            } elseif ($roster?->shift && ! $roster->shift->is_flexible) {
-                $start = Carbon::parse($date->toDateString().' '.$roster->shift->starts_at)->addMinutes((int) $rule->grace_minutes);
-                if ($in->greaterThan($start)) {
-                    $status = 'late';
-                }
-            }
         } elseif (! $rule->mark_absent_without_punch && ! $in) {
             $status = 'unmarked';
         }

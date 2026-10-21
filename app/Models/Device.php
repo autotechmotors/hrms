@@ -11,7 +11,7 @@ class Device extends Model
 {
     use AuditsChanges, BelongsToCompany;
 
-    protected $fillable = ['company_id', 'name', 'model', 'serial', 'ip_address', 'place', 'status', 'last_checked_at'];
+    protected $fillable = ['company_id', 'name', 'model', 'serial', 'register_id', 'ip_address', 'place', 'status', 'last_checked_at'];
 
     protected function casts(): array
     {
@@ -21,5 +21,10 @@ class Device extends Model
     public function users(): HasMany
     {
         return $this->hasMany(DeviceUser::class);
+    }
+
+    public function terminalUsers(): HasMany
+    {
+        return $this->hasMany(DeviceTerminalUser::class);
     }
 }
