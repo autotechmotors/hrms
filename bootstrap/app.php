@@ -14,6 +14,9 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->redirectGuestsTo('/login');
+        $middleware->validateCsrfTokens(except: [
+            'device-events',
+        ]);
         $middleware->alias([
             'mfa' => \App\Http\Middleware\EnsureMfaPassed::class,
             'permission' => \App\Http\Middleware\EnsurePermission::class,

@@ -5,6 +5,8 @@ return [
     'port' => (int) env('DAHUA_PUSH_PORT', 60002),
     'host' => env('DAHUA_PUSH_HOST', '192.168.1.68'),
     'register_id' => env('DAHUA_REGISTER_ID', 'test123'),
+    'forward_url' => env('DAHUA_FORWARD_URL'),
+    'forward_token' => env('DAHUA_FORWARD_TOKEN'),
 
     /*
     | The same door permission for every employee. 255 is the terminal's

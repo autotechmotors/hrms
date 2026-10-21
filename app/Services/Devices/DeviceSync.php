@@ -30,6 +30,7 @@ class DeviceSync
 
     public function run(Device $device): string
     {
+        app(PunchForward::class)->flush();
         $this->people->promoteMissingProfiles();
         $imported = $this->push->importInbox($device);
         $this->push->continueCollect($device);
@@ -48,6 +49,7 @@ class DeviceSync
 
     public function pullPunches(): int
     {
+        app(PunchForward::class)->flush();
         try {
             if (! Cache::add('devices.pull-punches', 1, now()->addSeconds(8))) {
                 return 0;
@@ -143,6 +145,79 @@ class DeviceSync
         return $recover ? $count + $this->recoverImported($device, $dir) : $count;
     }
 
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array{saved: int, pending: bool}
+     */
+    public function receive(Device $device, array $data, string $seq, ?string $image): array
+    {
+        $pending = false;
+        foreach ($data['NotifyInfo']['Events'] ?? [] as $event) {
+            if (! is_array($event)) {
+                continue;
+            }
+            $row = $event['Data'] ?? null;
+            if (! is_array($row)) {
+                continue;
+            }
+            $userId = trim((string) ($row['UserID'] ?? ''));
+            if ($userId === '') {
+                continue;
+            }
+            if (! $this->linkExisting($device, $userId, (string) ($row['UserName'] ?? $userId))) {
+                $pending = true;
+            }
+        }
+
+        $saved = $this->importEventFile($device, $data, $seq, '', true, $image, true);
+
+        return ['saved' => $saved, 'pending' => $pending && $saved === 0];
+    }
+
+    private function linkExisting(Device $device, string $userId, string $name): bool
+    {
+        $dismissed = DeviceTerminalUser::query()
+            ->where('device_id', $device->id)
+            ->where('user_id', $userId)
+            ->whereNotNull('dismissed_at')
+            ->exists();
+        if ($dismissed) {
+            return true;
+        }
+
+        $person = DeviceTerminalUser::query()
+            ->where('device_id', $device->id)
+            ->where('user_id', $userId)
+            ->whereNull('dismissed_at')
+            ->first();
+        if ($person?->employee_id) {
+            return true;
+        }
+
+        $employee = Employee::query()
+            ->where('company_id', $device->company_id)
+            ->where('employee_code', $userId)
+            ->first();
+        if (! $employee) {
+            return false;
+        }
+
+        if ($person) {
+            $person->update(['employee_id' => $employee->id, 'name' => $name]);
+
+            return true;
+        }
+
+        DeviceTerminalUser::query()->create([
+            'device_id' => $device->id,
+            'user_id' => $userId,
+            'name' => $name,
+            'employee_id' => $employee->id,
+        ]);
+
+        return true;
+    }
+
     private function recoverImported(Device $device, string $dir): int
     {
         $imported = $dir.DIRECTORY_SEPARATOR.'imported';
@@ -180,10 +255,10 @@ class DeviceSync
         File::move($from, $to);
     }
 
-    private function importEventFile(Device $device, array $data, string $seq, string $dir, bool $knownOnly = false): int
+    private function importEventFile(Device $device, array $data, string $seq, string $dir, bool $knownOnly = false, ?string $storedImage = null, bool $useStoredImage = false): int
     {
         $saved = 0;
-        $image = $this->imageFor($dir, $seq);
+        $image = $useStoredImage ? $storedImage : $this->imageFor($dir, $seq);
         foreach ($data['NotifyInfo']['Events'] as $event) {
             if (! is_array($event) || ($event['Code'] ?? '') !== 'AccessControl') {
                 continue;
@@ -247,6 +322,9 @@ class DeviceSync
             if ($punch->wasRecentlyCreated) {
                 $saved++;
                 $this->applyDay($employee, $at->copy()->startOfDay());
+                if (! $knownOnly) {
+                    app(PunchForward::class)->send($device, $event, $seq, $image);
+                }
             }
         }
 
