@@ -28,20 +28,12 @@ class DahuaPush
     public function listenerOpen(): bool
     {
         $socket = @fsockopen('127.0.0.1', (int) config('dahua.port'), $errno, $errstr, 0.4);
-        if ($socket !== false) {
-            fclose($socket);
-
-            return true;
+        if ($socket === false) {
+            return false;
         }
+        fclose($socket);
 
-        return $this->webGateway();
-    }
-
-    public function webGateway(): bool
-    {
-        $configured = rtrim((string) config('dahua.push_dir'), '\\/');
-
-        return $configured === '' || $this->foreignPath($configured);
+        return true;
     }
 
     public function connection(): ?array
@@ -743,24 +735,7 @@ class DahuaPush
 
     private function pushDir(): string
     {
-        $configured = rtrim((string) config('dahua.push_dir'), '\\/');
-        if ($configured !== '' && ! $this->foreignPath($configured)) {
-            if (is_dir($configured) || @mkdir($configured, 0755, true) || is_dir($configured)) {
-                return $configured;
-            }
-        }
-
-        $fallback = storage_path('app/dahua');
-        if (! is_dir($fallback)) {
-            mkdir($fallback, 0755, true);
-        }
-
-        return $fallback;
-    }
-
-    private function foreignPath(string $path): bool
-    {
-        return PHP_OS_FAMILY !== 'Windows' && preg_match('/^[A-Za-z]:[\\\\\\/]/', $path) === 1;
+        return rtrim((string) config('dahua.push_dir'), '\\/');
     }
 
     private function safe(string $value): string

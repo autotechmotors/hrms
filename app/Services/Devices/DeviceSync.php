@@ -49,11 +49,6 @@ class DeviceSync
         return $device->name.': imported '.$imported.', added '.$created.', punches '.$punches.($queued ? ', list requested' : ', list already waiting');
     }
 
-    public function importSaved(Device $device): int
-    {
-        return $this->importPunches($device, false);
-    }
-
     public function pullPunches(): int
     {
         app(PunchForward::class)->flush();
