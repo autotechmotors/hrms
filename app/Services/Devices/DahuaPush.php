@@ -103,6 +103,7 @@ class DahuaPush
             throw new RuntimeException('Choose a face, finger, or card to collect.');
         }
 
+        $this->releaseCollect($device);
         $this->rememberCollect($device, $userId, $kind);
 
         return $this->queue($device, 'collect-'.$kind.'-'.$userId, $this->command('POST', '/ezapi/ac/personCollect', [
@@ -418,11 +419,78 @@ class DahuaPush
         ];
     }
 
+    public function collecting(Device $device): bool
+    {
+        $active = $this->activeCollect($device);
+        if (is_array($active)) {
+            $started = (int) ($active['started_at'] ?? 0);
+            $keep = max(30, (int) ($active['keep_time'] ?? 900));
+            if ($started > 0 && time() <= $started + $keep) {
+                return true;
+            }
+            $this->clearActiveCollect($device);
+        }
+
+        return $this->collectCommandWaiting($device);
+    }
+
     public function continueCollect(Device $device): void
     {
         $active = $this->activeCollect($device);
         if ($active) {
             $this->pollCollect($device, $active);
+        }
+    }
+
+    private function releaseCollect(Device $device): void
+    {
+        $this->clearActiveCollect($device);
+        $path = $this->collectPath($device, 'queue');
+        if (is_file($path)) {
+            unlink($path);
+        }
+        foreach (['face', 'finger', 'card'] as $kind) {
+            $this->releaseQueuedPrefix($device, 'collect-'.$kind.'-');
+        }
+    }
+
+    private function collectCommandWaiting(Device $device): bool
+    {
+        $prefix = $this->safe($this->registerId($device)).'__';
+        foreach (['pending', 'sending'] as $folder) {
+            $dir = $this->pushDir().DIRECTORY_SEPARATOR.'commands'.DIRECTORY_SEPARATOR.$folder;
+            if (! is_dir($dir)) {
+                continue;
+            }
+            foreach (File::files($dir) as $file) {
+                $name = $file->getFilename();
+                if (! str_starts_with($name, $prefix)) {
+                    continue;
+                }
+                if (str_contains($name, '__collect-face-') || str_contains($name, '__collect-finger-') || str_contains($name, '__collect-card-')) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private function releaseQueuedPrefix(Device $device, string $actionPrefix): void
+    {
+        $prefix = $this->safe($this->registerId($device)).'__';
+        $needle = '__'.$this->safe($actionPrefix);
+        foreach (['pending', 'sending'] as $folder) {
+            $dir = $this->pushDir().DIRECTORY_SEPARATOR.'commands'.DIRECTORY_SEPARATOR.$folder;
+            if (! is_dir($dir)) {
+                continue;
+            }
+            foreach (File::files($dir) as $file) {
+                $name = $file->getFilename();
+                if (str_starts_with($name, $prefix) && str_contains($name, $needle)) {
+                    File::delete($file->getPathname());
+                }
+            }
         }
     }
 

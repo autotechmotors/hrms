@@ -35,13 +35,15 @@ class DeviceSync
         $imported = $this->push->importInbox($device);
         $this->push->continueCollect($device);
         $created = $this->linkPeople($device);
-        $this->pushUnlinked($device);
         $punches = $this->importPunches($device, true);
-        $this->queueMissingBiometrics($device);
         $queued = false;
-        if (! $this->push->listRequestWaiting($device)) {
-            $this->push->queueUserList($device);
-            $queued = true;
+        if (! $this->push->collecting($device)) {
+            $this->pushUnlinked($device);
+            $this->queueMissingBiometrics($device);
+            if (! $this->push->listRequestWaiting($device)) {
+                $this->push->queueUserList($device);
+                $queued = true;
+            }
         }
 
         return $device->name.': imported '.$imported.', added '.$created.', punches '.$punches.($queued ? ', list requested' : ', list already waiting');

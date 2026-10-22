@@ -175,11 +175,10 @@ class DahuaEnrollTest extends TestCase
         $this->assertSame('/ezapi/ac/personCollect', $payload['Request']['URI']);
         $this->assertSame(0, $payload['Request']['Body']['Type']);
         $this->assertSame('100033', $payload['Request']['Body']['UserID']);
-        $finger = collect(File::files($dir.DIRECTORY_SEPARATOR.'commands'.DIRECTORY_SEPARATOR.'pending'))
-            ->map(fn ($file) => json_decode(File::get($file->getPathname()), true))
-            ->first(fn ($payload) => ($payload['Request']['URI'] ?? null) === '/ezapi/ac/fingerprints');
-        $this->assertNotNull($finger);
-        $this->assertSame('100033', $finger['Request']['Body']['UsersFingerPrints'][0]['UserID']);
+        $beforeCapture = collect(File::files($dir.DIRECTORY_SEPARATOR.'commands'.DIRECTORY_SEPARATOR.'pending'))
+            ->map(fn ($file) => json_decode(File::get($file->getPathname()), true));
+        $this->assertNull($beforeCapture->first(fn ($payload) => ($payload['Request']['URI'] ?? null) === '/ezapi/ac/fingerprints'));
+        $this->assertNull($beforeCapture->first(fn ($payload) => ($payload['Request']['URI'] ?? null) === '/ezapi/ac/faces'));
 
         $inbox = $dir.DIRECTORY_SEPARATOR.'runtime'.DIRECTORY_SEPARATOR.'inbox';
         File::ensureDirectoryExists($inbox);
@@ -213,6 +212,11 @@ class DahuaEnrollTest extends TestCase
         $this->assertSame('100033', $face['Request']['Body']['FaceList'][0]['UserID']);
         $this->assertSame(base64_encode('face-bytes'), $face['Request']['Body']['FaceList'][0]['PhotoData'][0]);
         $this->assertSame([], $face['Request']['Body']['FaceList'][0]['FeatureData']);
+        $finger = collect(File::files($dir.DIRECTORY_SEPARATOR.'commands'.DIRECTORY_SEPARATOR.'pending'))
+            ->map(fn ($file) => json_decode(File::get($file->getPathname()), true))
+            ->first(fn ($payload) => ($payload['Request']['URI'] ?? null) === '/ezapi/ac/fingerprints');
+        $this->assertNotNull($finger);
+        $this->assertSame('100033', $finger['Request']['Body']['UsersFingerPrints'][0]['UserID']);
     }
 
     public function test_device_pages_expose_add_edit_and_delete(): void
@@ -376,6 +380,12 @@ class DahuaEnrollTest extends TestCase
             'slot' => '0',
             'content' => base64_encode('12345678'),
         ]);
+        \App\Models\EmployeeCredential::query()->create([
+            'employee_id' => $employee->id,
+            'kind' => 'face',
+            'slot' => '0',
+            'content' => base64_encode('stored-face'),
+        ]);
 
         $this->actingAsScoped($hr)
             ->postJson(route('employees.credentials.collect', $employee), ['kind' => 'finger'])
@@ -383,10 +393,11 @@ class DahuaEnrollTest extends TestCase
 
         $payloads = fn () => collect(File::files($dir.DIRECTORY_SEPARATOR.'commands'.DIRECTORY_SEPARATOR.'pending'))
             ->map(fn ($file) => json_decode(File::get($file->getPathname()), true));
-        $person = $payloads()->first(fn ($payload) => ($payload['Request']['URI'] ?? null) === '/ezapi/ac/persons');
-        $this->assertSame('12345678', $person['Request']['Body']['PersonnelInfo']['User']['Password']);
+        $this->assertNull($payloads()->first(fn ($payload) => ($payload['Request']['URI'] ?? null) === '/ezapi/ac/persons'));
         $collect = $payloads()->first(fn ($payload) => ($payload['Request']['URI'] ?? null) === '/ezapi/ac/personCollect');
         $this->assertSame(2, $collect['Request']['Body']['Type']);
+        $this->assertNull($payloads()->first(fn ($payload) => ($payload['Request']['URI'] ?? null) === '/ezapi/ac/faces'));
+        $this->assertNull($payloads()->first(fn ($payload) => ($payload['Request']['URI'] ?? null) === '/ezapi/ac/fingerprints'));
 
         $inbox = $dir.DIRECTORY_SEPARATOR.'runtime'.DIRECTORY_SEPARATOR.'inbox';
         File::ensureDirectoryExists($inbox);
@@ -419,6 +430,8 @@ class DahuaEnrollTest extends TestCase
         ]);
         $finger = $payloads()->first(fn ($payload) => ($payload['Request']['URI'] ?? null) === '/ezapi/ac/fingerprints');
         $this->assertNotNull($finger);
+        $person = $payloads()->first(fn ($payload) => ($payload['Request']['URI'] ?? null) === '/ezapi/ac/persons');
+        $this->assertSame('12345678', $person['Request']['Body']['PersonnelInfo']['User']['Password']);
         $this->assertSame('AT0006', $finger['Request']['Body']['UsersFingerPrints'][0]['UserID']);
         $this->assertSame(base64_encode('finger-bytes'), $finger['Request']['Body']['UsersFingerPrints'][0]['FingerPrints'][0]['FingerprintData']);
         $this->assertSame(0, $finger['Request']['Body']['UsersFingerPrints'][0]['FingerPrints'][0]['Type']);

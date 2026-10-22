@@ -80,9 +80,8 @@ class EmployeePush
                         ['employee_id' => $employee->id, 'kind' => 'password', 'slot' => '0'],
                         ['content' => base64_encode((string) $password)],
                     );
-                }
-                $this->rewrite($device, $employee, $userId, $name);
-                if ($kind !== 'password') {
+                    $this->queuePerson($device, $employee, $userId, $name);
+                } else {
                     $this->push->queueCollect($device, $userId, $kind);
                 }
                 $queued++;
@@ -92,9 +91,9 @@ class EmployeePush
         }
 
         $message = match ($kind) {
-            'face' => 'Look at '.$devices->first()->name.'. The face is saved here and sent back to the terminal as base64.',
-            'finger' => 'Place one finger on '.$devices->first()->name.'. It is saved here and written onto the terminal, the same way a password is stored.',
-            'card' => 'Present the card on '.$devices->first()->name.'. It is saved here and written onto the terminal. If this terminal has no card reader, the count stays empty.',
+            'face' => 'Look at '.$devices->first()->name.' now. Stay until the distance guide finishes. Do not click another credential while it is open.',
+            'finger' => 'Place one finger on '.$devices->first()->name.' now. Wait until that finger is saved before choosing another credential.',
+            'card' => 'Present the card on '.$devices->first()->name.' now. If this terminal has no card reader, the count stays empty.',
             default => 'Password sent to the terminal.',
         };
 
