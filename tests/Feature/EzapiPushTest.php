@@ -140,4 +140,28 @@ class EzapiPushTest extends TestCase
         $this->assertNotNull($follow);
         $this->assertSame($employee->employee_code, '100033');
     }
+
+    public function test_an_unknown_caller_does_not_become_the_device_contact(): void
+    {
+        $dir = storage_path('framework/testing/dahua-ezapi-probe');
+        File::deleteDirectory($dir);
+        config(['dahua.push_dir' => $dir, 'dahua.register_id' => 'GATE01']);
+
+        $org = $this->makeCompany('EZP');
+        Device::query()->create([
+            'company_id' => $org['company']->id,
+            'name' => 'TEST01',
+            'register_id' => 'GATE01',
+            'status' => 'online',
+        ]);
+
+        $this->postJson('/ezapi/push/init', [
+            'RegisterID' => 'NOSNI',
+            'InitState' => 1,
+        ])->assertOk();
+
+        $this->get('/ezapi/push/status')
+            ->assertOk()
+            ->assertJsonPath('latest', null);
+    }
 }

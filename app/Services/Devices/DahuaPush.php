@@ -28,7 +28,8 @@ class DahuaPush
     public function listenerOpen(): bool
     {
         $seen = $this->connection();
-        if (is_array($seen) && ($seen['online'] ?? false)) {
+        $seenId = trim((string) ($seen['register_id'] ?? ''));
+        if (is_array($seen) && ($seen['online'] ?? false) && $seenId !== '' && $this->knownRegister($seenId)) {
             return true;
         }
 
@@ -58,6 +59,15 @@ class DahuaPush
         $data['last_seen_at'] = $seen;
 
         return $data;
+    }
+
+    private function knownRegister(string $registerId): bool
+    {
+        if (strcasecmp($registerId, (string) config('dahua.register_id')) === 0) {
+            return true;
+        }
+
+        return Device::query()->where('register_id', $registerId)->exists();
     }
 
     public function lastResult(): ?array

@@ -4,6 +4,9 @@
     @php
         $statusClass = $device->status === 'online' ? 'ok' : ($device->status === 'offline' ? 'er' : '');
         $registerId = $device->register_id ?: config('dahua.register_id');
+        $heard = (! empty($connection['register_id']) && strcasecmp((string) $connection['register_id'], (string) $registerId) === 0)
+            ? $connection
+            : null;
         $reply = data_get($lastResult, 'Response.Body.Detail.DebugInfo')
             ?: data_get($lastResult, 'Response.Body.ErrorMsg')
             ?: data_get($lastResult, 'Response.StatusCode');
@@ -27,7 +30,7 @@
                 <div class="ed-hero-top">
                     <span class="b {{ $statusClass }}">{{ ucfirst($device->status) }}</span>
                     <span class="b {{ $listenerOpen ? 'ok' : 'er' }}">Listener {{ $listenerOpen ? 'running' : 'stopped' }}</span>
-                    @if (! empty($connection['online']))
+                    @if (! empty($heard['online']))
                         <span class="b ok">Online</span>
                     @endif
                 </div>
@@ -144,10 +147,10 @@
                         <div>
                             <span>Last contact</span>
                             <b>
-                                @if ($connection)
-                                    {{ \App\Support\Clock::stamp($connection['last_seen_at']) }}
-                                    @if (! empty($connection['ip']))
-                                        · {{ $connection['ip'] }}
+                                @if ($heard)
+                                    {{ \App\Support\Clock::stamp($heard['last_seen_at']) }}
+                                    @if (! empty($heard['ip']))
+                                        · {{ $heard['ip'] }}
                                     @endif
                                 @else
                                     No contact yet
@@ -160,9 +163,6 @@
                         </div>
                     </div>
                     <p>Server {{ $pushHost }}, port {{ $pushPort }}. The device calls this PC.</p>
-                    @if (! empty($connection['register_id']) && $connection['register_id'] !== $registerId)
-                        <p class="dv-warn">This device is calling as <b>{{ $connection['register_id'] }}</b>. The register ID saved here is <b>{{ $registerId }}</b>. Edit it so they match, or enroll commands will wait and never reach the device.</p>
-                    @endif
                 </div>
             </section>
 

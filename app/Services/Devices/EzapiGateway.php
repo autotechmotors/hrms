@@ -259,7 +259,10 @@ class EzapiGateway
             'action' => $action,
             'last_seen' => now()->toIso8601String(),
         ];
-        File::put($dir.DIRECTORY_SEPARATOR.'latest.json', json_encode($row, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+        $encoded = json_encode($row, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        if (Device::query()->where('register_id', $registerId)->exists()) {
+            File::put($dir.DIRECTORY_SEPARATOR.'latest.json', $encoded);
+        }
         File::ensureDirectoryExists($dir.DIRECTORY_SEPARATOR.'ip');
         File::put($dir.DIRECTORY_SEPARATOR.'ip'.DIRECTORY_SEPARATOR.sha1((string) $ip).'.json', json_encode($row));
         $hitsPath = $dir.DIRECTORY_SEPARATOR.'hits.json';

@@ -239,6 +239,16 @@ class DahuaEnrollTest extends TestCase
             ->assertSee('editDevice'.$device->id, false)
             ->assertSee(route('devices.destroy', $device), false);
 
+        $dir = storage_path('framework/testing/dahua-show-contact');
+        File::deleteDirectory($dir);
+        config(['dahua.push_dir' => $dir, 'dahua.register_id' => 'test123']);
+        File::ensureDirectoryExists($dir.DIRECTORY_SEPARATOR.'runtime');
+        File::put($dir.DIRECTORY_SEPARATOR.'runtime'.DIRECTORY_SEPARATOR.'latest.json', json_encode([
+            'register_id' => 'NOSNI',
+            'ip' => '103.100.17.196',
+            'last_seen' => now()->toIso8601String(),
+        ]));
+
         $this->get(route('devices.show', $device))
             ->assertOk()
             ->assertSee('Enroll employee')
@@ -246,7 +256,10 @@ class DahuaEnrollTest extends TestCase
             ->assertSee('People on this device')
             ->assertSee('Edit device')
             ->assertSee('Delete device')
-            ->assertSee('Connection');
+            ->assertSee('Connection')
+            ->assertSee('No contact yet')
+            ->assertDontSee('calling as')
+            ->assertDontSee('NOSNI');
 
         $this->put(route('devices.update', $device), [
             'name' => 'Main gate',
