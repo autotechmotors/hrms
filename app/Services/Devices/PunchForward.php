@@ -49,6 +49,9 @@ class PunchForward
         if ($url === '' || $token === '') {
             return false;
         }
+        if ($this->sameServer($url)) {
+            return true;
+        }
 
         try {
             $response = Http::timeout(15)
@@ -74,6 +77,14 @@ class PunchForward
         $this->keep($payload);
 
         return false;
+    }
+
+    private function sameServer(string $url): bool
+    {
+        $host = strtolower((string) parse_url($url, PHP_URL_HOST));
+        $app = strtolower((string) parse_url((string) config('app.url'), PHP_URL_HOST));
+
+        return $host !== '' && $host === $app;
     }
 
     /**
