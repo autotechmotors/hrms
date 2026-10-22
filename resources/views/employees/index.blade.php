@@ -251,14 +251,9 @@
             data: body,
             headers: { 'X-CSRF-TOKEN': csrf }
         }).done(function (data) {
-            const box = button.closest('.ac-cred');
-            paintCounts(box, data.counts || {});
-            if (data.waiting) {
-                watchDelivery(box, data.message || 'Look at the terminal now.');
-                return;
-            }
+            paintCounts(button.closest('.ac-cred'), data.counts || {});
             if (window.toast) window.toast(data.message || 'Sent to the terminal.');
-            watchCredentials(box);
+            watchCredentials(button.closest('.ac-cred'));
         }).fail(function (xhr) {
             const message = xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'The terminal could not be updated.';
             if (window.toast) window.toast(message, 'er');
@@ -275,32 +270,6 @@
             item.find('b').text(total);
             item.toggleClass('on', total > 0);
         });
-    }
-
-    function watchDelivery(box, message) {
-        const url = box.attr('data-state');
-        if (!url) return;
-        const previous = box.data('watchTimer');
-        if (previous) window.clearInterval(previous);
-        let tries = 0;
-        const timer = window.setInterval(function () {
-            tries += 1;
-            $.getJSON(url).done(function (data) {
-                paintCounts(box, data.counts || {});
-                if (data.delivery === 'detected') {
-                    window.clearInterval(timer);
-                    box.removeData('watchTimer');
-                    if (window.toast) window.toast(message, 'ok', 8000);
-                    watchCredentials(box);
-                }
-            });
-            if (tries >= 10) {
-                window.clearInterval(timer);
-                box.removeData('watchTimer');
-                if (window.toast) window.toast('The terminal did not receive the command.', 'er', 7000);
-            }
-        }, 2000);
-        box.data('watchTimer', timer);
     }
 
     function watchCredentials(box) {

@@ -123,7 +123,6 @@ class EmployeeController extends Controller
 
         return response()->json([
             'message' => $result['message'],
-            'waiting' => (bool) ($result['waiting'] ?? false),
             'counts' => $this->countsFor($employee),
         ]);
     }
@@ -131,28 +130,16 @@ class EmployeeController extends Controller
     public function credentialState(Employee $employee): JsonResponse
     {
         $this->authorize('view', $employee);
-        $push = app(\App\Services\Devices\DahuaPush::class);
-        $delivery = 'idle';
-        \App\Models\Device::query()->where('company_id', $employee->company_id)->orderBy('id')->each(function ($device) use ($push, &$delivery): void {
+        \App\Models\Device::query()->where('company_id', $employee->company_id)->orderBy('id')->each(function ($device): void {
             try {
+                $push = app(\App\Services\Devices\DahuaPush::class);
                 $push->importInbox($device);
                 $push->continueCollect($device);
             } catch (\Throwable) {
             }
-            $phase = $push->collectPhase($device);
-            if ($phase === 'waiting') {
-                $delivery = 'waiting';
-            } elseif ($phase === 'detected' && $delivery !== 'waiting') {
-                $delivery = 'detected';
-            } elseif ($phase === 'offline' && $delivery === 'idle') {
-                $delivery = 'offline';
-            }
         });
 
-        return response()->json([
-            'counts' => $this->countsFor($employee),
-            'delivery' => $delivery,
-        ]);
+        return response()->json(['counts' => $this->countsFor($employee)]);
     }
 
     public function edit(Employee $employee): View

@@ -68,14 +68,8 @@ class EmployeePush
         }
 
         $queued = 0;
-        $offline = null;
         foreach ($devices as $device) {
             try {
-                if (! $this->push->reachable($device)) {
-                    $offline ??= $device->name;
-
-                    continue;
-                }
                 $this->push->rememberPerson($device, $userId, $name, $employee->id);
                 DeviceUser::query()->updateOrCreate(
                     ['device_id' => $device->id, 'employee_id' => $employee->id],
@@ -96,16 +90,6 @@ class EmployeePush
             }
         }
 
-        if ($queued === 0) {
-            $name = $offline ?: 'The terminal';
-
-            return [
-                'devices' => 0,
-                'waiting' => false,
-                'message' => $name.' is not connected. The command was not sent.',
-            ];
-        }
-
         $message = match ($kind) {
             'face' => 'Look at '.$devices->first()->name.' now. Stay until the distance guide finishes. Do not click another credential while it is open.',
             'finger' => 'Place one finger on '.$devices->first()->name.' now. Wait until that finger is saved before choosing another credential.',
@@ -113,11 +97,7 @@ class EmployeePush
             default => 'Password sent to the terminal.',
         };
 
-        return [
-            'devices' => $queued,
-            'waiting' => $kind !== 'password',
-            'message' => $message,
-        ];
+        return ['devices' => $queued, 'message' => $message];
     }
 
     public function keepCollected(Device $device, Employee $employee, array $item): void
