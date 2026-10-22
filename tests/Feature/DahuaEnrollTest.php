@@ -163,8 +163,11 @@ class DahuaEnrollTest extends TestCase
             ->assertSee('data-kind="finger"', false)
             ->assertSee('>1<', false);
 
+        $this->seeTerminal($dir, 'GATE01');
+
         $this->postJson(route('employees.credentials.collect', $employee), ['kind' => 'face'])
             ->assertOk()
+            ->assertJsonPath('waiting', true)
             ->assertJsonPath('counts.finger', 1)
             ->assertJsonPath('counts.face', 0);
 
@@ -387,6 +390,8 @@ class DahuaEnrollTest extends TestCase
             'content' => base64_encode('stored-face'),
         ]);
 
+        $this->seeTerminal($dir, 'GATE01');
+
         $this->actingAsScoped($hr)
             ->postJson(route('employees.credentials.collect', $employee), ['kind' => 'finger'])
             ->assertOk();
@@ -534,5 +539,41 @@ class DahuaEnrollTest extends TestCase
             'company_id' => $org['company']->id,
             'employee_code' => '100033',
         ]);
+    }
+
+    public function test_face_click_is_refused_when_the_terminal_is_offline(): void
+    {
+        $dir = storage_path('framework/testing/dahua-offline');
+        File::deleteDirectory($dir);
+        config(['dahua.push_dir' => $dir, 'dahua.register_id' => 'GATE01']);
+
+        $org = $this->makeCompany('OFF');
+        $employee = $this->makeEmployee($org, 'AT0008');
+        $hr = $this->makeUser('hr-admin', $org['company']);
+        Device::query()->create([
+            'company_id' => $org['company']->id,
+            'name' => 'TEST01',
+            'register_id' => 'GATE01',
+            'status' => 'offline',
+        ]);
+
+        $this->actingAsScoped($hr)
+            ->postJson(route('employees.credentials.collect', $employee), ['kind' => 'face'])
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'TEST01 is not connected. The command was not sent.');
+
+        $this->assertDirectoryDoesNotExist($dir.DIRECTORY_SEPARATOR.'commands'.DIRECTORY_SEPARATOR.'pending');
+    }
+
+    private function seeTerminal(string $dir, string $registerId): void
+    {
+        $runtime = $dir.DIRECTORY_SEPARATOR.'runtime';
+        File::ensureDirectoryExists($runtime);
+        File::put($runtime.DIRECTORY_SEPARATOR.'latest.json', json_encode([
+            'register_id' => $registerId,
+            'ip' => '192.168.1.225',
+            'port' => 60002,
+            'last_seen' => now()->toIso8601String(),
+        ]));
     }
 }

@@ -63,6 +63,33 @@ class DahuaPush
         return $data;
     }
 
+    public function reachable(Device $device): bool
+    {
+        $connection = $this->connection();
+        if ($connection === null || empty($connection['online'])) {
+            return false;
+        }
+
+        $seen = $this->safe((string) ($connection['register_id'] ?? ''));
+
+        return $seen === '' || $seen === $this->safe($this->registerId($device));
+    }
+
+    public function collectPhase(Device $device): string
+    {
+        if (! $this->reachable($device)) {
+            return 'offline';
+        }
+        if ($this->collectCommandWaiting($device)) {
+            return 'waiting';
+        }
+        if ($this->activeCollect($device) || $this->sentCollectRecently($device)) {
+            return 'detected';
+        }
+
+        return 'idle';
+    }
+
     public function lastResult(): ?array
     {
         $path = $this->pushDir().DIRECTORY_SEPARATOR.'runtime'.DIRECTORY_SEPARATOR.'last_result.json';
@@ -478,6 +505,27 @@ class DahuaPush
                 if (str_contains($name, '__collect-face-') || str_contains($name, '__collect-finger-') || str_contains($name, '__collect-card-')) {
                     return true;
                 }
+            }
+        }
+
+        return false;
+    }
+
+    private function sentCollectRecently(Device $device): bool
+    {
+        $prefix = $this->safe($this->registerId($device)).'__';
+        $dir = $this->pushDir().DIRECTORY_SEPARATOR.'commands'.DIRECTORY_SEPARATOR.'sent';
+        if (! is_dir($dir)) {
+            return false;
+        }
+        $cutoff = time() - 120;
+        foreach (File::files($dir) as $file) {
+            $name = $file->getFilename();
+            if (! str_starts_with($name, $prefix) || $file->getMTime() < $cutoff) {
+                continue;
+            }
+            if (str_contains($name, '__collect-face-') || str_contains($name, '__collect-finger-') || str_contains($name, '__collect-card-')) {
+                return true;
             }
         }
 
