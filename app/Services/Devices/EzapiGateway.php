@@ -19,17 +19,24 @@ class EzapiGateway
      */
     public function handle(string $action, Request $request): array
     {
+        if ($action === 'status') {
+            return ['status' => 200, 'body' => $this->statusBody()];
+        }
+
         $payload = $this->payload($request);
         $registerId = $this->registerId($request, $payload);
+        if ($registerId === '' && $action === 'request') {
+            $registerId = $this->remembered($request->ip());
+        }
         if ($registerId !== '') {
-            $this->seen($registerId, $request->ip());
+            $this->seen($registerId, $request->ip(), $action);
         }
 
         $device = $registerId === '' ? null : Device::query()->where('register_id', $registerId)->first();
 
         return match ($action) {
             'init' => ['status' => 200, 'body' => $this->initBody($payload)],
-            'request' => ['status' => 200, 'body' => $device ? $this->nextCommand($device) : ''],
+            'request' => ['status' => 200, 'body' => $device ? $this->commandFor($device) : ''],
             'result' => $this->result($device, $request),
             'event', 'general' => $this->event($device, $payload, $request),
             default => ['status' => 404, 'body' => 'Not Found'],
@@ -69,7 +76,7 @@ class EzapiGateway
         return $json === false ? '' : $json;
     }
 
-    private function nextCommand(Device $device): string
+    private function commandFor(Device $device): string
     {
         try {
             $this->push->importInbox($device);
@@ -77,6 +84,28 @@ class EzapiGateway
         } catch (\Throwable) {
         }
 
+        $deadline = microtime(true) + $this->pollSeconds();
+        do {
+            $body = $this->takeCommand($device);
+            if ($body !== '') {
+                return $body;
+            }
+            if (microtime(true) >= $deadline || connection_aborted()) {
+                break;
+            }
+            usleep(300000);
+        } while (microtime(true) < $deadline);
+
+        return '';
+    }
+
+    private function pollSeconds(): int
+    {
+        return max(0, (int) config('dahua.poll_seconds', 10));
+    }
+
+    private function takeCommand(Device $device): string
+    {
         $pending = $this->push->directory().DIRECTORY_SEPARATOR.'commands'.DIRECTORY_SEPARATOR.'pending';
         if (! is_dir($pending)) {
             return '';
@@ -195,10 +224,8 @@ class EzapiGateway
             return $data;
         }
 
-        $start = strpos($raw, '{"RegisterID"');
-        if ($start === false) {
-            $start = strpos($raw, '{');
-        }
+        $mark = strpos($raw, '"RegisterID"');
+        $start = $mark === false ? strpos($raw, '{') : strrpos(substr($raw, 0, $mark), '{');
         if ($start === false) {
             return [];
         }
@@ -221,16 +248,57 @@ class EzapiGateway
         return [];
     }
 
-    private function seen(string $registerId, ?string $ip): void
+    private function seen(string $registerId, ?string $ip, string $action): void
     {
         $dir = $this->push->directory().DIRECTORY_SEPARATOR.'runtime';
         File::ensureDirectoryExists($dir);
-        File::put($dir.DIRECTORY_SEPARATOR.'latest.json', json_encode([
+        $row = [
             'register_id' => $registerId,
             'ip' => (string) $ip,
             'port' => 443,
+            'action' => $action,
             'last_seen' => now()->toIso8601String(),
-        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+        ];
+        File::put($dir.DIRECTORY_SEPARATOR.'latest.json', json_encode($row, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+        File::ensureDirectoryExists($dir.DIRECTORY_SEPARATOR.'ip');
+        File::put($dir.DIRECTORY_SEPARATOR.'ip'.DIRECTORY_SEPARATOR.sha1((string) $ip).'.json', json_encode($row));
+        $hitsPath = $dir.DIRECTORY_SEPARATOR.'hits.json';
+        $hits = is_file($hitsPath) ? json_decode((string) file_get_contents($hitsPath), true) : [];
+        $hits = is_array($hits) ? $hits : [];
+        $hits[] = $row;
+        File::put($hitsPath, json_encode(array_slice($hits, -20)));
+    }
+
+    private function remembered(?string $ip): string
+    {
+        $path = $this->push->directory().DIRECTORY_SEPARATOR.'runtime'.DIRECTORY_SEPARATOR.'ip'.DIRECTORY_SEPARATOR.sha1((string) $ip).'.json';
+        $row = is_file($path) ? json_decode((string) file_get_contents($path), true) : null;
+        if (! is_array($row)) {
+            return '';
+        }
+        $seen = strtotime((string) ($row['last_seen'] ?? ''));
+        if ($seen === false || $seen < time() - 120) {
+            return '';
+        }
+
+        return trim((string) ($row['register_id'] ?? ''));
+    }
+
+    private function statusBody(): string
+    {
+        $dir = $this->push->directory().DIRECTORY_SEPARATOR.'runtime';
+        $latest = is_file($dir.DIRECTORY_SEPARATOR.'latest.json')
+            ? json_decode((string) file_get_contents($dir.DIRECTORY_SEPARATOR.'latest.json'), true)
+            : null;
+        $hits = is_file($dir.DIRECTORY_SEPARATOR.'hits.json')
+            ? json_decode((string) file_get_contents($dir.DIRECTORY_SEPARATOR.'hits.json'), true)
+            : [];
+        $json = json_encode([
+            'latest' => is_array($latest) ? $latest : null,
+            'hits' => is_array($hits) ? $hits : [],
+        ], JSON_UNESCAPED_SLASHES);
+
+        return $json === false ? '{}' : $json;
     }
 
     private function safe(string $value): string

@@ -47,9 +47,17 @@ Route::middleware('guest')->group(function (): void {
 Route::post('logout', [LoginController::class, 'destroy'])->middleware('auth')->name('logout');
 Route::get('device-events', [DeviceEventController::class, 'show'])->name('device-events.show');
 Route::post('device-events', [DeviceEventController::class, 'store'])->middleware('throttle:120,1')->name('device-events.store');
-Route::match(['get', 'post'], 'ezapi/push/{action}', [EzapiController::class, 'push'])
-    ->where('action', 'init|request|result|event|general')
-    ->name('ezapi.push');
+Route::withoutMiddleware([
+    \Illuminate\Cookie\Middleware\EncryptCookies::class,
+    \Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse::class,
+    \Illuminate\Session\Middleware\StartSession::class,
+    \Illuminate\View\Middleware\ShareErrorsFromSession::class,
+    \Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class,
+])->group(function (): void {
+    Route::match(['get', 'post'], 'ezapi/push/{action}', [EzapiController::class, 'push'])
+        ->where('action', 'init|request|result|event|general|status')
+        ->name('ezapi.push');
+});
 Route::get('two-factor/recovery', [TwoFactorController::class, 'recovery'])->middleware('auth')->name('two-factor.recovery');
 
 Route::middleware(['auth', 'mfa'])->group(function (): void {

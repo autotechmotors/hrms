@@ -17,6 +17,7 @@ class EzapiPushTest extends TestCase
     {
         parent::setUp();
         $this->seedAccess();
+        config(['dahua.poll_seconds' => 0]);
     }
 
     public function test_the_terminal_can_register_and_pull_a_capture_command(): void
@@ -40,9 +41,15 @@ class EzapiPushTest extends TestCase
             'InitState' => 1,
             'DataPushCaps' => ['Event' => ['CodeList' => ['AccessControl']]],
         ])->assertOk()
+            ->assertHeaderMissing('set-cookie')
             ->assertJsonPath('SycAction', 1)
             ->assertJsonPath('PandingTime', 10)
             ->assertJsonPath('CmdGetEnable', true);
+
+        $this->get('/ezapi/push/status')
+            ->assertOk()
+            ->assertJsonPath('latest.register_id', 'GATE01')
+            ->assertJsonPath('latest.action', 'init');
 
         $this->get('/ezapi/push/request?RegisterID=GATE01')
             ->assertOk()
