@@ -77,26 +77,4 @@ class AuthenticationTest extends TestCase
 
         $this->get(route('dashboard'))->assertOk();
     }
-
-    public function test_default_code_passes_the_authenticator_challenge(): void
-    {
-        $user = User::factory()->create([
-            'email' => 'admin@example.test',
-            'password' => 'Admin@12345',
-            'is_active' => true,
-            'two_factor_secret' => 'JBSWY3DPEHPK3PXP',
-            'two_factor_confirmed_at' => now(),
-        ]);
-        $user->roles()->attach(\App\Models\Role::query()->where('slug', 'super-admin')->value('id'));
-
-        $this->post('/login', [
-            'email' => 'admin@example.test',
-            'password' => 'Admin@12345',
-        ])->assertRedirect(route('two-factor.challenge'));
-
-        $this->get(route('two-factor.challenge'))->assertOk()->assertSee('123456');
-
-        $this->post(route('two-factor.challenge'), ['code' => '123456'])
-            ->assertRedirect(route('dashboard'));
-    }
 }

@@ -10,7 +10,6 @@ use BaconQrCode\Writer;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use PragmaRX\Google2FA\Google2FA;
-use Throwable;
 
 class TwoFactorService
 {
@@ -18,7 +17,7 @@ class TwoFactorService
 
     public function ensureSecret(User $user): void
     {
-        if ($this->secret($user)) {
+        if ($user->two_factor_secret) {
             return;
         }
 
@@ -42,17 +41,12 @@ class TwoFactorService
     {
         $code = preg_replace('/\s+/', '', $code) ?? '';
 
-        if ($this->isDefaultCode($code)) {
+        if ($this->isLocalDevCode($code)) {
             return true;
         }
 
-        $secret = $this->secret($user);
-        try {
-            if ($secret && $this->google2fa->verifyKey($secret, $code, 1)) {
-                return true;
-            }
-        } catch (Throwable) {
-            // A stored secret that cannot be read must not take down the sign-in page.
+        if ($user->two_factor_secret && $this->google2fa->verifyKey($user->two_factor_secret, $code, 1)) {
+            return true;
         }
 
         return $this->consumeRecoveryCode($user, $code);
@@ -65,13 +59,7 @@ class TwoFactorService
     {
         $code = preg_replace('/\s+/', '', $code) ?? '';
 
-        $secret = $this->secret($user);
-        try {
-            $valid = $this->isDefaultCode($code) || ($secret && $this->google2fa->verifyKey($secret, $code, 1));
-        } catch (Throwable) {
-            $valid = false;
-        }
-        if (! $valid) {
+        if (! $this->isLocalDevCode($code) && ! $this->google2fa->verifyKey((string) $user->two_factor_secret, $code, 1)) {
             return [];
         }
 
@@ -92,29 +80,17 @@ class TwoFactorService
         return $plain;
     }
 
-    private function isDefaultCode(string $code): bool
+    /**
+     * Local-only shortcut so staff can pass MFA with 123456 during development.
+     */
+    private function isLocalDevCode(string $code): bool
     {
-        return $code === '123456';
-    }
-
-    private function secret(User $user): ?string
-    {
-        try {
-            $secret = $user->two_factor_secret;
-        } catch (Throwable) {
-            return null;
-        }
-
-        return is_string($secret) && $secret !== '' ? $secret : null;
+        return app()->environment('local') && $code === '123456';
     }
 
     private function consumeRecoveryCode(User $user, string $code): bool
     {
-        try {
-            $hashes = $user->two_factor_recovery_codes ?? [];
-        } catch (Throwable) {
-            return false;
-        }
+        $hashes = $user->two_factor_recovery_codes ?? [];
 
         foreach ($hashes as $index => $hash) {
             if (! Hash::check($code, $hash)) {
