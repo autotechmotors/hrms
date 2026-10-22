@@ -7,9 +7,17 @@ use App\Models\Device;
 use App\Services\Devices\DeviceSync;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 
 class DeviceEventController extends Controller
 {
+    public function show(): Response
+    {
+        return response('Device event receiver is running. Punches are accepted by POST only.', 200, [
+            'Content-Type' => 'text/plain; charset=UTF-8',
+        ]);
+    }
+
     public function store(Request $request, DeviceSync $sync): JsonResponse
     {
         $token = (string) config('dahua.forward_token');

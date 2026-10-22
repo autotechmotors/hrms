@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Models\Device;
+use App\Models\Shift;
+use App\Models\ShiftRoster;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\File;
@@ -229,6 +231,46 @@ class DeviceAttendanceTest extends TestCase
             ->assertJsonPath('days.0.punches.1.direction', 'Out')
             ->assertJsonPath('days.0.punches.2.direction', 'In')
             ->assertJsonPath('days.0.punches.3.direction', 'Out');
+    }
+
+    public function test_worked_time_follows_the_in_and_out_times(): void
+    {
+        $org = $this->makeCompany('WORK');
+        $hr = $this->makeUser('hr-admin', $org['company']);
+        $employee = $this->makeEmployee($org, 'AT0006');
+        $shift = Shift::query()->create([
+            'company_id' => $org['company']->id,
+            'name' => 'Floor',
+            'code' => 'FLR',
+            'starts_at' => '09:00:00',
+            'ends_at' => '18:00:00',
+            'break_minutes' => 60,
+        ]);
+        ShiftRoster::query()->create([
+            'employee_id' => $employee->id,
+            'work_date' => '2026-10-22',
+            'shift_id' => $shift->id,
+        ]);
+        foreach (['10:17:35' => 'in', '11:18:43' => 'out'] as $time => $direction) {
+            \App\Models\AttendancePunch::query()->create([
+                'employee_id' => $employee->id,
+                'punched_at' => '2026-10-22 '.$time,
+                'direction' => $direction,
+                'external_key' => 'worked-'.$time,
+            ]);
+        }
+
+        $this->actingAsScoped($hr)
+            ->getJson(route('attendance.employee.feed', ['employee' => $employee, 'month' => '2026-10']))
+            ->assertOk()
+            ->assertJsonPath('days.0.in', '10:17 AM')
+            ->assertJsonPath('days.0.out', '11:18 AM')
+            ->assertJsonPath('days.0.worked', '1h 01m');
+
+        $this->get(route('attendance.show', ['employee' => $employee, 'date' => '2026-10-22']))
+            ->assertOk()
+            ->assertSee('1h 01m')
+            ->assertDontSee('>1m<', false);
     }
 
     public function test_a_date_can_be_edited_and_deleted_from_the_attendance_record(): void

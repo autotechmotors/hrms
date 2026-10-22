@@ -44,10 +44,6 @@ class AttendanceCalculator
             $out = $out->copy()->addDay();
         }
         $minutes = ($in && $out && $out->greaterThan($in)) ? (int) round($in->diffInMinutes($out, true)) : 0;
-        $break = (int) ($roster?->shift->break_minutes ?? 0);
-        if ($break > 0 && $minutes > $break) {
-            $minutes -= $break;
-        }
 
         $status = 'absent';
         if ($holiday && $holiday->kind === 'public') {

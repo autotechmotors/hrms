@@ -44,6 +44,7 @@ Route::middleware('guest')->group(function (): void {
 });
 
 Route::post('logout', [LoginController::class, 'destroy'])->middleware('auth')->name('logout');
+Route::get('device-events', [DeviceEventController::class, 'show'])->name('device-events.show');
 Route::post('device-events', [DeviceEventController::class, 'store'])->middleware('throttle:120,1')->name('device-events.store');
 Route::get('two-factor/recovery', [TwoFactorController::class, 'recovery'])->middleware('auth')->name('two-factor.recovery');
 

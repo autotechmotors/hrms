@@ -142,6 +142,13 @@ class DeviceForwardTest extends TestCase
         $this->assertDatabaseCount('attendance_punches', 0);
     }
 
+    public function test_opening_the_receiver_in_a_browser_shows_it_is_running(): void
+    {
+        $this->get(route('device-events.show'))
+            ->assertOk()
+            ->assertSee('Device event receiver is running');
+    }
+
     public function test_a_forwarded_scan_without_the_token_is_refused(): void
     {
         config(['dahua.forward_token' => 'secret-token']);
