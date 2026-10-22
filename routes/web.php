@@ -15,6 +15,7 @@ use App\Http\Controllers\Operations\AttendanceController;
 use App\Http\Controllers\Operations\BankController;
 use App\Http\Controllers\Operations\DeviceController;
 use App\Http\Controllers\Operations\DeviceEventController;
+use App\Http\Controllers\Operations\EzapiController;
 use App\Http\Controllers\Operations\HolidayController;
 use App\Http\Controllers\Operations\LeaveController;
 use App\Http\Controllers\Operations\PayrollController;
@@ -46,6 +47,9 @@ Route::middleware('guest')->group(function (): void {
 Route::post('logout', [LoginController::class, 'destroy'])->middleware('auth')->name('logout');
 Route::get('device-events', [DeviceEventController::class, 'show'])->name('device-events.show');
 Route::post('device-events', [DeviceEventController::class, 'store'])->middleware('throttle:120,1')->name('device-events.store');
+Route::match(['get', 'post'], 'ezapi/push/{action}', [EzapiController::class, 'push'])
+    ->where('action', 'init|request|result|event|general')
+    ->name('ezapi.push');
 Route::get('two-factor/recovery', [TwoFactorController::class, 'recovery'])->middleware('auth')->name('two-factor.recovery');
 
 Route::middleware(['auth', 'mfa'])->group(function (): void {

@@ -16,6 +16,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->redirectGuestsTo('/login');
         $middleware->validateCsrfTokens(except: [
             'device-events',
+            'ezapi/*',
         ]);
         $middleware->alias([
             'mfa' => \App\Http\Middleware\EnsureMfaPassed::class,

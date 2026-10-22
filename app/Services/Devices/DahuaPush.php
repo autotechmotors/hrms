@@ -27,6 +27,11 @@ class DahuaPush
 
     public function listenerOpen(): bool
     {
+        $seen = $this->connection();
+        if (is_array($seen) && ($seen['online'] ?? false)) {
+            return true;
+        }
+
         $socket = @fsockopen('127.0.0.1', (int) config('dahua.port'), $errno, $errstr, 0.4);
         if ($socket === false) {
             return false;
