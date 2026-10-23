@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Operations;
 
 use App\Http\Controllers\Controller;
 use App\Models\Device;
+use App\Services\Devices\DahuaLog;
 use App\Services\Devices\DeviceSync;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -42,6 +43,14 @@ class DeviceEventController extends Controller
             'RegisterID' => $data['register_id'],
             'NotifyInfo' => ['Events' => [$data['event']]],
         ], $data['seq'], $data['image'] ?? null);
+
+        DahuaLog::debug('forward POST /device-events', [
+            'register_id' => $data['register_id'],
+            'device_id' => $device->id,
+            'seq' => $data['seq'],
+            'user_id' => data_get($data, 'event.Data.UserID'),
+            'code' => data_get($data, 'event.Code'),
+        ]);
 
         return response()->json($result);
     }

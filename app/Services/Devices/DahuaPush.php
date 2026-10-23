@@ -306,6 +306,11 @@ class DahuaPush
     private function importResult(Device $device, array $data): int
     {
         $status = (string) data_get($data, 'Response.StatusCode', '');
+        DahuaLog::debug('result '.$status, [
+            'device_id' => $device->id,
+            'register_id' => $this->registerId($device),
+            'error' => data_get($data, 'Response.Body.ErrorMsg', data_get($data, 'Response.Body.ErrorCode')),
+        ]);
         if (! str_starts_with($status, '200')) {
             return 0;
         }
@@ -744,6 +749,13 @@ class DahuaPush
         if (file_put_contents($path, $json) === false) {
             throw new RuntimeException('Could not write the terminal command.');
         }
+
+        DahuaLog::debug('queued '.$payload['Request']['Method'].' '.$payload['Request']['URI'], [
+            'device_id' => $device->id,
+            'register_id' => $this->registerId($device),
+            'action' => $action,
+            'file' => $name,
+        ]);
 
         return $path;
     }

@@ -45,8 +45,8 @@ Route::middleware('guest')->group(function (): void {
 });
 
 Route::post('logout', [LoginController::class, 'destroy'])->middleware('auth')->name('logout');
-Route::get('device-events', [DeviceEventController::class, 'show'])->name('device-events.show');
-Route::post('device-events', [DeviceEventController::class, 'store'])->middleware('throttle:120,1')->name('device-events.store');
+Route::get('device-events', [DeviceEventController::class, 'show'])->middleware('dahua.log')->name('device-events.show');
+Route::post('device-events', [DeviceEventController::class, 'store'])->middleware(['dahua.log', 'throttle:120,1'])->name('device-events.store');
 Route::withoutMiddleware([
     \Illuminate\Cookie\Middleware\EncryptCookies::class,
     \Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse::class,
@@ -56,6 +56,7 @@ Route::withoutMiddleware([
 ])->group(function (): void {
     Route::match(['get', 'post'], 'ezapi/push/{action}', [EzapiController::class, 'push'])
         ->where('action', 'init|request|result|event|general|status')
+        ->middleware('dahua.log')
         ->name('ezapi.push');
 });
 Route::get('two-factor/recovery', [TwoFactorController::class, 'recovery'])->middleware('auth')->name('two-factor.recovery');

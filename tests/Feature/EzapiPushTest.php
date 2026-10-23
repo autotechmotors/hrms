@@ -141,6 +141,46 @@ class EzapiPushTest extends TestCase
         $this->assertSame($employee->employee_code, '100033');
     }
 
+    public function test_device_api_calls_are_written_to_the_debug_log(): void
+    {
+        $dir = storage_path('framework/testing/dahua-api-log');
+        File::deleteDirectory($dir);
+        config([
+            'dahua.push_dir' => $dir,
+            'dahua.register_id' => 'GATE01',
+            'logging.channels.dahua.driver' => 'single',
+            'logging.channels.dahua.path' => $dir.'/dahua.log',
+        ]);
+
+        $org = $this->makeCompany('EZL');
+        Device::query()->create([
+            'company_id' => $org['company']->id,
+            'name' => 'TEST01',
+            'register_id' => 'GATE01',
+            'status' => 'online',
+        ]);
+
+        $this->postJson('/ezapi/push/init', [
+            'RegisterID' => 'GATE01',
+            'InitState' => 1,
+        ])->assertOk();
+
+        $this->postJson('/ezapi/push/result', [
+            'RegisterID' => 'GATE01',
+            'Response' => [
+                'StatusCode' => '200 OK',
+                'Body' => ['Password' => 'secret-pass', 'UserID' => '1'],
+            ],
+        ])->assertOk();
+
+        $log = File::get($dir.'/dahua.log');
+        $this->assertStringContainsString('api request POST /ezapi/push/init', $log);
+        $this->assertStringContainsString('api response POST /ezapi/push/init', $log);
+        $this->assertStringContainsString('GATE01', $log);
+        $this->assertStringContainsString('api request POST /ezapi/push/result', $log);
+        $this->assertStringNotContainsString('secret-pass', $log);
+    }
+
     public function test_an_unknown_caller_does_not_become_the_device_contact(): void
     {
         $dir = storage_path('framework/testing/dahua-ezapi-probe');

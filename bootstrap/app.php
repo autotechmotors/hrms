@@ -21,6 +21,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'mfa' => \App\Http\Middleware\EnsureMfaPassed::class,
             'permission' => \App\Http\Middleware\EnsurePermission::class,
+            'dahua.log' => \App\Http\Middleware\LogDahuaApi::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

@@ -123,6 +123,14 @@ return [
             'handler' => NullHandler::class,
         ],
 
+        'dahua' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/dahua.log'),
+            'level' => 'debug',
+            'days' => 14,
+            'replace_placeholders' => true,
+        ],
+
         'emergency' => [
             'path' => storage_path('logs/laravel.log'),
         ],

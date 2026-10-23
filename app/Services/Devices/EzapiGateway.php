@@ -20,6 +20,10 @@ class EzapiGateway
     public function handle(string $action, Request $request): array
     {
         if ($action === 'status') {
+            DahuaLog::debug('in '.$request->method().' /ezapi/push/status', [
+                'ip' => (string) $request->ip(),
+            ]);
+
             return ['status' => 200, 'body' => $this->statusBody()];
         }
 
@@ -34,13 +38,27 @@ class EzapiGateway
 
         $device = $registerId === '' ? null : Device::query()->where('register_id', $registerId)->first();
 
-        return match ($action) {
+        $result = match ($action) {
             'init' => ['status' => 200, 'body' => $this->initBody($payload)],
             'request' => ['status' => 200, 'body' => $device ? $this->commandFor($device) : ''],
             'result' => $this->result($device, $request),
             'event', 'general' => $this->event($device, $payload, $request),
             default => ['status' => 404, 'body' => 'Not Found'],
         };
+
+        DahuaLog::debug('in '.$request->method().' /ezapi/push/'.$action, [
+            'register_id' => $registerId,
+            'ip' => (string) $request->ip(),
+            'device_id' => $device?->id,
+            'http' => $result['status'],
+            'reply' => $this->replyLabel($result['body']),
+            'user_id' => data_get($payload, 'NotifyInfo.Events.0.Data.UserID'),
+            'code' => data_get($payload, 'NotifyInfo.Events.0.Code'),
+            'result' => data_get($payload, 'Response.StatusCode'),
+            'error' => data_get($payload, 'Response.Body.ErrorMsg', data_get($payload, 'Response.Body.ErrorCode')),
+        ]);
+
+        return $result;
     }
 
     /**
@@ -97,6 +115,22 @@ class EzapiGateway
         } while (microtime(true) < $deadline);
 
         return '';
+    }
+
+    private function replyLabel(string $body): string
+    {
+        if ($body === '') {
+            return 'empty';
+        }
+
+        $data = json_decode($body, true);
+        $method = is_array($data) ? (string) data_get($data, 'Request.Method', '') : '';
+        $uri = is_array($data) ? (string) data_get($data, 'Request.URI', '') : '';
+        if ($uri !== '') {
+            return trim($method.' '.$uri);
+        }
+
+        return strlen($body).' bytes';
     }
 
     private function pollSeconds(): int
