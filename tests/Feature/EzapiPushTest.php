@@ -46,6 +46,13 @@ class EzapiPushTest extends TestCase
             ->assertJsonPath('PandingTime', 10)
             ->assertJsonPath('CmdGetEnable', true);
 
+        $this->postJson('/ezapi/push/init', [
+            'RegisterID' => 'GATE01',
+            'InitState' => 2,
+        ])->assertOk()
+            ->assertJsonPath('SycAction', 2)
+            ->assertJsonMissingPath('TimeCheck');
+
         $this->get('/ezapi/push/status')
             ->assertOk()
             ->assertJsonPath('latest.register_id', 'GATE01')

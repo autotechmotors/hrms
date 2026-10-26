@@ -3,6 +3,7 @@
 return [
     'push_dir' => env('DAHUA_PUSH_DIR', 'D:\\EZAPI_DAHUA_TECHNICAL_MATERIAL\\General_EZAPIDemo_ChnEng_Golang_IS_V1.000.0000000.0.R.20260708(1)\\AutoRegisterAndPush_Person\\bin'),
     'port' => (int) env('DAHUA_PUSH_PORT', 60002),
+    'poll_seconds' => (int) env('DAHUA_POLL_SECONDS', 1),
     'host' => env('DAHUA_PUSH_HOST', '192.168.1.68'),
     'register_id' => env('DAHUA_REGISTER_ID', 'test123'),
     'forward_url' => env('DAHUA_FORWARD_URL'),

@@ -368,7 +368,7 @@
     });
 
     apply({ days: state.days, refreshed_at: @json($payload['refreshed_at']), since: state.since });
-    setInterval(refresh, 4000);
+    setInterval(refresh, 1500);
 })(jQuery);
 </script>
 @endpush
