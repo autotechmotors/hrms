@@ -1,10 +1,41 @@
 <?php
 
 /**
- * HTTPS listener for the Dahua terminal. Forwards /ezapi/push to the local HRMS.
+ * TLS listener for the Dahua terminal. The terminal only completes its handshake
+ * with the RSA demo certificate, so this process presents that certificate and
+ * forwards the HTTP request to HRMS. The second argument may be host:port or a
+ * full URL such as https://hrms.autotechmotors.com.
  *
- * Usage: php scripts/dahua-listen.php [port]
+ * Usage: php scripts/dahua-listen.php [port] [upstream] [cert.pem] [key.pem]
  */
+
+function upstream_target(string $upstream, string $path): array
+{
+    $upstream = trim($upstream);
+    if (! str_contains($upstream, '://')) {
+        $upstream = 'http://'.$upstream;
+    }
+    $parts = parse_url($upstream);
+    $host = is_array($parts) ? (string) ($parts['host'] ?? '') : '';
+    if ($host === '') {
+        throw new InvalidArgumentException('Upstream must be host:port or an http(s) URL.');
+    }
+    $scheme = (string) ($parts['scheme'] ?? 'http');
+    $port = isset($parts['port']) ? (int) $parts['port'] : null;
+    $origin = $scheme.'://'.$host.($port ? ':'.$port : '');
+    $hostHeader = $host.($port ? ':'.$port : '');
+    $path = '/'.ltrim($path, '/');
+
+    return [
+        'url' => $origin.$path,
+        'host' => $hostHeader,
+        'https' => $scheme === 'https',
+    ];
+}
+
+if (PHP_SAPI !== 'cli' || ! isset($argv[0]) || realpath((string) $argv[0]) !== realpath(__FILE__)) {
+    return;
+}
 
 $port = (int) ($argv[1] ?? 60002);
 $upstream = $argv[2] ?? '192.168.1.67:8000';
@@ -28,7 +59,8 @@ if ($server === false) {
     exit(1);
 }
 stream_set_blocking($server, false);
-fwrite(STDOUT, "Dahua listener on 0.0.0.0:$port -> http://$upstream\n");
+$shown = upstream_target($upstream, '/');
+fwrite(STDOUT, "Dahua listener on 0.0.0.0:$port -> {$shown['url']}\n");
 
 $clients = [];
 $multi = curl_multi_init();
@@ -182,11 +214,12 @@ function forward(string $upstream, array $request): CurlHandle
         }
         $headers[] = $line;
     }
-    $headers[] = 'Host: '.$upstream;
+    $target = upstream_target($upstream, $request['path']);
+    $headers[] = 'Host: '.$target['host'];
     $headers[] = 'Connection: close';
     $headers[] = 'Content-Length: '.strlen($request['body']);
 
-    $handle = curl_init('http://'.$upstream.$request['path']);
+    $handle = curl_init($target['url']);
     $options = [
         CURLOPT_CUSTOMREQUEST => $request['method'],
         CURLOPT_HTTPHEADER => $headers,
@@ -194,6 +227,9 @@ function forward(string $upstream, array $request): CurlHandle
         CURLOPT_HEADER => false,
         CURLOPT_TIMEOUT => 60,
         CURLOPT_CONNECTTIMEOUT => 5,
+        CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+        CURLOPT_SSL_VERIFYPEER => $target['https'],
+        CURLOPT_SSL_VERIFYHOST => $target['https'] ? 2 : 0,
     ];
     if ($request['body'] !== '') {
         $options[CURLOPT_POSTFIELDS] = $request['body'];
