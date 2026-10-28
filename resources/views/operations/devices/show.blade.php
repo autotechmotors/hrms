@@ -162,7 +162,13 @@
                             <b>{{ $reply ?: '—' }}</b>
                         </div>
                     </div>
-                    <p>Server {{ $pushHost }}, port {{ $pushPort }}. Run <code>php artisan dahua:listen</code> on this PC (no AutoRegister EXE). Terminal AutoRegister ID must match this device register ID.</p>
+                    <p>Server {{ $pushHost }}, port {{ $pushPort }}.
+                        @if (config('dahua.auto_listen'))
+                            Listener auto-starts with <code>schedule:work</code> / cron (<code>DAHUA_AUTO_LISTEN=true</code>).
+                        @else
+                            On live, the website :443 handles EZAPI — no local listener.
+                        @endif
+                        Terminal AutoRegister ID must match this device register ID.</p>
                 </div>
             </section>
 

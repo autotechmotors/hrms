@@ -16,6 +16,13 @@ return [
     'poll_seconds' => (int) env('DAHUA_POLL_SECONDS', 10),
 
     /*
+    | When true, schedule/cron runs dahua:ensure-listen every minute so the
+    | HTTPS listener stays up without a manual window (local office PC).
+    | Keep false on shared Hostinger — device uses site :443 there.
+    */
+    'auto_listen' => filter_var(env('DAHUA_AUTO_LISTEN', false), FILTER_VALIDATE_BOOL),
+
+    /*
     | The same door permission for every employee. 255 is the terminal's
     | all-day plan. The end date is the latest date this terminal accepts.
     */

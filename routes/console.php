@@ -9,3 +9,8 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 Schedule::command('devices:sync')->everyMinute()->withoutOverlapping();
+
+Schedule::command('dahua:ensure-listen')
+    ->everyMinute()
+    ->when(fn () => (bool) config('dahua.auto_listen'))
+    ->withoutOverlapping();
