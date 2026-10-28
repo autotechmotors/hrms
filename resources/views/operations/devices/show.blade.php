@@ -162,7 +162,7 @@
                             <b>{{ $reply ?: '—' }}</b>
                         </div>
                     </div>
-                    <p>Server {{ $pushHost }}, port {{ $pushPort }}. The device calls this PC.</p>
+                    <p>Server {{ $pushHost }}, port {{ $pushPort }}. Run <code>php artisan dahua:listen</code> on this PC (no AutoRegister EXE). Terminal AutoRegister ID must match this device register ID.</p>
                 </div>
             </section>
 

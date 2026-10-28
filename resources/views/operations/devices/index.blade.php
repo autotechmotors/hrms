@@ -31,7 +31,7 @@
         <div class="card kp">
             <small>Listener</small>
             <b>{{ $listenerOpen ? 'Running' : 'Stopped' }}</b>
-            <span>Port {{ config('dahua.port') }} on this PC</span>
+            <span>php artisan dahua:listen · port {{ config('dahua.port') }}</span>
         </div>
     </div>
 

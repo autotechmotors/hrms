@@ -323,6 +323,12 @@ class DeviceSync
             );
             if ($punch->wasRecentlyCreated) {
                 $saved++;
+                DahuaLog::moment($direction.' '.$employee->employee_code, [
+                    'device' => $device->register_id,
+                    'employee_id' => $employee->id,
+                    'at' => $at->toDateTimeString(),
+                    'seq' => $seq,
+                ]);
                 $this->applyDay($employee, $at->copy()->startOfDay());
                 if (! $knownOnly) {
                     app(PunchForward::class)->send($device, $event, $seq, $image);

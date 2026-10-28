@@ -14,6 +14,15 @@ class DahuaLog
         }
     }
 
+    /** Attendance / movement moment for daily review (storage/logs/dahua-YYYY-MM-DD.log). */
+    public static function moment(string $message, array $context = []): void
+    {
+        try {
+            Log::channel('dahua')->info('moment '.$message, self::clean($context));
+        } catch (\Throwable) {
+        }
+    }
+
     /**
      * @param  array<string, mixed>  $context
      * @return array<string, mixed>

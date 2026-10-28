@@ -33,6 +33,7 @@ class DahuaPush
             return true;
         }
 
+        // php artisan dahua:listen (or any process bound to the push port)
         $socket = @fsockopen('127.0.0.1', (int) config('dahua.port'), $errno, $errstr, 0.4);
         if ($socket === false) {
             return false;

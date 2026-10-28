@@ -1,12 +1,18 @@
 <?php
 
 return [
-    'push_dir' => env('DAHUA_PUSH_DIR', 'D:\\EZAPI_DAHUA_TECHNICAL_MATERIAL\\General_EZAPIDemo_ChnEng_Golang_IS_V1.000.0000000.0.R.20260708(1)\\AutoRegisterAndPush_Person\\bin'),
+    /*
+    | Queue, inbox, and runtime files live inside Laravel storage.
+    | No dependency on AutoRegisterAndPush_Person.exe or the EZAPI demo folder.
+    */
+    'push_dir' => env('DAHUA_PUSH_DIR') ?: storage_path('app/dahua'),
+    'cert_dir' => env('DAHUA_CERT_DIR') ?: storage_path('app/dahua/certs'),
     'port' => (int) env('DAHUA_PUSH_PORT', 60002),
     'host' => env('DAHUA_PUSH_HOST', '192.168.1.68'),
     'register_id' => env('DAHUA_REGISTER_ID', 'test123'),
     'forward_url' => env('DAHUA_FORWARD_URL'),
     'forward_token' => env('DAHUA_FORWARD_TOKEN'),
+    'poll_seconds' => (int) env('DAHUA_POLL_SECONDS', 10),
 
     /*
     | The same door permission for every employee. 255 is the terminal's
