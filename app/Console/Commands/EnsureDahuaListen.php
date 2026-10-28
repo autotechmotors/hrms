@@ -21,6 +21,18 @@ class EnsureDahuaListen extends Command
         }
 
         $port = (int) config('dahua.port', 60002);
+
+        // Shared hosting / live site already serves HTTPS on 80/443 — never bind those.
+        if (in_array($port, [80, 443], true) || app()->environment('production')) {
+            $this->warn('Auto-listen skipped on production / port '.$port.' (use website :443 EZAPI routes).');
+            DahuaLog::debug('ensure-listen skipped', [
+                'port' => $port,
+                'env' => app()->environment(),
+            ]);
+
+            return self::SUCCESS;
+        }
+
         if ($this->portOpen($port)) {
             $this->line("Listener already on port {$port}.");
 

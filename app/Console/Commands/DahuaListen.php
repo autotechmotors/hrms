@@ -21,6 +21,12 @@ class DahuaListen extends Command
 
             return self::FAILURE;
         }
+        if (in_array($port, [80, 443], true)) {
+            $this->error('Ports 80/443 belong to the web server. On live, point the device at the domain:443 — do not run dahua:listen. For local use port 60002.');
+            DahuaLog::debug('listener refused privileged port', ['port' => $port]);
+
+            return self::FAILURE;
+        }
 
         $this->info('Starting Dahua EZAPI listener…');
         $this->line('Register IDs come from Devices in HRMS — match the terminal AutoRegister ID.');
