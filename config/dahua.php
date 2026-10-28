@@ -8,6 +8,7 @@ return [
     'push_dir' => env('DAHUA_PUSH_DIR') ?: storage_path('app/dahua'),
     'cert_dir' => env('DAHUA_CERT_DIR') ?: storage_path('app/dahua/certs'),
     'port' => (int) env('DAHUA_PUSH_PORT', 60002),
+    'poll_seconds' => (int) env('DAHUA_POLL_SECONDS', 1),
     'host' => env('DAHUA_PUSH_HOST', '192.168.1.68'),
     'register_id' => env('DAHUA_REGISTER_ID', 'test123'),
     'forward_url' => env('DAHUA_FORWARD_URL'),

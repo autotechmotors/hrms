@@ -412,7 +412,7 @@
                 status: params.get('status') || '',
                 since: since
             }).done(paintFeed);
-        }, 4000);
+        }, 1500);
     }
     if (!form.length) return;
 

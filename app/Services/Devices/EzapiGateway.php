@@ -78,18 +78,23 @@ class EzapiGateway
             $detail['General'] = ['Enable' => true, 'TypeList' => array_values($types)];
         }
 
-        $json = json_encode([
-            'SycAction' => 1,
+        $reuse = (int) ($payload['InitState'] ?? 1) === 2;
+        $body = [
+            'SycAction' => $reuse ? 2 : 1,
             'PandingTime' => 10,
             'CmdGetEnable' => true,
             'DataPushEnable' => true,
             'DataPushDetail' => $detail,
-            'TimeCheck' => [
+        ];
+        if (! $reuse) {
+            $body['TimeCheck'] = [
                 'UTC' => now()->utc()->format('Y-m-d\TH:i:s\Z'),
                 'Tolerance' => 3,
                 'TimeZone' => 13,
-            ],
-        ], JSON_UNESCAPED_SLASHES);
+            ];
+        }
+
+        $json = json_encode($body, JSON_UNESCAPED_SLASHES);
 
         return $json === false ? '' : $json;
     }

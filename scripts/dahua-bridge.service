@@ -1,0 +1,14 @@
+[Unit]
+Description=Dahua EZAPI TLS bridge to HRMS
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/dahua
+ExecStart=/usr/bin/php /opt/dahua/dahua-listen.php 60002 https://hrms.autotechmotors.com /opt/dahua/certs/cert.pem /opt/dahua/certs/key.pem
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
