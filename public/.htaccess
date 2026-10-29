@@ -5,6 +5,9 @@
 
     RewriteEngine On
 
+    # Dahua EZAPI: no gzip / brotli — terminals only accept Content-Length bodies.
+    RewriteRule ^ezapi/ - [E=no-gzip:1,E=no-brotli:1]
+
     # Handle Authorization Header
     RewriteCond %{HTTP:Authorization} .
     RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
@@ -22,4 +25,11 @@
     RewriteCond %{REQUEST_FILENAME} !-d
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteRule ^ index.php [L]
+</IfModule>
+
+<IfModule mod_headers.c>
+    <If "%{REQUEST_URI} =~ m#^/ezapi/#">
+        Header unset Content-Encoding env=no-gzip
+        Header unset Transfer-Encoding env=no-gzip
+    </If>
 </IfModule>

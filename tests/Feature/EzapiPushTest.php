@@ -36,15 +36,21 @@ class EzapiPushTest extends TestCase
             'status' => 'online',
         ]);
 
-        $this->postJson('/ezapi/push/init', [
+        $init = $this->postJson('/ezapi/push/init', [
             'RegisterID' => 'GATE01',
             'InitState' => 1,
             'DataPushCaps' => ['Event' => ['CodeList' => ['AccessControl']]],
         ])->assertOk()
             ->assertHeaderMissing('set-cookie')
+            ->assertHeader('Content-Type', 'application/json; charset=utf-8')
+            ->assertHeader('Connection', 'keep-alive')
             ->assertJsonPath('SycAction', 1)
             ->assertJsonPath('PandingTime', 10)
-            ->assertJsonPath('CmdGetEnable', true);
+            ->assertJsonPath('CmdGetEnable', true)
+            ->assertJsonPath('TimeCheck.Tolerance', 86400)
+            ->assertJsonPath('TimeCheck.TimeZone', 13);
+
+        $init->assertHeader('Content-Length', (string) strlen($init->getContent()));
 
         $this->postJson('/ezapi/push/init', [
             'RegisterID' => 'GATE01',

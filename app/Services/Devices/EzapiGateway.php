@@ -78,6 +78,9 @@ class EzapiGateway
             $detail['General'] = ['Enable' => true, 'TypeList' => array_values($types)];
         }
 
+        // Match AutoRegisterAndPush_Person Go demo: InitState 1 → SycAction 1 + TimeCheck;
+        // InitState 2 → SycAction 2 and skip TimeCheck. Wide Tolerance so a skewed
+        // device clock cannot trap the terminal in an InitState=1 retry loop.
         $reuse = (int) ($payload['InitState'] ?? 1) === 2;
         $body = [
             'SycAction' => $reuse ? 2 : 1,
@@ -89,7 +92,7 @@ class EzapiGateway
         if (! $reuse) {
             $body['TimeCheck'] = [
                 'UTC' => now()->utc()->format('Y-m-d\TH:i:s\Z'),
-                'Tolerance' => 3,
+                'Tolerance' => 86400,
                 'TimeZone' => 13,
             ];
         }
