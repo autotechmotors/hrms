@@ -57,6 +57,13 @@ class EnsureDahuaListen extends Command
 
     private function portOpen(int $port): bool
     {
+        // Do not TCP-connect: that breaks the TLS listener and spams handshake errors.
+        if (PHP_OS_FAMILY === 'Windows') {
+            exec('netstat -ano | findstr ":'.$port.' " | findstr LISTENING', $lines);
+
+            return $lines !== [];
+        }
+
         $socket = @fsockopen('127.0.0.1', $port, $errno, $errstr, 0.4);
         if ($socket === false) {
             return false;
@@ -75,12 +82,19 @@ class EnsureDahuaListen extends Command
         $artisan = base_path('artisan');
         $log = storage_path('logs/dahua-listen.out');
         $pidFile = storage_path('app/dahua/runtime/listener.pid');
+        $cwd = base_path();
 
         if (PHP_OS_FAMILY === 'Windows') {
-            $inner = '"'.$php.'" "'.$artisan.'" dahua:listen --port='.$port;
-            $cmd = 'cmd /c start /B "" '.$inner.' >> "'.$log.'" 2>&1';
-            pclose(popen($cmd, 'r'));
-            File::put($pidFile, (string) getmypid());
+            $ps = sprintf(
+                'Start-Process -FilePath %s -ArgumentList %s -WorkingDirectory %s -WindowStyle Hidden -RedirectStandardOutput %s -RedirectStandardError %s',
+                escapeshellarg($php),
+                escapeshellarg('artisan dahua:listen --port='.$port),
+                escapeshellarg($cwd),
+                escapeshellarg($log),
+                escapeshellarg($log)
+            );
+            pclose(popen('powershell -NoProfile -Command '.$ps, 'r'));
+            File::put($pidFile, (string) time());
 
             return;
         }

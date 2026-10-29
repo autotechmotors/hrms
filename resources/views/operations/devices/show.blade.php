@@ -164,9 +164,11 @@
                     </div>
                     <p>Server {{ $pushHost }}, port {{ $pushPort }}.
                         @if (config('dahua.auto_listen'))
-                            Listener auto-starts with <code>schedule:work</code> / cron (<code>DAHUA_AUTO_LISTEN=true</code>).
+                            Listener stays up via <code>schedule:work</code> / <code>scripts\start-local-hrms.bat</code> — no manual <code>dahua:listen</code>.
+                        @elseif ((int) config('dahua.port') === 443)
+                            Live website HTTPS :443 handles EZAPI — no separate listener.
                         @else
-                            On live, the website :443 handles EZAPI — no local listener.
+                            Keep the push port process running (Apache or <code>dahua:ensure-listen</code>).
                         @endif
                         Terminal AutoRegister ID must match this device register ID.</p>
                 </div>

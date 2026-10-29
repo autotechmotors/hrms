@@ -31,7 +31,16 @@
         <div class="card kp">
             <small>Listener</small>
             <b>{{ $listenerOpen ? 'Running' : 'Stopped' }}</b>
-            <span>@if (config('dahua.auto_listen')) auto via schedule @else domain :443 @endif · port {{ config('dahua.port') }}</span>
+            <span>
+                @if (config('dahua.auto_listen'))
+                    auto listen
+                @elseif ((int) config('dahua.port') === 443)
+                    live web :443
+                @else
+                    Apache HTTPS (no artisan listen)
+                @endif
+                · port {{ config('dahua.port') }}
+            </span>
         </div>
     </div>
 
