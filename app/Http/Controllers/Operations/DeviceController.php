@@ -9,6 +9,7 @@ use App\Models\DeviceTerminalUser;
 use App\Models\DeviceUser;
 use App\Services\Devices\DahuaPush;
 use App\Services\Devices\EmployeePush;
+use App\Services\Devices\LocalPcServer;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -25,12 +26,47 @@ class DeviceController extends Controller
 
         $devices = Device::query()->visibleTo($request->user())->where('company_id', $this->companyId())->withCount('users')->orderBy('name')->get();
 
+        $pc = app(LocalPcServer::class);
+
         return view('operations.devices.index', [
             'devices' => $devices,
             'canEdit' => $request->user()->hasPermission('devices.manage') || $request->user()->hasPermission('employees.edit'),
             'listenerOpen' => app(DahuaPush::class)->listenerOpen(),
             'enrolledCount' => (int) $devices->sum('users_count'),
+            'localPc' => $pc->status(),
         ]);
+    }
+
+    public function enableLocalPc(LocalPcServer $pc): RedirectResponse
+    {
+        $this->authorizeDevices();
+        $result = $pc->enableAutostart();
+
+        return back()->with($result['ok'] ? 'success' : 'error', $result['message']);
+    }
+
+    public function disableLocalPc(LocalPcServer $pc): RedirectResponse
+    {
+        $this->authorizeDevices();
+        $result = $pc->disableAutostart();
+
+        return back()->with($result['ok'] ? 'success' : 'error', $result['message']);
+    }
+
+    public function startLocalPc(LocalPcServer $pc): RedirectResponse
+    {
+        $this->authorizeDevices();
+        $result = $pc->startNow();
+
+        return back()->with($result['ok'] ? 'success' : 'error', $result['message']);
+    }
+
+    public function stopLocalPc(LocalPcServer $pc): RedirectResponse
+    {
+        $this->authorizeDevices();
+        $result = $pc->stopNow();
+
+        return back()->with($result['ok'] ? 'success' : 'error', $result['message']);
     }
 
     public function store(Request $request): RedirectResponse

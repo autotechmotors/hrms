@@ -85,15 +85,18 @@ class EnsureDahuaListen extends Command
         $cwd = base_path();
 
         if (PHP_OS_FAMILY === 'Windows') {
+            $errLog = storage_path('logs/dahua-listen.err');
             $ps = sprintf(
-                'Start-Process -FilePath %s -ArgumentList %s -WorkingDirectory %s -WindowStyle Hidden -RedirectStandardOutput %s -RedirectStandardError %s',
-                escapeshellarg($php),
-                escapeshellarg('artisan dahua:listen --port='.$port),
-                escapeshellarg($cwd),
-                escapeshellarg($log),
-                escapeshellarg($log)
+                "Start-Process -FilePath %s -ArgumentList %s -WorkingDirectory %s -WindowStyle Hidden -RedirectStandardOutput %s -RedirectStandardError %s",
+                $this->psQuote($php),
+                $this->psQuote('artisan dahua:listen --port='.$port),
+                $this->psQuote($cwd),
+                $this->psQuote($log),
+                $this->psQuote($errLog)
             );
-            pclose(popen('powershell -NoProfile -Command '.$ps, 'r'));
+            $tmp = storage_path('app/dahua/runtime/start-listen.ps1');
+            File::put($tmp, $ps);
+            pclose(popen('powershell -NoProfile -ExecutionPolicy Bypass -File '.$this->cmdQuote($tmp), 'r'));
             File::put($pidFile, (string) time());
 
             return;
@@ -105,5 +108,15 @@ class EnsureDahuaListen extends Command
         if ($pid !== '') {
             File::put($pidFile, $pid);
         }
+    }
+
+    private function psQuote(string $value): string
+    {
+        return "'".str_replace("'", "''", $value)."'";
+    }
+
+    private function cmdQuote(string $value): string
+    {
+        return '"'.str_replace('"', '', $value).'"';
     }
 }

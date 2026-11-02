@@ -110,6 +110,10 @@ Route::middleware(['auth', 'mfa'])->group(function (): void {
 
     Route::get('devices', [DeviceController::class, 'index'])->name('devices.index');
     Route::post('devices', [DeviceController::class, 'store'])->name('devices.store');
+    Route::post('devices/local-pc/enable', [DeviceController::class, 'enableLocalPc'])->name('devices.local-pc.enable');
+    Route::post('devices/local-pc/disable', [DeviceController::class, 'disableLocalPc'])->name('devices.local-pc.disable');
+    Route::post('devices/local-pc/start', [DeviceController::class, 'startLocalPc'])->name('devices.local-pc.start');
+    Route::post('devices/local-pc/stop', [DeviceController::class, 'stopLocalPc'])->name('devices.local-pc.stop');
     Route::get('devices/{device}', [DeviceController::class, 'show'])->name('devices.show');
     Route::put('devices/{device}', [DeviceController::class, 'update'])->name('devices.update');
     Route::delete('devices/{device}', [DeviceController::class, 'destroy'])->name('devices.destroy');

@@ -41,7 +41,7 @@
                 return;
             }
             item.classList.add('out');
-            window.setTimeout(() => item.remove(), 220);
+            window.setTimeout(() => item.remove(), 220);0
         };
         close.addEventListener('click', dismiss);
         root.appendChild(item);

@@ -14,6 +14,8 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->redirectGuestsTo('/login');
+        // HTTPS share tunnel (cloudflared / ngrok) — honor X-Forwarded-Proto
+        $middleware->trustProxies(at: '*');
         $middleware->validateCsrfTokens(except: [
             'device-events',
             'ezapi/*',

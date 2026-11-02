@@ -164,7 +164,7 @@
                     </div>
                     <p>Server {{ $pushHost }}, port {{ $pushPort }}.
                         @if (config('dahua.auto_listen'))
-                            Listener stays up via <code>schedule:work</code> / <code>scripts\start-local-hrms.bat</code> — no manual <code>dahua:listen</code>.
+                            PC login = background auto start (no CMD windows). Install once: <code>scripts\install-hrms-autostart.bat</code>.
                         @elseif ((int) config('dahua.port') === 443)
                             Live website HTTPS :443 handles EZAPI — no separate listener.
                         @else
