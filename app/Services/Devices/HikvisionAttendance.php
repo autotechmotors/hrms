@@ -26,7 +26,7 @@ class HikvisionAttendance
      */
     public function pull(bool $full = true): array
     {
-        $password = (string) config('hikvision.password');
+        $password = trim((string) config('hikvision.password'));
         if ($password === '') {
             throw new RuntimeException('Set HIKVISION_PASSWORD to the face terminal login, then run hikvision:pull again.');
         }
@@ -323,13 +323,21 @@ class HikvisionAttendance
         $rows = [];
         $host = trim((string) config('hikvision.host'));
         $registerId = trim((string) config('hikvision.register_id'));
-        if ($host !== '' && $registerId !== '') {
+        $port = is_numeric(config('hikvision.port')) ? (int) config('hikvision.port') : 0;
+        $published = $host !== '' && $port > 0 ? ($port === 80 ? $host : $host.':'.$port) : null;
+        if ($published !== null && $registerId !== '') {
+            $rows[$registerId] = $published;
+        } elseif ($host !== '' && $registerId !== '') {
             $rows[$registerId] = $host;
         }
         Device::query()->orderBy('id')->get()
             ->filter(fn (Device $device) => $device->isHikvision() && trim((string) $device->ip_address) !== '')
-            ->each(function (Device $device) use (&$rows): void {
-                $rows[(string) $device->register_id] = trim((string) $device->ip_address);
+            ->each(function (Device $device) use (&$rows, $published): void {
+                $id = (string) $device->register_id;
+                if ($published !== null && array_key_exists($id, $rows)) {
+                    return;
+                }
+                $rows[$id] = trim((string) $device->ip_address);
             });
 
         return $rows;
@@ -339,11 +347,11 @@ class HikvisionAttendance
     {
         $device = Device::query()->get()->first(fn (Device $row) => strcasecmp((string) $row->register_id, $registerId) === 0);
         if ($device) {
-            $device->update([
-                'ip_address' => $host,
+            $device->update(array_filter([
+                'ip_address' => str_contains($host, ':') ? null : $host,
                 'status' => 'online',
                 'last_checked_at' => now(),
-            ]);
+            ], fn ($value) => $value !== null));
 
             return $device->fresh() ?? $device;
         }

@@ -2,9 +2,9 @@
 
 return [
     /*
-    | Leave pull off on Hostinger. The terminal posts scans itself to
-    | /hikvision-events/{DAHUA_FORWARD_TOKEN}. Pull is only a backup on a PC
-    | that can see the terminal.
+    | The terminal posts scans itself to /hikvision-events/{DAHUA_FORWARD_TOKEN}.
+    | When HIKVISION_PORT is set, the live server also pulls through that port,
+    | so the office PC does not have to stay on.
     */
     'pull' => filter_var(env('HIKVISION_PULL', false), FILTER_VALIDATE_BOOL),
     'host' => env('HIKVISION_HOST', '192.168.1.156'),

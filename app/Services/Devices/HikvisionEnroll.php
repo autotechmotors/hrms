@@ -72,9 +72,19 @@ class HikvisionEnroll
         }
     }
 
+    public function published(): bool
+    {
+        $port = config('hikvision.port');
+
+        return trim((string) config('hikvision.host')) !== '' && is_numeric($port) && (int) $port > 0;
+    }
+
     public function reachable(Device $device): bool
     {
-        if ((string) config('hikvision.password') === '') {
+        if ($this->published()) {
+            return true;
+        }
+        if (trim((string) config('hikvision.password')) === '') {
             return false;
         }
         if (config('hikvision.direct') === false) {
@@ -302,8 +312,8 @@ class HikvisionEnroll
     private function endpoint(Device $device): array
     {
         $configured = trim((string) config('hikvision.host'));
-        $port = config('hikvision.port');
-        if ($configured !== '' && is_int($port) && $port > 0) {
+        $port = is_numeric(config('hikvision.port')) ? (int) config('hikvision.port') : 0;
+        if ($configured !== '' && $port > 0) {
             $configured = (string) preg_replace('#^https?://#', '', $configured);
             $configured = explode('/', $configured)[0];
             if (str_contains($configured, ':')) {

@@ -24,6 +24,7 @@ class HikvisionAttendanceTest extends TestCase
     {
         parent::setUp();
         $this->seedAccess();
+        config(['hikvision.port' => null]);
     }
 
     public function test_a_hikvision_face_scan_is_stored_and_forwarded_like_a_device_event(): void
@@ -502,6 +503,39 @@ class HikvisionAttendanceTest extends TestCase
         ]);
         $this->postJson('/hikvision-events/wrongtoken/people', ['people' => [['code' => '1', 'name' => 'A']]])
             ->assertUnauthorized();
+    }
+
+    public function test_a_published_port_reaches_the_terminal_without_the_office_pc(): void
+    {
+        config([
+            'hikvision.host' => '103.214.226.146',
+            'hikvision.port' => 18080,
+            'hikvision.username' => 'admin',
+            'hikvision.password' => 'secret',
+            'hikvision.direct' => false,
+        ]);
+        $org = $this->makeCompany('HIK');
+        $employee = $this->makeEmployee($org, 'AT0099');
+        Device::query()->create([
+            'company_id' => $org['company']->id,
+            'name' => 'Gate',
+            'register_id' => 'HIK1921681156',
+            'ip_address' => '192.168.1.156',
+            'status' => 'online',
+        ]);
+        $urls = [];
+        $this->app->instance(HikvisionClient::class, new HikvisionClient(function (string $method, string $url) use (&$urls) {
+            $urls[] = $url;
+
+            return ['status' => 200, 'body' => json_encode(['statusCode' => 1, 'statusString' => 'OK'])];
+        }));
+        $jobs = \Mockery::mock(\App\Services\Devices\HikvisionJobs::class);
+        $jobs->shouldReceive('dispatchAndWait')->never();
+        $this->app->instance(\App\Services\Devices\HikvisionJobs::class, $jobs);
+
+        $this->assertSame(1, app(\App\Services\Devices\EmployeePush::class)->saveToTerminals($employee));
+        $this->assertTrue(collect($urls)->contains(fn (string $url) => str_starts_with($url, 'http://103.214.226.146:18080/')));
+        $this->assertFalse(collect($urls)->contains(fn (string $url) => str_contains($url, '192.168.1.156')));
     }
 
     public function test_saving_an_employee_asks_the_office_link_when_the_server_cannot_see_the_terminal(): void
