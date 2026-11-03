@@ -28,11 +28,18 @@ class HikvisionEnroll
             return;
         }
         if ($kind === 'face') {
-            $this->captureFace($device, $employee, $userId);
+            $this->people->storeItem($employee, ['PhotoData' => [base64_encode($this->takenFace($device, $userId, $name))]]);
+
             return;
         }
         if ($kind === 'finger') {
-            $this->captureFinger($device, $employee, $userId);
+            $fingerNo = EmployeeCredential::query()
+                ->where('employee_id', $employee->id)
+                ->where('kind', 'finger')
+                ->count() + 1;
+            $data = $this->takenFinger($device, $userId, $name, $fingerNo);
+            $this->people->storeItem($employee, ['FingerPrints' => [['FingerprintID' => $fingerNo, 'FingerprintData' => $data]]]);
+
             return;
         }
 
@@ -65,6 +72,54 @@ class HikvisionEnroll
         }
     }
 
+    public function reachable(Device $device): bool
+    {
+        if ((string) config('hikvision.password') === '') {
+            return false;
+        }
+        if (config('hikvision.direct') === false) {
+            return false;
+        }
+        if (app()->runningUnitTests()) {
+            return true;
+        }
+
+        $host = trim((string) $device->ip_address);
+        if ($host === '') {
+            $host = trim((string) config('hikvision.host'));
+        }
+        $host = (string) preg_replace('#^https?://#', '', $host);
+        $host = explode('/', $host)[0];
+        $host = explode(':', $host)[0];
+        if ($host === '') {
+            return false;
+        }
+        $socket = @fsockopen($host, 80, $errno, $error, 1);
+        if ($socket === false) {
+            return false;
+        }
+        fclose($socket);
+
+        return true;
+    }
+
+    public function takenFace(Device $device, string $userId, string $name): string
+    {
+        $this->ensureUser($device, $userId, $name);
+
+        return $this->captureFace($device, $userId);
+    }
+
+    public function takenFinger(Device $device, string $userId, string $name, int $fingerNo): string
+    {
+        if ($fingerNo < 1 || $fingerNo > 10) {
+            throw new RuntimeException($device->name.' already has 10 fingers for this person.');
+        }
+        $this->ensureUser($device, $userId, $name);
+
+        return $this->captureFinger($device, $userId, $fingerNo);
+    }
+
     public function ensureUser(Device $device, string $userId, string $name, ?string $password = null): void
     {
         [$username, $secret] = $this->login();
@@ -84,7 +139,7 @@ class HikvisionEnroll
         }
     }
 
-    private function captureFace(Device $device, Employee $employee, string $userId): void
+    private function captureFace(Device $device, string $userId): string
     {
         [$username, $password] = $this->login();
         $base = $this->base($device);
@@ -107,20 +162,13 @@ class HikvisionEnroll
             throw new RuntimeException('The face terminal took a picture, but HRMS could not read it.');
         }
 
-        $this->people->storeItem($employee, ['PhotoData' => [base64_encode($jpeg)]]);
         $this->bindFace($device, $userId, $url, $jpeg);
+
+        return $jpeg;
     }
 
-    private function captureFinger(Device $device, Employee $employee, string $userId): void
+    private function captureFinger(Device $device, string $userId, int $fingerNo): string
     {
-        $fingerNo = EmployeeCredential::query()
-            ->where('employee_id', $employee->id)
-            ->where('kind', 'finger')
-            ->count() + 1;
-        if ($fingerNo > 10) {
-            throw new RuntimeException($device->name.' already has 10 fingers for this person.');
-        }
-
         [$username, $password] = $this->login();
         $response = $this->client->call('POST', $this->base($device).'/ISAPI/AccessControl/CaptureFingerPrint', $username, $password, $this->xml('CaptureFingerPrintCond', '<fingerNo>'.$fingerNo.'</fingerNo>'), 55);
         if (! $this->ok($response)) {
@@ -133,7 +181,8 @@ class HikvisionEnroll
         }
 
         $this->saveFinger($device, $userId, $fingerNo, $data);
-        $this->people->storeItem($employee, ['FingerPrints' => [['FingerprintID' => $fingerNo, 'FingerprintData' => $data]]]);
+
+        return $data;
     }
 
     private function bindFace(Device $device, string $userId, string $url, string $jpeg): void

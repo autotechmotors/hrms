@@ -16,6 +16,7 @@ class EmployeePush
     public function __construct(
         private readonly DahuaPush $push,
         private readonly HikvisionEnroll $hikvision,
+        private readonly HikvisionJobs $jobs,
     ) {}
 
     public function sync(Employee $employee): int
@@ -50,7 +51,7 @@ class EmployeePush
                 if (! $includeFaceTerminal) {
                     continue;
                 }
-                $this->hikvision->storeProfile($device, $userId, $name, $this->storedPin($employee), $this->facePayload($employee), $this->storedPrints($employee));
+                $this->placeOnTerminal($device, $employee, $userId, $name);
                 DeviceUser::query()->updateOrCreate(
                     ['device_id' => $device->id, 'employee_id' => $employee->id],
                     ['is_blocked' => false],
@@ -124,7 +125,7 @@ class EmployeePush
                             ['content' => base64_encode((string) $password)],
                         );
                     }
-                    $this->hikvision->capture($device, $employee, $kind, $password);
+                    $this->collectOnTerminal($device, $employee, $userId, $name, $kind, $password);
                     $hikvision = $device;
                 } elseif ($kind === 'password') {
                     EmployeeCredential::query()->updateOrCreate(
@@ -187,7 +188,7 @@ class EmployeePush
         }
 
         if ($device->isHikvision()) {
-            $this->hikvision->storeProfile($device, $userId, $name, $this->storedPin($employee), $this->facePayload($employee), $this->storedPrints($employee));
+            $this->placeOnTerminal($device, $employee, $userId, $name);
 
             return;
         }
@@ -222,7 +223,11 @@ class EmployeePush
         foreach ($devices as $device) {
             try {
                 if ($device->isHikvision()) {
-                    $this->hikvision->remove($device, $userId);
+                    if ($this->hikvision->reachable($device)) {
+                        $this->hikvision->remove($device, $userId);
+                    } else {
+                        $this->jobs->push(['kind' => 'remove', 'code' => $userId, 'name' => $userId]);
+                    }
                     continue;
                 }
                 $this->push->queueDeleteUser($device, $userId);
@@ -235,6 +240,61 @@ class EmployeePush
     /**
      * @return Collection<int, Device>
      */
+    private function placeOnTerminal(Device $device, Employee $employee, string $userId, string $name): void
+    {
+        $pin = $this->storedPin($employee);
+        $face = $this->facePayload($employee);
+        $prints = $this->storedPrints($employee);
+        if ($this->hikvision->reachable($device)) {
+            $this->hikvision->storeProfile($device, $userId, $name, $pin, $face, $prints);
+
+            return;
+        }
+
+        $result = $this->jobs->dispatchAndWait([
+            'kind' => 'profile',
+            'employee_id' => $employee->id,
+            'code' => $userId,
+            'name' => $name,
+            'password' => $pin,
+            'face' => $face,
+            'prints' => $prints,
+        ], 20);
+        if (($result['status'] ?? '') !== 'done') {
+            throw new \RuntimeException($result['message'] ?: 'The office link to the face terminal is not running.');
+        }
+    }
+
+    private function collectOnTerminal(Device $device, Employee $employee, string $userId, string $name, string $kind, ?string $password): void
+    {
+        if ($this->hikvision->reachable($device)) {
+            $this->hikvision->capture($device, $employee, $kind, $password);
+
+            return;
+        }
+        if ($kind === 'card') {
+            throw new \RuntimeException($device->name.' adds a face or a finger. Stand at that terminal and use those buttons.');
+        }
+
+        $job = [
+            'kind' => $kind,
+            'employee_id' => $employee->id,
+            'code' => $userId,
+            'name' => $name,
+            'password' => $password,
+        ];
+        if ($kind === 'finger') {
+            $job['finger_no'] = EmployeeCredential::query()
+                ->where('employee_id', $employee->id)
+                ->where('kind', 'finger')
+                ->count() + 1;
+        }
+        $result = $this->jobs->dispatchAndWait($job, in_array($kind, ['face', 'finger'], true) ? 70 : 15);
+        if (($result['status'] ?? '') !== 'done') {
+            throw new \RuntimeException($result['message'] ?: 'The office link to the face terminal is not running.');
+        }
+    }
+
     private function devices(Employee $employee): Collection
     {
         $ids = DeviceUser::query()->where('employee_id', $employee->id)->pluck('device_id')

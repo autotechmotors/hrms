@@ -504,6 +504,31 @@ class HikvisionAttendanceTest extends TestCase
             ->assertUnauthorized();
     }
 
+    public function test_saving_an_employee_asks_the_office_link_when_the_server_cannot_see_the_terminal(): void
+    {
+        config([
+            'hikvision.password' => '',
+            'hikvision.direct' => false,
+            'hikvision.register_id' => 'HIK1921681156',
+        ]);
+        $org = $this->makeCompany('HIK');
+        $employee = $this->makeEmployee($org, 'AT0099');
+        Device::query()->create([
+            'company_id' => $org['company']->id,
+            'name' => 'Gate',
+            'register_id' => 'HIK1921681156',
+            'ip_address' => '192.168.1.156',
+            'status' => 'online',
+        ]);
+        $jobs = \Mockery::mock(\App\Services\Devices\HikvisionJobs::class);
+        $jobs->shouldReceive('dispatchAndWait')->once()->withArgs(function (array $job): bool {
+            return $job['kind'] === 'profile' && $job['code'] === 'AT0099';
+        })->andReturn(['status' => 'done', 'message' => '']);
+        $this->app->instance(\App\Services\Devices\HikvisionJobs::class, $jobs);
+
+        $this->assertSame(1, app(\App\Services\Devices\EmployeePush::class)->saveToTerminals($employee));
+    }
+
     public function test_the_pull_command_asks_for_the_terminal_password(): void
     {
         config(['hikvision.password' => '']);

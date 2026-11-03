@@ -9,6 +9,7 @@ use App\Models\Employee;
 use App\Services\Devices\DevicePeople;
 use App\Services\Devices\DeviceSync;
 use App\Services\Devices\HikvisionEvents;
+use App\Services\Devices\HikvisionJobs;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -101,6 +102,36 @@ class HikvisionEventController extends Controller
         }
 
         return response()->json(['added' => $added, 'existing' => $existing]);
+    }
+
+    public function nextJob(string $token, HikvisionJobs $jobs): JsonResponse
+    {
+        $this->token($token);
+        $job = $jobs->claim();
+
+        return response()->json(['job' => $job]);
+    }
+
+    public function finishJob(Request $request, string $token, string $id, HikvisionJobs $jobs): JsonResponse
+    {
+        $this->token($token);
+        $result = $request->validate([
+            'ok' => ['required', 'boolean'],
+            'message' => ['nullable', 'string', 'max:500'],
+            'face' => ['nullable', 'string'],
+            'finger' => ['nullable', 'string'],
+            'slot' => ['nullable', 'integer'],
+        ]);
+
+        return response()->json($jobs->finish($id, $result));
+    }
+
+    private function token(string $token): void
+    {
+        $expected = (string) config('dahua.forward_token');
+        if ($expected === '' || ! hash_equals($expected, $token)) {
+            abort(401);
+        }
     }
 
     private function device(string $ip): ?Device
