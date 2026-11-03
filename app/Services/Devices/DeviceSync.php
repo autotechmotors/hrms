@@ -31,6 +31,9 @@ class DeviceSync
     public function run(Device $device): string
     {
         app(PunchForward::class)->flush();
+        if ($device->isHikvision()) {
+            return $device->name.': face scans come from the Hikvision pull, not EZAPI';
+        }
         $this->people->promoteMissingProfiles();
         $imported = $this->push->importInbox($device);
         $this->push->continueCollect($device);
@@ -64,7 +67,9 @@ class DeviceSync
         foreach (Device::query()->orderBy('id')->get() as $device) {
             $count += $this->importPunches($device, false);
         }
-        $this->reapplyRecent();
+        if ($count > 0) {
+            $this->reapplyRecent();
+        }
 
         return $count;
     }
@@ -386,6 +391,7 @@ class DeviceSync
     private function reapplyRecent(): void
     {
         $groups = AttendancePunch::query()
+            ->select(['id', 'employee_id', 'punched_at', 'direction'])
             ->where('punched_at', '>=', now()->subDays(2)->startOfDay())
             ->orderBy('punched_at')
             ->get()
@@ -404,6 +410,7 @@ class DeviceSync
     {
         $start = $date->copy()->timezone('Asia/Kolkata')->startOfDay();
         $punches = AttendancePunch::query()
+            ->select(['id', 'employee_id', 'punched_at', 'direction'])
             ->where('employee_id', $employee->id)
             ->whereBetween('punched_at', [$start, $start->copy()->endOfDay()])
             ->orderBy('punched_at')

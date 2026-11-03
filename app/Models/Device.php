@@ -27,4 +27,9 @@ class Device extends Model
     {
         return $this->hasMany(DeviceTerminalUser::class);
     }
+
+    public function isHikvision(): bool
+    {
+        return str_starts_with(strtoupper(trim((string) $this->register_id)), 'HIK');
+    }
 }

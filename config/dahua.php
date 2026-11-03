@@ -13,6 +13,9 @@ return [
     'register_id' => env('DAHUA_REGISTER_ID', 'test123'),
     'forward_url' => env('DAHUA_FORWARD_URL'),
     'forward_token' => env('DAHUA_FORWARD_TOKEN'),
+    'forward_dir' => env('DAHUA_FORWARD_DIR')
+        ? storage_path(env('DAHUA_FORWARD_DIR'))
+        : storage_path('app/device-forward'),
     'poll_seconds' => (int) env('DAHUA_POLL_SECONDS', 10),
 
     /*

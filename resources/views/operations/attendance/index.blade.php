@@ -180,13 +180,13 @@
                         @endphp
                         <td class="att-time js-in">
                             <span class="js-clock">{{ $formatTime($day?->punch_in) }}</span>
-                            @if($inPunch && \App\Support\StoredImage::mimeOf($inPunch->image))
+                            @if($inPunch && (int) $inPunch->has_image === 1)
                                 <button type="button" class="att-zoom" data-photo="{{ route('attendance.punch.photo', $inPunch) }}" title="View in photo"><img class="att-shot" src="{{ route('attendance.punch.photo', $inPunch) }}" alt="In photo"></button>
                             @endif
                         </td>
                         <td class="att-time js-out">
                             <span class="js-clock">{{ $formatTime($day?->punch_out) }}</span>
-                            @if($outPunch && \App\Support\StoredImage::mimeOf($outPunch->image))
+                            @if($outPunch && (int) $outPunch->has_image === 1)
                                 <button type="button" class="att-zoom" data-photo="{{ route('attendance.punch.photo', $outPunch) }}" title="View out photo"><img class="att-shot" src="{{ route('attendance.punch.photo', $outPunch) }}" alt="Out photo"></button>
                             @endif
                         </td>

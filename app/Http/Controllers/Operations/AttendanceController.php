@@ -55,12 +55,7 @@ class AttendanceController extends Controller
         }
 
         $employees = $filtered->paginate(30)->withQueryString();
-        $punches = AttendancePunch::query()
-            ->whereIn('employee_id', $employees->pluck('id'))
-            ->whereDate('punched_at', $date)
-            ->orderBy('punched_at')
-            ->get()
-            ->groupBy('employee_id');
+        $punches = $this->dayPunches($employees->pluck('id'), $date);
         $stats = $this->dayStats($scopedIds->count(), $allDays);
 
         return view('operations.attendance.index', [
@@ -232,12 +227,7 @@ class AttendanceController extends Controller
             ->whereDate('work_date', $date)
             ->get()
             ->keyBy('employee_id');
-        $punches = AttendancePunch::query()
-            ->whereIn('employee_id', $employees->pluck('id'))
-            ->whereDate('punched_at', $date)
-            ->orderBy('punched_at')
-            ->get()
-            ->groupBy('employee_id');
+        $punches = $this->dayPunches($employees->pluck('id'), $date);
 
         $portraits = $this->portraits($employees);
         $rows = [];
@@ -256,8 +246,8 @@ class AttendanceController extends Controller
                 'worked' => $this->workedLabel($day?->minutes_worked),
                 'status' => $status['label'],
                 'status_class' => $status['class'],
-                'in_photo' => $this->photoUrl($inPunch?->image, 'attendance.punch.photo', $inPunch),
-                'out_photo' => $this->photoUrl($outPunch?->image, 'attendance.punch.photo', $outPunch),
+                'in_photo' => $this->photoUrl($inPunch, 'attendance.punch.photo'),
+                'out_photo' => $this->photoUrl($outPunch, 'attendance.punch.photo'),
             ];
         }
 
@@ -369,12 +359,13 @@ class AttendanceController extends Controller
         $faces = EmployeeCredential::query()
             ->whereIn('employee_id', $employees->pluck('id'))
             ->where('kind', 'face')
+            ->whereNotNull('content')
             ->orderBy('slot')
-            ->get()
+            ->get(['id', 'employee_id', 'slot'])
             ->groupBy('employee_id');
 
         return $employees->mapWithKeys(function (Employee $employee) use ($faces) {
-            $face = $faces->get($employee->id, collect())->first(fn (EmployeeCredential $item) => StoredImage::mimeOf($item->content));
+            $face = $faces->get($employee->id, collect())->first();
             if ($face) {
                 return [$employee->id => route('attendance.credential.photo', $face)];
             }
@@ -410,6 +401,8 @@ class AttendanceController extends Controller
         $face = $employee->credentials->first(fn (EmployeeCredential $item) => $item->kind === 'face' && StoredImage::mimeOf($item->content));
         $faceUrl = $face ? route('attendance.credential.photo', $face) : null;
         $punches = AttendancePunch::query()
+            ->select(['id', 'employee_id', 'punched_at', 'direction'])
+            ->selectRaw('(CASE WHEN image IS NOT NULL THEN 1 ELSE 0 END) as has_image')
             ->where('employee_id', $employee->id)
             ->whereBetween('punched_at', [$start->copy()->startOfDay(), $end->copy()->endOfDay()])
             ->orderBy('punched_at')
@@ -520,7 +513,7 @@ class AttendanceController extends Controller
             return ['photo' => null, 'note' => null];
         }
 
-        $photo = $this->photoUrl($punch->image, 'attendance.punch.photo', $punch);
+        $photo = $this->photoUrl($punch, 'attendance.punch.photo');
         if ($photo) {
             return ['photo' => $photo, 'note' => 'Door photo'];
         }
@@ -532,13 +525,36 @@ class AttendanceController extends Controller
         return ['photo' => null, 'note' => null];
     }
 
-    protected function photoUrl(?string $stored, string $name, mixed $model): ?string
+    protected function photoUrl(?AttendancePunch $punch, string $name): ?string
     {
-        if (! $model || StoredImage::mimeOf($stored) === null) {
+        if (! $punch) {
             return null;
         }
+        if ((int) ($punch->has_image ?? 0) === 1 || StoredImage::mimeOf($punch->image) !== null) {
+            return route($name, $punch);
+        }
 
-        return route($name, $model);
+        return null;
+    }
+
+    /**
+     * @param  Collection<int, int>  $employeeIds
+     * @return Collection<int|string, Collection<int, AttendancePunch>>
+     */
+    protected function dayPunches(Collection $employeeIds, Carbon $date): Collection
+    {
+        if ($employeeIds->isEmpty()) {
+            return collect();
+        }
+
+        return AttendancePunch::query()
+            ->select(['id', 'employee_id', 'punched_at', 'direction'])
+            ->selectRaw('(CASE WHEN image IS NOT NULL THEN 1 ELSE 0 END) as has_image')
+            ->whereIn('employee_id', $employeeIds)
+            ->whereDate('punched_at', $date)
+            ->orderBy('punched_at')
+            ->get()
+            ->groupBy('employee_id');
     }
 
     protected function imageResponse(?string $stored): Response

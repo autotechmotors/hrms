@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Device;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
 use Tests\Concerns\BuildsOrganization;
@@ -140,6 +141,32 @@ class DeviceForwardTest extends TestCase
 
         $this->assertDatabaseMissing('employees', ['employee_code' => 'GHOST']);
         $this->assertDatabaseCount('attendance_punches', 0);
+    }
+
+    public function test_a_pending_live_site_is_not_retried_on_the_next_flush(): void
+    {
+        Http::fake(['https://hrms.example/device-events' => Http::response(['saved' => 0, 'pending' => true])]);
+        config([
+            'dahua.forward_url' => 'https://hrms.example/device-events',
+            'dahua.forward_token' => 'secret-token',
+        ]);
+        Cache::flush();
+        $dir = (string) config('dahua.forward_dir');
+        File::deleteDirectory($dir);
+        File::ensureDirectoryExists($dir);
+        File::put($dir.DIRECTORY_SEPARATOR.'one.json', json_encode([
+            'register_id' => 'HIK1921681156',
+            'seq' => '1',
+            'image' => null,
+            'event' => ['Code' => 'AccessControl', 'Data' => ['UserID' => 'Aut00741']],
+        ]));
+
+        $forward = app(\App\Services\Devices\PunchForward::class);
+        $forward->flush();
+        $forward->flush();
+
+        Http::assertSentCount(1);
+        $this->assertFileExists($dir.DIRECTORY_SEPARATOR.'one.json');
     }
 
     public function test_opening_the_receiver_in_a_browser_shows_it_is_running(): void

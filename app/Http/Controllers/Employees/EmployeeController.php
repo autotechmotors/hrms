@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\EmployeeRequest;
 use App\Models\Branch;
 use App\Models\Department;
+use App\Models\Device;
 use App\Models\Designation;
 use App\Models\DeviceTerminalUser;
 use App\Models\Employee;
@@ -23,6 +24,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use RuntimeException;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -83,11 +85,10 @@ class EmployeeController extends Controller
             $request->file('photograph'),
         );
         $employee->refresh();
-        $pushed = app(\App\Services\Devices\EmployeePush::class)->sync($employee);
 
-        return redirect()->route('employees.show', $employee)->with('success', $pushed > 0
-            ? 'Employee saved. The terminal will add the name and photo on its next poll.'
-            : 'Employee saved.');
+        [$flash, $message] = $this->terminalMessage($employee, false);
+
+        return redirect()->route('employees.show', $employee)->with($flash, $message);
     }
 
     public function show(Employee $employee): View
@@ -109,9 +110,37 @@ class EmployeeController extends Controller
         ]);
     }
 
+    /**
+     * @return array{0: string, 1: string}
+     */
+    private function terminalMessage(Employee $employee, bool $updated): array
+    {
+        $saved = $updated ? 'Employee updated.' : 'Employee saved.';
+        try {
+            $pushed = app(\App\Services\Devices\EmployeePush::class)->saveToTerminals($employee);
+        } catch (RuntimeException $exception) {
+            return ['warning', $saved.' The face terminal did not add them: '.$exception->getMessage()];
+        }
+        if ($pushed < 1) {
+            return ['success', $saved];
+        }
+        $face = Device::query()
+            ->where('company_id', $employee->company_id)
+            ->get()
+            ->contains(fn (Device $device) => $device->isHikvision());
+        if ($face) {
+            return ['success', $saved.' This person is on the face terminal. Add a face or finger from the employee list.'];
+        }
+
+        return ['success', $updated
+            ? 'Employee updated. The terminal will refresh the name and photo on its next poll.'
+            : 'Employee saved. The terminal will add the name and photo on its next poll.'];
+    }
+
     public function collectCredential(Request $request, Employee $employee): JsonResponse
     {
         $this->authorize('update', $employee);
+        set_time_limit(90);
         $data = $request->validate([
             'kind' => ['required', 'in:face,finger,card,password'],
             'password' => ['required_if:kind,password', 'nullable', 'regex:/^\d{4,8}$/'],
@@ -159,12 +188,10 @@ class EmployeeController extends Controller
             $request->file('photograph'),
         );
         $employee->refresh();
-        $pushed = app(\App\Services\Devices\EmployeePush::class)->sync($employee);
-        $message = $pushed > 0
-            ? 'Employee updated. The terminal will refresh the name and photo on its next poll.'
-            : 'Employee updated.';
 
-        return redirect()->route('employees.show', $employee)->with('success', $message);
+        [$flash, $message] = $this->terminalMessage($employee, true);
+
+        return redirect()->route('employees.show', $employee)->with($flash, $message);
     }
 
     public function toggleBlocked(Request $request, Employee $employee): JsonResponse|RedirectResponse

@@ -244,11 +244,17 @@
             if (!pin) return;
             body.password = pin;
         }
+        if ((kind === 'face' || kind === 'finger') && window.toast) {
+            window.toast(kind === 'face'
+                ? 'Look at the face terminal now. Stay still until it finishes.'
+                : 'Place one finger on the face terminal. Wait until it finishes.');
+        }
         button.addClass('wait');
         $.ajax({
             url: url,
             method: 'POST',
             data: body,
+            timeout: 75000,
             headers: { 'X-CSRF-TOKEN': csrf }
         }).done(function (data) {
             paintCounts(button.closest('.ac-cred'), data.counts || {});

@@ -13,9 +13,22 @@ use Illuminate\Support\Facades\Storage;
 
 class EmployeePush
 {
-    public function __construct(private readonly DahuaPush $push) {}
+    public function __construct(
+        private readonly DahuaPush $push,
+        private readonly HikvisionEnroll $hikvision,
+    ) {}
 
     public function sync(Employee $employee): int
+    {
+        return $this->send($employee, false);
+    }
+
+    public function saveToTerminals(Employee $employee): int
+    {
+        return $this->send($employee, true);
+    }
+
+    private function send(Employee $employee, bool $includeFaceTerminal): int
     {
         $devices = $this->devices($employee);
         if ($devices->isEmpty()) {
@@ -33,6 +46,23 @@ class EmployeePush
 
         $queued = 0;
         foreach ($devices as $device) {
+            if ($device->isHikvision()) {
+                if (! $includeFaceTerminal) {
+                    continue;
+                }
+                $this->hikvision->storeProfile($device, $userId, $name, $this->storedPin($employee), $this->facePayload($employee), $this->storedPrints($employee));
+                DeviceUser::query()->updateOrCreate(
+                    ['device_id' => $device->id, 'employee_id' => $employee->id],
+                    ['is_blocked' => false],
+                );
+                DeviceTerminalUser::query()->updateOrCreate(
+                    ['device_id' => $device->id, 'user_id' => $userId],
+                    ['name' => $name, 'employee_id' => $employee->id, 'dismissed_at' => null],
+                );
+                $queued++;
+
+                continue;
+            }
             try {
                 $this->rewrite($device, $employee, $userId, $name);
                 DeviceTerminalUser::query()->updateOrCreate(
@@ -67,7 +97,15 @@ class EmployeePush
             return ['devices' => 0, 'message' => 'This employee needs a code and a name before the terminal can store them.'];
         }
 
+        $faceTerminals = Device::query()
+            ->where('company_id', $employee->company_id)
+            ->orderBy('id')
+            ->get()
+            ->filter(fn (Device $device) => $device->isHikvision());
+        $devices = $devices->merge($faceTerminals)->unique('id')->values();
         $queued = 0;
+        $hikvision = null;
+        $hikvisionError = null;
         foreach ($devices as $device) {
             try {
                 $this->push->rememberPerson($device, $userId, $name, $employee->id);
@@ -75,7 +113,20 @@ class EmployeePush
                     ['device_id' => $device->id, 'employee_id' => $employee->id],
                     ['is_blocked' => false],
                 );
-                if ($kind === 'password') {
+                DeviceTerminalUser::query()->updateOrCreate(
+                    ['device_id' => $device->id, 'user_id' => $userId],
+                    ['name' => $name, 'employee_id' => $employee->id, 'dismissed_at' => null],
+                );
+                if ($device->isHikvision()) {
+                    if ($kind === 'password') {
+                        EmployeeCredential::query()->updateOrCreate(
+                            ['employee_id' => $employee->id, 'kind' => 'password', 'slot' => '0'],
+                            ['content' => base64_encode((string) $password)],
+                        );
+                    }
+                    $this->hikvision->capture($device, $employee, $kind, $password);
+                    $hikvision = $device;
+                } elseif ($kind === 'password') {
                     EmployeeCredential::query()->updateOrCreate(
                         ['employee_id' => $employee->id, 'kind' => 'password', 'slot' => '0'],
                         ['content' => base64_encode((string) $password)],
@@ -85,16 +136,28 @@ class EmployeePush
                     $this->push->queueCollect($device, $userId, $kind);
                 }
                 $queued++;
-            } catch (\Throwable) {
+            } catch (\Throwable $exception) {
+                if ($device->isHikvision()) {
+                    $hikvisionError = $exception->getMessage();
+                }
                 continue;
             }
         }
 
+        if ($queued === 0) {
+            return ['devices' => 0, 'message' => $hikvisionError ?: 'Add a device before collecting a credential.'];
+        }
+
+        $target = $hikvision?->name ?? $devices->first()->name;
         $message = match ($kind) {
-            'face' => 'Look at '.$devices->first()->name.' now. Stay until the distance guide finishes. Do not click another credential while it is open.',
-            'finger' => 'Place one finger on '.$devices->first()->name.' now. Wait until that finger is saved before choosing another credential.',
-            'card' => 'Present the card on '.$devices->first()->name.' now. If this terminal has no card reader, the count stays empty.',
-            default => 'Password sent to the terminal.',
+            'face' => $hikvision
+                ? 'Face saved on '.$target.'.'
+                : 'Look at '.$target.' now. Stay until the distance guide finishes. Do not click another credential while it is open.',
+            'finger' => $hikvision
+                ? 'Finger saved on '.$target.'.'
+                : 'Place one finger on '.$target.' now. Wait until that finger is saved before choosing another credential.',
+            'card' => 'Present the card on '.$target.' now. If this terminal has no card reader, the count stays empty.',
+            default => 'Password sent to '.$target.'.',
         };
 
         return ['devices' => $queued, 'message' => $message];
@@ -120,6 +183,12 @@ class EmployeePush
         $userId = trim($userId ?? (string) $employee->employee_code);
         $name = trim($name ?? (string) $employee->full_name);
         if ($userId === '' || $name === '') {
+            return;
+        }
+
+        if ($device->isHikvision()) {
+            $this->hikvision->storeProfile($device, $userId, $name, $this->storedPin($employee), $this->facePayload($employee), $this->storedPrints($employee));
+
             return;
         }
 
@@ -152,6 +221,10 @@ class EmployeePush
 
         foreach ($devices as $device) {
             try {
+                if ($device->isHikvision()) {
+                    $this->hikvision->remove($device, $userId);
+                    continue;
+                }
                 $this->push->queueDeleteUser($device, $userId);
             } catch (\Throwable) {
                 continue;

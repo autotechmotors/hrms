@@ -31,5 +31,6 @@
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="DAHUA_FORWARD_URL" value="" force="true"/>
         <env name="DAHUA_FORWARD_TOKEN" value="" force="true"/>
+        <env name="DAHUA_FORWARD_DIR" value="framework/testing/device-forward" force="true"/>
     </php>
 </phpunit>

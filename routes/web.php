@@ -16,6 +16,7 @@ use App\Http\Controllers\Operations\BankController;
 use App\Http\Controllers\Operations\DeviceController;
 use App\Http\Controllers\Operations\DeviceEventController;
 use App\Http\Controllers\Operations\EzapiController;
+use App\Http\Controllers\Operations\HikvisionEventController;
 use App\Http\Controllers\Operations\HolidayController;
 use App\Http\Controllers\Operations\LeaveController;
 use App\Http\Controllers\Operations\PayrollController;
@@ -47,6 +48,10 @@ Route::middleware('guest')->group(function (): void {
 Route::post('logout', [LoginController::class, 'destroy'])->middleware('auth')->name('logout');
 Route::get('device-events', [DeviceEventController::class, 'show'])->middleware('dahua.log')->name('device-events.show');
 Route::post('device-events', [DeviceEventController::class, 'store'])->middleware(['dahua.log', 'throttle:120,1'])->name('device-events.store');
+Route::match(['get', 'post'], 'hikvision-events/{token}', HikvisionEventController::class)
+    ->where('token', '[A-Za-z0-9]+')
+    ->middleware('throttle:120,1')
+    ->name('hikvision-events.store');
 Route::withoutMiddleware([
     \Illuminate\Cookie\Middleware\EncryptCookies::class,
     \Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse::class,
