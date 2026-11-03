@@ -48,6 +48,10 @@ Route::middleware('guest')->group(function (): void {
 Route::post('logout', [LoginController::class, 'destroy'])->middleware('auth')->name('logout');
 Route::get('device-events', [DeviceEventController::class, 'show'])->middleware('dahua.log')->name('device-events.show');
 Route::post('device-events', [DeviceEventController::class, 'store'])->middleware(['dahua.log', 'throttle:120,1'])->name('device-events.store');
+Route::post('hikvision-events/{token}/people', [HikvisionEventController::class, 'people'])
+    ->where('token', '[A-Za-z0-9]+')
+    ->middleware('throttle:10,1')
+    ->name('hikvision-events.people');
 Route::match(['get', 'post'], 'hikvision-events/{token}', HikvisionEventController::class)
     ->where('token', '[A-Za-z0-9]+')
     ->middleware('throttle:120,1')

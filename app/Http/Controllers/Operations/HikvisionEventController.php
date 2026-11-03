@@ -4,6 +4,9 @@ namespace App\Http\Controllers\Operations;
 
 use App\Http\Controllers\Controller;
 use App\Models\Device;
+use App\Models\DeviceTerminalUser;
+use App\Models\Employee;
+use App\Services\Devices\DevicePeople;
 use App\Services\Devices\DeviceSync;
 use App\Services\Devices\HikvisionEvents;
 use Illuminate\Http\JsonResponse;
@@ -55,6 +58,49 @@ class HikvisionEventController extends Controller
         ], $scan['serial'], $scan['image']);
 
         return response()->json($result);
+    }
+
+    public function people(Request $request, string $token, DevicePeople $people): JsonResponse
+    {
+        $expected = (string) config('dahua.forward_token');
+        if ($expected === '' || ! hash_equals($expected, $token)) {
+            abort(401);
+        }
+
+        $rows = $request->validate([
+            'people' => ['required', 'array', 'max:500'],
+            'people.*.code' => ['required', 'string', 'max:50'],
+            'people.*.name' => ['nullable', 'string', 'max:120'],
+        ]);
+        $device = $this->device('');
+        if (! $device) {
+            return response()->json(['added' => 0, 'message' => 'Device is not on this server.'], 422);
+        }
+
+        $added = 0;
+        $existing = 0;
+        foreach ($rows['people'] as $row) {
+            $code = trim($row['code']);
+            $name = trim((string) ($row['name'] ?? ''));
+            if ($code === '') {
+                continue;
+            }
+            $already = Employee::query()
+                ->where('company_id', $device->company_id)
+                ->where('employee_code', $code)
+                ->exists();
+            $employee = $people->ensure($device, $code, $name !== '' ? $name : $code);
+            if (! $employee) {
+                continue;
+            }
+            DeviceTerminalUser::query()->updateOrCreate(
+                ['device_id' => $device->id, 'user_id' => $code],
+                ['name' => $name !== '' ? $name : $code, 'employee_id' => $employee->id, 'dismissed_at' => null],
+            );
+            $already ? $existing++ : $added++;
+        }
+
+        return response()->json(['added' => $added, 'existing' => $existing]);
     }
 
     private function device(string $ip): ?Device

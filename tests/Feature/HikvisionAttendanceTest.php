@@ -475,6 +475,35 @@ class HikvisionAttendanceTest extends TestCase
         $this->get('/hikvision-events/secrettoken')->assertOk()->assertSee('Hikvision event receiver is running.');
     }
 
+    public function test_a_terminal_directory_is_added_on_this_server_without_passwords(): void
+    {
+        config(['dahua.forward_token' => 'secrettoken', 'hikvision.register_id' => 'HIK1921681156']);
+        $org = $this->makeCompany('HIK');
+        $this->makeEmployee($org, '900001');
+        Device::query()->create([
+            'company_id' => $org['company']->id,
+            'name' => 'Gate',
+            'register_id' => 'HIK1921681156',
+            'ip_address' => '192.168.1.156',
+            'status' => 'online',
+        ]);
+
+        $this->postJson('/hikvision-events/secrettoken/people', [
+            'people' => [
+                ['code' => '900001', 'name' => 'New Person'],
+                ['code' => '900002', 'name' => 'Second Person'],
+            ],
+        ])->assertOk()->assertJson(['added' => 1, 'existing' => 1]);
+
+        $this->assertDatabaseHas('employees', [
+            'employee_code' => '900002',
+            'first_name' => 'Second',
+            'last_name' => 'Person',
+        ]);
+        $this->postJson('/hikvision-events/wrongtoken/people', ['people' => [['code' => '1', 'name' => 'A']]])
+            ->assertUnauthorized();
+    }
+
     public function test_the_pull_command_asks_for_the_terminal_password(): void
     {
         config(['hikvision.password' => '']);

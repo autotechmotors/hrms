@@ -473,6 +473,26 @@ class HikvisionEvents
         }
     }
 
+    /**
+     * Names and codes on the terminal. Passwords are never included.
+     *
+     * @return list<array{code: string, name: string}>
+     */
+    public function directory(string $host, string $username, string $password): array
+    {
+        $people = [];
+        foreach ($this->users($this->baseUrl($host), $username, $password) as $person) {
+            $code = trim((string) ($person['employeeNo'] ?? ''));
+            if ($code === '') {
+                continue;
+            }
+            $name = trim((string) ($person['name'] ?? ''));
+            $people[] = ['code' => $code, 'name' => $name !== '' ? $name : $code];
+        }
+
+        return $people;
+    }
+
     public function userCount(string $host, string $username, string $password): ?int
     {
         try {
