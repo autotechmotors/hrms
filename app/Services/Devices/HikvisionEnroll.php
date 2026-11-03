@@ -84,17 +84,11 @@ class HikvisionEnroll
             return true;
         }
 
-        $host = trim((string) $device->ip_address);
-        if ($host === '') {
-            $host = trim((string) config('hikvision.host'));
-        }
-        $host = (string) preg_replace('#^https?://#', '', $host);
-        $host = explode('/', $host)[0];
-        $host = explode(':', $host)[0];
+        [$host, $port] = $this->endpoint($device);
         if ($host === '') {
             return false;
         }
-        $socket = @fsockopen($host, 80, $errno, $error, 1);
+        $socket = @fsockopen($host, $port, $errno, $error, 3);
         if ($socket === false) {
             return false;
         }
@@ -283,7 +277,7 @@ class HikvisionEnroll
      */
     private function login(): array
     {
-        $password = (string) config('hikvision.password');
+        $password = trim((string) config('hikvision.password'));
         if ($password === '') {
             throw new RuntimeException('Set HIKVISION_PASSWORD before enrolling on the face terminal.');
         }
@@ -293,18 +287,46 @@ class HikvisionEnroll
 
     private function base(Device $device): string
     {
-        $host = trim((string) $device->ip_address);
-        if ($host === '') {
-            $host = trim((string) config('hikvision.host'));
-        }
+        [$host, $port] = $this->endpoint($device);
         if ($host === '') {
             throw new RuntimeException($device->name.' has no IP address.');
         }
-        if (! str_starts_with($host, 'http://') && ! str_starts_with($host, 'https://')) {
-            $host = 'http://'.$host;
+        $address = $port === 80 ? $host : $host.':'.$port;
+
+        return 'http://'.$address;
+    }
+
+    /**
+     * @return array{0: string, 1: int}
+     */
+    private function endpoint(Device $device): array
+    {
+        $configured = trim((string) config('hikvision.host'));
+        $port = config('hikvision.port');
+        if ($configured !== '' && is_int($port) && $port > 0) {
+            $configured = (string) preg_replace('#^https?://#', '', $configured);
+            $configured = explode('/', $configured)[0];
+            if (str_contains($configured, ':')) {
+                [$configured, $written] = explode(':', $configured, 2);
+                $port = (int) $written;
+            }
+
+            return [$configured, $port];
         }
 
-        return rtrim($host, '/');
+        $host = trim((string) $device->ip_address);
+        if ($host === '') {
+            $host = $configured;
+        }
+        $host = (string) preg_replace('#^https?://#', '', $host);
+        $host = explode('/', $host)[0];
+        $devicePort = 80;
+        if (str_contains($host, ':')) {
+            [$host, $written] = explode(':', $host, 2);
+            $devicePort = (int) $written;
+        }
+
+        return [$host, $devicePort > 0 ? $devicePort : 80];
     }
 
     private function xml(string $root, string $inner): string
