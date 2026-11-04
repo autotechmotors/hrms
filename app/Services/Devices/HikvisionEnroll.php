@@ -3,6 +3,7 @@
 namespace App\Services\Devices;
 
 use App\Models\Device;
+use App\Models\DeviceTerminalUser;
 use App\Models\Employee;
 use App\Models\EmployeeCredential;
 use App\Support\StoredImage;
@@ -23,7 +24,11 @@ class HikvisionEnroll
             throw new RuntimeException('This employee needs a code and a name before the face terminal can store them.');
         }
 
-        $this->ensureUser($device, $userId, $name, $password);
+        if ($kind === 'password') {
+            $this->ensureUser($device, $userId, $name, $password);
+        } elseif (! $this->onTerminal($device, $userId)) {
+            $this->ensureUser($device, $userId, $name, null, false);
+        }
         if ($kind === 'password') {
             return;
         }
@@ -109,8 +114,6 @@ class HikvisionEnroll
 
     public function takenFace(Device $device, string $userId, string $name): string
     {
-        $this->ensureUser($device, $userId, $name);
-
         return $this->captureFace($device, $userId);
     }
 
@@ -119,12 +122,11 @@ class HikvisionEnroll
         if ($fingerNo < 1 || $fingerNo > 10) {
             throw new RuntimeException($device->name.' already has 10 fingers for this person.');
         }
-        $this->ensureUser($device, $userId, $name);
 
         return $this->captureFinger($device, $userId, $fingerNo);
     }
 
-    public function ensureUser(Device $device, string $userId, string $name, ?string $password = null): void
+    public function ensureUser(Device $device, string $userId, string $name, ?string $password = null, bool $refresh = true): void
     {
         [$username, $secret] = $this->login();
         $body = $this->userBody($userId, $name, $password);
@@ -136,11 +138,23 @@ class HikvisionEnroll
         if (! $this->exists($created)) {
             throw new RuntimeException($this->problem($created));
         }
+        if (! $refresh) {
+            return;
+        }
 
         $updated = $this->client->call('PUT', $base.'/ISAPI/AccessControl/UserInfo/Modify?format=json', $username, $secret, $body);
         if (! $this->ok($updated)) {
             throw new RuntimeException($this->problem($updated));
         }
+    }
+
+    private function onTerminal(Device $device, string $userId): bool
+    {
+        return DeviceTerminalUser::query()
+            ->where('device_id', $device->id)
+            ->where('user_id', $userId)
+            ->whereNull('dismissed_at')
+            ->exists();
     }
 
     private function captureFace(Device $device, string $userId): string

@@ -109,14 +109,12 @@ class EmployeePush
         $hikvisionError = null;
         foreach ($devices as $device) {
             try {
-                $this->push->rememberPerson($device, $userId, $name, $employee->id);
+                if (! $device->isHikvision()) {
+                    $this->push->rememberPerson($device, $userId, $name, $employee->id);
+                }
                 DeviceUser::query()->updateOrCreate(
                     ['device_id' => $device->id, 'employee_id' => $employee->id],
                     ['is_blocked' => false],
-                );
-                DeviceTerminalUser::query()->updateOrCreate(
-                    ['device_id' => $device->id, 'user_id' => $userId],
-                    ['name' => $name, 'employee_id' => $employee->id, 'dismissed_at' => null],
                 );
                 if ($device->isHikvision()) {
                     if ($kind === 'password') {
@@ -126,14 +124,26 @@ class EmployeePush
                         );
                     }
                     $this->collectOnTerminal($device, $employee, $userId, $name, $kind, $password);
+                    DeviceTerminalUser::query()->updateOrCreate(
+                        ['device_id' => $device->id, 'user_id' => $userId],
+                        ['name' => $name, 'employee_id' => $employee->id, 'dismissed_at' => null, 'synced_at' => now()],
+                    );
                     $hikvision = $device;
                 } elseif ($kind === 'password') {
+                    DeviceTerminalUser::query()->updateOrCreate(
+                        ['device_id' => $device->id, 'user_id' => $userId],
+                        ['name' => $name, 'employee_id' => $employee->id, 'dismissed_at' => null],
+                    );
                     EmployeeCredential::query()->updateOrCreate(
                         ['employee_id' => $employee->id, 'kind' => 'password', 'slot' => '0'],
                         ['content' => base64_encode((string) $password)],
                     );
                     $this->queuePerson($device, $employee, $userId, $name);
                 } else {
+                    DeviceTerminalUser::query()->updateOrCreate(
+                        ['device_id' => $device->id, 'user_id' => $userId],
+                        ['name' => $name, 'employee_id' => $employee->id, 'dismissed_at' => null],
+                    );
                     $this->push->queueCollect($device, $userId, $kind);
                 }
                 $queued++;

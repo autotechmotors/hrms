@@ -196,7 +196,7 @@ class HikvisionAttendanceTest extends TestCase
                                 'employeeNo' => 'Aut00741',
                                 'name' => 'Darshit Goti',
                                 'numOfFace' => 1,
-                                'Valid' => ['beginTime' => '2026-11-03T00:00:00'],
+                                'Valid' => ['beginTime' => now()->timezone('Asia/Kolkata')->toDateString().'T00:00:00'],
                                 'faceURL' => 'http://192.168.1.156/enrolled.jpg',
                             ]],
                         ],
@@ -323,6 +323,47 @@ class HikvisionAttendanceTest extends TestCase
         $this->assertStringContainsString('<CaptureFaceDataCond', $capture);
         $this->assertStringContainsString('<dataType>url</dataType>', $capture);
         $this->assertTrue(collect($urls)->contains(fn (string $url) => str_contains($url, 'FaceDataRecord')));
+    }
+
+    public function test_a_face_button_opens_the_camera_without_rewriting_an_existing_person(): void
+    {
+        config([
+            'hikvision.username' => 'admin',
+            'hikvision.password' => 'secret',
+        ]);
+        $org = $this->makeCompany('HIK');
+        $employee = $this->makeEmployee($org, 'AT0010');
+        $device = Device::query()->create([
+            'company_id' => $org['company']->id,
+            'name' => 'Gate',
+            'register_id' => 'HIK1921681156',
+            'ip_address' => '192.168.1.156',
+            'status' => 'online',
+        ]);
+        \App\Models\DeviceTerminalUser::query()->create([
+            'device_id' => $device->id,
+            'user_id' => 'AT0010',
+            'name' => 'Neha Bonsal',
+            'employee_id' => $employee->id,
+        ]);
+        $jpeg = base64_decode('/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAb/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCwAA//2Q==');
+        $urls = [];
+        $this->app->instance(HikvisionClient::class, new HikvisionClient(function (string $method, string $url) use (&$urls, $jpeg) {
+            $urls[] = $method.' '.$url;
+            if (str_contains($url, 'CaptureFaceData')) {
+                return ['status' => 200, 'body' => json_encode(['CaptureFaceData' => ['faceDataUrl' => 'http://192.168.1.156/face.jpg', 'captureProgress' => 100]])];
+            }
+            if ($method === 'GET') {
+                return ['status' => 200, 'body' => $jpeg];
+            }
+
+            return ['status' => 200, 'body' => json_encode(['statusCode' => 1, 'statusString' => 'OK'])];
+        }));
+
+        app(\App\Services\Devices\EmployeePush::class)->collect($employee, 'face');
+
+        $this->assertStringContainsString('CaptureFaceData', $urls[0]);
+        $this->assertFalse(collect($urls)->contains(fn (string $url) => str_contains($url, 'UserInfo')));
     }
 
     public function test_saving_an_employee_adds_that_person_on_the_hikvision_terminal(): void
