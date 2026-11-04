@@ -92,6 +92,27 @@ class OperationsModulesTest extends TestCase
         }
     }
 
+    public function test_attendance_rules_can_turn_selfie_storage_off(): void
+    {
+        $org = $this->makeCompany('SEL');
+        $hr = $this->makeUser('hr-admin', $org['company']);
+
+        $this->actingAsScoped($hr)
+            ->get(route('attendance.index'))
+            ->assertOk()
+            ->assertSee('Store the scan selfie on the attendance punch')
+            ->assertSee('name="store_selfie"', false);
+
+        $this->post(route('attendance.rule'), [
+            'grace_minutes' => 5,
+            'half_day_minutes' => '',
+            'full_day_minutes' => '',
+            'mark_absent_without_punch' => 1,
+        ])->assertRedirect();
+
+        $this->assertFalse((bool) \App\Models\AttendanceRule::query()->where('company_id', $org['company']->id)->value('store_selfie'));
+    }
+
     public function test_holiday_calendar_exposes_clicked_and_outside_dates(): void
     {
         $org = $this->makeCompany('CAL');

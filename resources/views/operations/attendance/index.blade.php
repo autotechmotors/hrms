@@ -304,6 +304,10 @@
                             <input type="checkbox" name="mark_absent_without_punch" value="1" @checked(old('mark_absent_without_punch', $rule->mark_absent_without_punch))>
                             <span>Mark absent when there is no punch</span>
                         </label>
+                        <label class="att-check">
+                            <input type="checkbox" name="store_selfie" value="1" @checked(old('store_selfie', $rule->store_selfie))>
+                            <span>Store the scan selfie on the attendance punch</span>
+                        </label>
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn" data-bs-dismiss="modal">Cancel</button>

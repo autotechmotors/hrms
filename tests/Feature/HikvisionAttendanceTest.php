@@ -517,6 +517,53 @@ class HikvisionAttendanceTest extends TestCase
         $this->get('/hikvision-events/secrettoken')->assertOk()->assertSee('Hikvision event receiver is running.');
     }
 
+    public function test_a_face_scan_keeps_the_punch_and_drops_the_selfie_when_storage_is_off(): void
+    {
+        config(['dahua.forward_token' => 'secrettoken', 'hikvision.register_id' => 'HIK1921681156']);
+        $org = $this->makeCompany('HIK');
+        $employee = $this->makeEmployee($org, '900001');
+        \App\Models\AttendanceRule::query()->create([
+            'company_id' => $org['company']->id,
+            'grace_minutes' => 0,
+            'mark_absent_without_punch' => true,
+            'store_selfie' => false,
+        ]);
+        Device::query()->create([
+            'company_id' => $org['company']->id,
+            'name' => 'Gate',
+            'register_id' => 'HIK1921681156',
+            'ip_address' => '192.168.1.156',
+            'status' => 'online',
+        ]);
+        $jpeg = base64_decode('/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAb/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCwAA//2Q==');
+        $json = json_encode([
+            'ipAddress' => '192.168.1.156',
+            'dateTime' => '2026-11-03T13:24:05+05:30',
+            'eventType' => 'AccessControllerEvent',
+            'AccessControllerEvent' => [
+                'majorEventType' => 5,
+                'subEventType' => 75,
+                'employeeNoString' => '900001',
+                'name' => 'New Person',
+                'serialNo' => 88,
+                'currentVerifyMode' => 'face',
+                'attendanceStatus' => 'checkIn',
+            ],
+        ]);
+        $boundary = '----HikBound';
+        $body = "--{$boundary}\r\nContent-Disposition: form-data; name=\"event_log\"\r\nContent-Type: application/json\r\n\r\n{$json}\r\n--{$boundary}\r\nContent-Disposition: form-data; name=\"Picture\"; filename=\"Picture.jpg\"\r\nContent-Type: image/jpeg\r\n\r\n{$jpeg}\r\n--{$boundary}--\r\n";
+
+        $this->call('POST', '/hikvision-events/secrettoken', [], [], [], [
+            'CONTENT_TYPE' => 'multipart/form-data; boundary='.$boundary,
+        ], $body)
+            ->assertOk()
+            ->assertJson(['saved' => 1, 'pending' => false]);
+
+        $punch = AttendancePunch::query()->where('employee_id', $employee->id)->first();
+        $this->assertNotNull($punch);
+        $this->assertNull($punch->image);
+    }
+
     public function test_a_terminal_directory_is_added_on_this_server_without_passwords(): void
     {
         config(['dahua.forward_token' => 'secrettoken', 'hikvision.register_id' => 'HIK1921681156']);

@@ -22,7 +22,7 @@ class WatchHikvision extends Command
             return self::FAILURE;
         }
 
-        $tick = 0;
+        $tick = 0;  
         while (true) {
             try {
                 $done = $relay->drain();

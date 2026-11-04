@@ -5,6 +5,7 @@ namespace App\Services\Devices;
 use App\Models\AttendanceDay;
 use App\Models\AttendancePunch;
 use App\Models\AttendancePunchSkip;
+use App\Models\AttendanceRule;
 use App\Models\Device;
 use App\Models\DeviceTerminalUser;
 use App\Models\DeviceUser;
@@ -323,7 +324,7 @@ class DeviceSync
                     'device_id' => $device->id,
                     'punched_at' => $at,
                     'direction' => $direction,
-                    'image' => $image,
+                    'image' => $this->storeSelfie($device) ? $image : null,
                 ],
             );
             if ($punch->wasRecentlyCreated) {
@@ -449,6 +450,17 @@ class DeviceSync
             'status' => $day->status ?: 'absent',
         ])->save();
         $this->calculator->recalculate($employee, $date);
+    }
+
+    private function storeSelfie(Device $device): bool
+    {
+        if (! $device->company_id) {
+            return true;
+        }
+
+        $rule = AttendanceRule::query()->where('company_id', $device->company_id)->first();
+
+        return $rule === null || $rule->store_selfie;
     }
 
     private function imageFor(string $dir, string $seq): ?string

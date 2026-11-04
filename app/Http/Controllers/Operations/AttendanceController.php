@@ -73,7 +73,7 @@ class AttendanceController extends Controller
             ],
             'rule' => AttendanceRule::query()->firstOrCreate(
                 ['company_id' => $companyId],
-                ['grace_minutes' => 0, 'mark_absent_without_punch' => true],
+                ['grace_minutes' => 0, 'mark_absent_without_punch' => true, 'store_selfie' => true],
             ),
             'canEdit' => $canEdit,
             'portraits' => $this->portraits($employees->getCollection()),
@@ -89,6 +89,7 @@ class AttendanceController extends Controller
             'half_day_minutes' => ['nullable', 'integer', 'min:1', 'max:1440'],
             'full_day_minutes' => ['nullable', 'integer', 'min:1', 'max:1440'],
             'mark_absent_without_punch' => ['nullable', 'boolean'],
+            'store_selfie' => ['nullable', 'boolean'],
         ]);
 
         AttendanceRule::query()->updateOrCreate(
@@ -98,6 +99,7 @@ class AttendanceController extends Controller
                 'half_day_minutes' => $data['half_day_minutes'] ?: null,
                 'full_day_minutes' => $data['full_day_minutes'] ?: null,
                 'mark_absent_without_punch' => $request->boolean('mark_absent_without_punch'),
+                'store_selfie' => $request->boolean('store_selfie'),
             ],
         );
 

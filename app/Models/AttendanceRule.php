@@ -10,10 +10,13 @@ class AttendanceRule extends Model
 {
     use AuditsChanges, BelongsToCompany;
 
-    protected $fillable = ['company_id', 'grace_minutes', 'half_day_minutes', 'full_day_minutes', 'mark_absent_without_punch'];
+    protected $fillable = ['company_id', 'grace_minutes', 'half_day_minutes', 'full_day_minutes', 'mark_absent_without_punch', 'store_selfie'];
 
     protected function casts(): array
     {
-        return ['mark_absent_without_punch' => 'boolean'];
+        return [
+            'mark_absent_without_punch' => 'boolean',
+            'store_selfie' => 'boolean',
+        ];
     }
 }
