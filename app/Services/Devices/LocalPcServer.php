@@ -11,7 +11,7 @@ class LocalPcServer
 {
     public function available(): bool
     {
-        return PHP_OS_FAMILY === 'Windows';
+        return PHP_OS_FAMILY === 'Windows' && function_exists('exec');
     }
 
     /**
@@ -100,6 +100,9 @@ class LocalPcServer
         $service = $scripts.DIRECTORY_SEPARATOR.'hrms-local-service.bat';
         $watch = $scripts.DIRECTORY_SEPARATOR.'hrms-watchdog-hidden.vbs';
 
+        if (! function_exists('popen')) {
+            return ['ok' => false, 'message' => 'This server cannot start the office PC service.'];
+        }
         if (is_file($watch)) {
             pclose(popen('wscript.exe //B '.escapeshellarg($watch), 'r'));
         } elseif (is_file($service)) {
@@ -162,7 +165,10 @@ class LocalPcServer
         if (! $this->available()) {
             return false;
         }
-        exec('netstat -ano | findstr ":'.$port.' " | findstr LISTENING', $lines);
+        $lines = [];
+        if (! $this->command('netstat -ano | findstr ":'.$port.' " | findstr LISTENING', $lines)) {
+            return false;
+        }
 
         return $lines !== [];
     }
@@ -179,7 +185,11 @@ PS;
         $tmp = storage_path('app/dahua/runtime/ui-startup.ps1');
         File::ensureDirectoryExists(dirname($tmp));
         File::put($tmp, $ps);
-        exec('powershell -NoProfile -ExecutionPolicy Bypass -File '.escapeshellarg($tmp).' 2>&1', $out, $code);
+        if (! $this->command('powershell -NoProfile -ExecutionPolicy Bypass -File '.escapeshellarg($tmp).' 2>&1', $out, $code)) {
+            @unlink($tmp);
+
+            return false;
+        }
         @unlink($tmp);
 
         return $code === 0 && is_file($link);
@@ -189,19 +199,20 @@ PS;
     {
         $service = $this->scriptsDir().DIRECTORY_SEPARATOR.'hrms-local-service.bat';
         $tr = 'cmd /c "'.$service.'"';
-        exec('schtasks /Create /TN "HRMS Keep Alive" /TR '.escapeshellarg($tr).' /SC MINUTE /MO 5 /F 2>&1');
+        $this->command('schtasks /Create /TN "HRMS Keep Alive" /TR '.escapeshellarg($tr).' /SC MINUTE /MO 5 /F 2>&1');
     }
 
     private function deleteKeepAliveTask(): void
     {
-        exec('schtasks /Delete /TN "HRMS Keep Alive" /F 2>&1');
+        $this->command('schtasks /Delete /TN "HRMS Keep Alive" /F 2>&1');
     }
 
     private function taskExists(): bool
     {
-        exec('schtasks /Query /TN "HRMS Keep Alive" 2>&1', $out, $code);
+        $out = [];
+        $code = 1;
 
-        return $code === 0;
+        return $this->command('schtasks /Query /TN "HRMS Keep Alive" 2>&1', $out, $code) && $code === 0;
     }
 
     private function killByCommandLine(string $needle): void
@@ -211,7 +222,23 @@ PS;
         $tmp = storage_path('app/dahua/runtime/ui-stop.ps1');
         File::ensureDirectoryExists(dirname($tmp));
         File::put($tmp, $ps);
-        exec('powershell -NoProfile -ExecutionPolicy Bypass -File '.escapeshellarg($tmp).' 2>&1');
+        $this->command('powershell -NoProfile -ExecutionPolicy Bypass -File '.escapeshellarg($tmp).' 2>&1');
         @unlink($tmp);
+    }
+
+    /**
+     * @param  array<int, string>|null  $output
+     */
+    private function command(string $command, ?array &$output = null, ?int &$code = null): bool
+    {
+        if (! $this->available()) {
+            return false;
+        }
+
+        $output ??= [];
+        $code = 1;
+        \exec($command, $output, $code);
+
+        return true;
     }
 }
