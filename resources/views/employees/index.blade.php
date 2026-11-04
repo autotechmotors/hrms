@@ -235,6 +235,10 @@
         event.stopPropagation();
         const button = $(this);
         if (button.hasClass('wait')) return;
+        if ($(event.target).closest('.ac-x').length) {
+            removeCredential(button);
+            return;
+        }
         const url = this.getAttribute('data-url');
         const kind = this.getAttribute('data-kind');
         if (!url || !kind) return;
@@ -257,7 +261,7 @@
             timeout: 75000,
             headers: { 'X-CSRF-TOKEN': csrf }
         }).done(function (data) {
-            paintCounts(button.closest('.ac-cred'), data.counts || {});
+            paintCounts(button.closest('.ac-cred'), data.counts || {}, data.slots || null);
             if (window.toast) window.toast(data.message || 'Sent to the terminal.');
             watchCredentials(button.closest('.ac-cred'));
         }).fail(function (xhr) {
@@ -268,13 +272,58 @@
         });
     });
 
-    function paintCounts(box, counts) {
+    function removeCredential(button) {
+        const pairs = (button.attr('data-slots') || '').split(',').filter(Boolean).map(function (pair) {
+            const parts = pair.split(':');
+            return { id: parts[0], slot: parts[1] || parts[0] };
+        });
+        if (!pairs.length) return;
+        const kind = button.attr('data-kind');
+        let chosen = pairs[0];
+        if (pairs.length > 1) {
+            const answer = window.prompt('Remove which ' + kind + '? ' + pairs.map(function (pair) { return pair.slot; }).join(', '), pairs[pairs.length - 1].slot);
+            if (!answer) return;
+            chosen = pairs.find(function (pair) { return pair.slot === answer; });
+            if (!chosen) return;
+        } else if (!window.confirm('Remove this ' + kind + ' from Laravel and the face terminal?')) {
+            return;
+        }
+        button.addClass('wait');
+        $.ajax({
+            url: button.attr('data-remove') + '/' + chosen.id,
+            method: 'DELETE',
+            timeout: 60000,
+            headers: { 'X-CSRF-TOKEN': csrf }
+        }).done(function (data) {
+            paintCounts(button.closest('.ac-cred'), data.counts || {}, data.slots || null);
+            if (window.toast) window.toast(data.message || 'Removed from the terminal.');
+        }).fail(function (xhr) {
+            const message = xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'The terminal could not remove it.';
+            if (window.toast) window.toast(message, 'er');
+        }).always(function () {
+            button.removeClass('wait');
+        });
+    }
+
+    function paintCounts(box, counts, slots) {
         box.find('.ac-item').each(function () {
             const kind = this.getAttribute('data-kind');
             const total = counts[kind] || 0;
             const item = $(this);
             item.find('b').text(total);
             item.toggleClass('on', total > 0);
+            if (slots && slots[kind]) {
+                this.setAttribute('data-slots', slots[kind].map(function (row) { return row.id + ':' + row.slot; }).join(','));
+            } else if (slots) {
+                this.setAttribute('data-slots', '');
+            }
+            let mark = item.find('.ac-x');
+            const removable = total > 0 && (kind === 'face' || kind === 'finger');
+            if (removable && !mark.length) {
+                mark = $('<span class="ac-x" title="Remove">×</span>');
+                item.append(mark);
+            }
+            mark.toggle(removable);
         });
     }
 
@@ -287,7 +336,7 @@
         const timer = window.setInterval(function () {
             tries += 1;
             $.getJSON(url).done(function (data) {
-                paintCounts(box, data.counts || {});
+                paintCounts(box, data.counts || {}, data.slots || null);
             });
             if (tries >= 36) {
                 window.clearInterval(timer);

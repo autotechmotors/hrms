@@ -218,6 +218,7 @@ body{overflow-x:clip;max-width:100%}
 .ac-item.on{color:var(--tx)}
 .ac-item:hover{background:var(--as);color:var(--ac)}
 .ac-item.wait{color:var(--wn)}
+.ac-x{font-style:normal;font-size:14px;line-height:1;color:#b42318;padding:0 2px}
 .ac-cred-card{display:flex;align-items:center;justify-content:space-between;gap:8px;padding-top:8px}
 .ac-cred-card > span{color:var(--mu);font-size:12px;font-weight:600}
 .el-check{display:flex;flex-wrap:wrap;gap:6px}

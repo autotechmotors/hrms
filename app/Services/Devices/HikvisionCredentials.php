@@ -19,16 +19,16 @@ class HikvisionCredentials
      */
     public function copyMissing(): array
     {
-        $password = trim((string) config('hikvision.password'));
+        $device = $this->device();
+        $password = $device->terminalPassword();
         if ($password === '') {
-            throw new RuntimeException('Set HIKVISION_PASSWORD to the face terminal login, then copy credentials again.');
+            throw new RuntimeException('Set the face terminal password in Dahua Devices before copying credentials.');
         }
 
-        $device = $this->device();
-        $host = $this->host($device);
+        $host = $device->terminalHost();
         $savedFaces = 0;
         $savedFingers = 0;
-        foreach ($this->events->biometrics($host, (string) config('hikvision.username'), $password) as $person) {
+        foreach ($this->events->biometrics($host, $device->terminalUsername(), $password) as $person) {
             $employee = Employee::query()
                 ->where('company_id', $device->company_id)
                 ->where('employee_code', $person['code'])
@@ -37,14 +37,14 @@ class HikvisionCredentials
                 continue;
             }
             if ($person['faces'] > 0 && ! $this->stored($employee, 'face')) {
-                $photo = $this->events->facePhoto($host, (string) config('hikvision.username'), $password, $person['code']);
+                $photo = $this->events->facePhoto($host, $device->terminalUsername(), $password, $person['code']);
                 if (is_string($photo) && $photo !== '') {
                     $this->people->storeItem($employee, ['PhotoData' => [$photo]]);
                     $savedFaces++;
                 }
             }
             if ($person['fingers'] > 0 && $this->stored($employee, 'finger') < $person['fingers']) {
-                foreach ($this->events->fingerprints($host, (string) config('hikvision.username'), $password, $person['code'], $person['fingers']) as $print) {
+                foreach ($this->events->fingerprints($host, $device->terminalUsername(), $password, $person['code'], $person['fingers']) as $print) {
                     $slot = (string) $print['id'];
                     $exists = EmployeeCredential::query()
                         ->where('employee_id', $employee->id)
@@ -87,14 +87,4 @@ class HikvisionCredentials
         throw new RuntimeException('Add the Hikvision face terminal before copying faces and fingers.');
     }
 
-    private function host(Device $device): string
-    {
-        $configured = trim((string) config('hikvision.host'));
-        $port = is_numeric(config('hikvision.port')) ? (int) config('hikvision.port') : 0;
-        if ($configured !== '' && $port > 0) {
-            return $port === 80 ? $configured : $configured.':'.$port;
-        }
-
-        return $configured !== '' ? $configured : trim((string) $device->ip_address);
-    }
 }

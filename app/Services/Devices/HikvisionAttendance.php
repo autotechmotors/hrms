@@ -26,7 +26,7 @@ class HikvisionAttendance
      */
     public function pull(bool $full = true): array
     {
-        $password = trim((string) config('hikvision.password'));
+        $password = $this->secret();
         if ($password === '') {
             throw new RuntimeException('Set HIKVISION_PASSWORD to the face terminal login, then run hikvision:pull again.');
         }
@@ -52,7 +52,10 @@ class HikvisionAttendance
         $added = $imported['added'];
         $paused = false;
         foreach ($this->targets() as $registerId => $host) {
-            $result = $this->pullTarget((string) $registerId, $host, (string) config('hikvision.username'), $password, $full);
+            $device = Device::query()->get()->first(fn (Device $row) => strcasecmp((string) $row->register_id, (string) $registerId) === 0);
+            $username = $device && trim((string) $device->username) !== '' ? $device->terminalUsername() : (string) config('hikvision.username');
+            $secret = $device && trim((string) $device->password) !== '' ? $device->terminalPassword() : $password;
+            $result = $this->pullTarget((string) $registerId, $host, $username, $secret, $full);
             $stored += $result['stored'];
             $held += $result['held'];
             $added += $result['added'];
@@ -315,30 +318,37 @@ class HikvisionAttendance
         return $exists ? 0 : 1;
     }
 
+    private function secret(): string
+    {
+        foreach (Device::query()->orderBy('id')->get() as $device) {
+            if ($device->isHikvision() && trim((string) $device->password) !== '') {
+                return $device->terminalPassword();
+            }
+        }
+
+        return trim((string) config('hikvision.password'));
+    }
+
     /**
      * @return array<string, string>
      */
     private function targets(): array
     {
         $rows = [];
+        Device::query()->orderBy('id')->get()
+            ->filter(fn (Device $device) => $device->isHikvision())
+            ->each(function (Device $device) use (&$rows): void {
+                $host = $device->terminalHost();
+                if ($host !== '') {
+                    $rows[(string) $device->register_id] = $host;
+                }
+            });
         $host = trim((string) config('hikvision.host'));
         $registerId = trim((string) config('hikvision.register_id'));
-        $port = is_numeric(config('hikvision.port')) ? (int) config('hikvision.port') : 0;
-        $published = $host !== '' && $port > 0 ? ($port === 80 ? $host : $host.':'.$port) : null;
-        if ($published !== null && $registerId !== '') {
-            $rows[$registerId] = $published;
-        } elseif ($host !== '' && $registerId !== '') {
-            $rows[$registerId] = $host;
+        if ($host !== '' && $registerId !== '' && ! array_key_exists($registerId, $rows)) {
+            $port = is_numeric(config('hikvision.port')) ? (int) config('hikvision.port') : 0;
+            $rows[$registerId] = $port > 80 ? $host.':'.$port : $host;
         }
-        Device::query()->orderBy('id')->get()
-            ->filter(fn (Device $device) => $device->isHikvision() && trim((string) $device->ip_address) !== '')
-            ->each(function (Device $device) use (&$rows, $published): void {
-                $id = (string) $device->register_id;
-                if ($published !== null && array_key_exists($id, $rows)) {
-                    return;
-                }
-                $rows[$id] = trim((string) $device->ip_address);
-            });
 
         return $rows;
     }

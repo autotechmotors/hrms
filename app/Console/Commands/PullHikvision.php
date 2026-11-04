@@ -15,8 +15,9 @@ class PullHikvision extends Command
 
     public function handle(HikvisionAttendance $attendance): int
     {
-        if ((string) config('hikvision.password') === '') {
-            $this->error('Set HIKVISION_PASSWORD to the face terminal login, then run hikvision:pull again.');
+        $configured = \App\Models\Device::query()->get()->contains(fn ($device) => $device->isHikvision() && $device->terminalPassword() !== '');
+        if (! $configured) {
+            $this->error('Set the face terminal password in Dahua Devices, then run hikvision:pull again.');
 
             return self::FAILURE;
         }

@@ -45,7 +45,7 @@
             </div>
             <div>
                 <small>IP address</small>
-                <b>{{ $device->ip_address ?: '—' }}</b>
+                <b>{{ $device->ip_address ? $device->ip_address.($device->port ? ':'.$device->port : '') : '—' }}</b>
             </div>
             <div>
                 <small>Serial</small>

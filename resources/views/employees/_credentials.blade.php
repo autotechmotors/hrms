@@ -1,5 +1,6 @@
 @php
     $counts = $counts ?? [];
+    $slots = $slots ?? [];
     $kinds = [
         'password' => ['icon' => 'lock', 'label' => 'Password'],
         'card' => ['icon' => 'card', 'label' => 'Card'],
@@ -9,17 +10,26 @@
 @endphp
 <div class="ac-cred" data-state="{{ route('employees.credentials.state', $employee) }}">
     @foreach($kinds as $kind => $meta)
-        @php $total = (int) ($counts[$kind] ?? 0); @endphp
+        @php
+            $total = (int) ($counts[$kind] ?? 0);
+            $kindSlots = $slots[$kind] ?? [];
+            $slotValue = collect($kindSlots)->map(fn ($row) => $row['id'].':'.$row['slot'])->implode(',');
+        @endphp
         @if($canAdd)
             <button
                 type="button"
                 class="ac-item {{ $total > 0 ? 'on' : '' }}"
                 data-kind="{{ $kind }}"
                 data-url="{{ route('employees.credentials.collect', $employee) }}"
+                data-remove="{{ url('/employees/'.$employee->id.'/credentials') }}"
+                data-slots="{{ $slotValue }}"
                 title="{{ $total > 0 ? $meta['label'].' stored. Click to add another on the terminal.' : 'Click to add '.$meta['label'].' on the terminal.' }}"
             >
                 <x-i :name="$meta['icon']" :size="15" />
                 <b>{{ $total }}</b>
+                @if(in_array($kind, ['face', 'finger'], true) && $total > 0)
+                    <span class="ac-x" title="Remove {{ strtolower($meta['label']) }}">×</span>
+                @endif
             </button>
         @else
             <span class="ac-item {{ $total > 0 ? 'on' : '' }}" title="{{ $meta['label'] }} {{ $total }}">

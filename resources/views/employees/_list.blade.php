@@ -52,7 +52,7 @@
                         </div>
                     </td>
                     <td>
-                        @include('employees._credentials', ['employee' => $employee, 'counts' => $credentialCounts[$employee->id] ?? [], 'canAdd' => $canBlock])
+                        @include('employees._credentials', ['employee' => $employee, 'counts' => $credentialCounts[$employee->id] ?? [], 'slots' => ($credentialSlots[$employee->id] ?? []), 'canAdd' => $canBlock])
                     </td>
                     <td>
                         @if($canBlock)
@@ -117,7 +117,7 @@
                 </div>
                 <div class="ac-cred-card">
                     <span>Access Credentials</span>
-                    @include('employees._credentials', ['employee' => $employee, 'counts' => $credentialCounts[$employee->id] ?? [], 'canAdd' => $canBlock])
+                    @include('employees._credentials', ['employee' => $employee, 'counts' => $credentialCounts[$employee->id] ?? [], 'slots' => ($credentialSlots[$employee->id] ?? []), 'canAdd' => $canBlock])
                 </div>
                 <div class="el-card-block">
                     <span>Blocked</span>

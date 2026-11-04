@@ -223,6 +223,49 @@ class EmployeePush
         return $this->devices($employee);
     }
 
+    /**
+     * @return array{devices: int, message: string}
+     */
+    public function removeCredential(Employee $employee, EmployeeCredential $credential): array
+    {
+        if ((int) $credential->employee_id !== (int) $employee->id) {
+            throw new \RuntimeException('That credential belongs to another employee.');
+        }
+
+        $userId = trim((string) $employee->employee_code);
+        $devices = Device::query()
+            ->where('company_id', $employee->company_id)
+            ->get()
+            ->filter(fn (Device $device) => $device->isHikvision());
+        foreach ($devices as $device) {
+            if ($credential->kind === 'face') {
+                $remaining = EmployeeCredential::query()
+                    ->where('employee_id', $employee->id)
+                    ->where('kind', 'face')
+                    ->whereKeyNot($credential->id)
+                    ->orderByDesc('id')
+                    ->get();
+                if ($remaining->isEmpty()) {
+                    $this->hikvision->deleteFace($device, $userId);
+                } else {
+                    $bytes = StoredImage::bytes((string) $remaining->first()->content);
+                    if (! is_string($bytes) || ! str_starts_with($bytes, "\xFF\xD8\xFF")) {
+                        throw new \RuntimeException('The remaining face could not be sent back to '.$device->name.'.');
+                    }
+                    $this->hikvision->replaceFace($device, $userId, $bytes);
+                }
+            }
+            if ($credential->kind === 'finger') {
+                $this->hikvision->deleteFinger($device, $userId, (int) $credential->slot);
+            }
+        }
+
+        $credential->delete();
+        $label = $credential->kind === 'finger' ? 'Finger' : 'Face';
+
+        return ['devices' => $devices->count(), 'message' => $label.' removed from Laravel and the face terminal.'];
+    }
+
     public function drop(Collection $devices, string $userId): void
     {
         $userId = trim($userId);

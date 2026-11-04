@@ -254,10 +254,18 @@ class DeviceController extends Controller
             'serial' => ['nullable', 'string', 'max:120'],
             'register_id' => [$creating ? 'nullable' : 'required', 'string', 'max:64'],
             'ip_address' => ['nullable', 'ip'],
+            'username' => ['nullable', 'string', 'max:64'],
+            'password' => ['nullable', 'string', 'max:64'],
+            'port' => ['nullable', 'integer', 'min:1', 'max:65535'],
             'place' => ['nullable', 'string', 'max:120'],
             'status' => [$creating ? 'nullable' : 'required', Rule::in(['unknown', 'online', 'offline'])],
         ]);
         $data['register_id'] = trim((string) ($data['register_id'] ?? '')) ?: config('dahua.register_id');
+        $data['username'] = trim((string) ($data['username'] ?? '')) ?: null;
+        $data['port'] = ($data['port'] ?? null) ?: null;
+        if (trim((string) ($data['password'] ?? '')) === '') {
+            unset($data['password']);
+        }
         unset($data['status']);
         if (! $creating) {
             $data['status'] = $request->string('status')->toString();

@@ -22,6 +22,15 @@
     <label>IP address
         <input class="in" name="ip_address" value="{{ $field('ip_address') }}" placeholder="192.168.1.10" maxlength="45">
     </label>
+    <label>Port
+        <input class="in" name="port" value="{{ $field('port') }}" placeholder="80" inputmode="numeric" maxlength="5">
+    </label>
+    <label>Username
+        <input class="in" name="username" value="{{ $field('username') }}" maxlength="64" autocomplete="off">
+    </label>
+    <label>Password
+        <input class="in" type="password" name="password" value="" maxlength="64" autocomplete="new-password" placeholder="{{ $current && $current->password ? 'Saved. Leave blank to keep it.' : 'Terminal password' }}">
+    </label>
     <label class="dv-span">Place
         <input class="in" name="place" value="{{ $field('place') }}" maxlength="120">
     </label>

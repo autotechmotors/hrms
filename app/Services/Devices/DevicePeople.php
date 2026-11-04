@@ -65,8 +65,18 @@ class DevicePeople
 
     public function storeItem(Employee $employee, array $item): void
     {
-        foreach (array_values(array_filter((array) ($item['PhotoData'] ?? []))) as $index => $photo) {
-            $saved = $this->put($employee, 'face', (string) $index, (string) $photo);
+        foreach ((array) ($item['PhotoData'] ?? []) as $index => $photo) {
+            if (is_array($photo)) {
+                $slot = (string) ($photo['slot'] ?? $index);
+                $value = (string) ($photo['data'] ?? '');
+            } else {
+                $slot = (string) $index;
+                $value = (string) $photo;
+            }
+            if (trim($value) === '') {
+                continue;
+            }
+            $saved = $this->put($employee, 'face', $slot, $value);
             if ($saved) {
                 $this->useAsProfile($employee, $saved);
             }

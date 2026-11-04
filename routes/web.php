@@ -167,6 +167,7 @@ Route::middleware(['auth', 'mfa'])->group(function (): void {
     Route::get('employees/import/template', [EmployeeController::class, 'template'])->name('employees.import.template');
     Route::get('employees/{employee}/photo', [EmployeeController::class, 'photo'])->name('employees.photo');
     Route::post('employees/{employee}/credentials', [EmployeeController::class, 'collectCredential'])->name('employees.credentials.collect');
+    Route::delete('employees/{employee}/credentials/{credential}', [EmployeeController::class, 'destroyCredential'])->name('employees.credentials.destroy');
     Route::get('employees/{employee}/credentials', [EmployeeController::class, 'credentialState'])->name('employees.credentials.state');
     Route::post('employees/{employee}/documents', [EmployeeDocumentController::class, 'store'])->name('employees.documents.store');
     Route::get('employees/{employee}/documents/{document}/view', [EmployeeDocumentController::class, 'view'])->name('employees.documents.view');

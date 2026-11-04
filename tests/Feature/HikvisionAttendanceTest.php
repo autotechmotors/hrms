@@ -673,6 +673,86 @@ class HikvisionAttendanceTest extends TestCase
         $this->assertDatabaseMissing('employee_credentials', ['employee_id' => $employee->id, 'kind' => 'password']);
     }
 
+    public function test_a_saved_device_address_is_used_instead_of_the_env_host(): void
+    {
+        config([
+            'hikvision.host' => '192.168.1.156',
+            'hikvision.port' => null,
+            'hikvision.username' => 'admin',
+            'hikvision.password' => 'secret',
+        ]);
+        $org = $this->makeCompany('HIK');
+        $employee = $this->makeEmployee($org, 'AT0010');
+        $device = Device::query()->create([
+            'company_id' => $org['company']->id,
+            'name' => 'Gate',
+            'register_id' => 'HIK1921681156',
+            'ip_address' => '10.1.1.5',
+            'port' => 90,
+            'username' => 'admin',
+            'password' => 'from-settings',
+            'status' => 'online',
+        ]);
+        \App\Models\DeviceTerminalUser::query()->create([
+            'device_id' => $device->id,
+            'user_id' => 'AT0010',
+            'name' => 'Neha Bonsal',
+            'employee_id' => $employee->id,
+        ]);
+        $jpeg = base64_decode('/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAb/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCwAA//2Q==');
+        $urls = [];
+        $this->app->instance(HikvisionClient::class, new HikvisionClient(function (string $method, string $url) use (&$urls, $jpeg) {
+            $urls[] = $url;
+            if (str_contains($url, 'CaptureFaceData')) {
+                return ['status' => 200, 'body' => json_encode(['CaptureFaceData' => ['faceDataUrl' => 'http://10.1.1.5/face.jpg']])];
+            }
+            if ($method === 'GET') {
+                return ['status' => 200, 'body' => $jpeg];
+            }
+
+            return ['status' => 200, 'body' => json_encode(['statusCode' => 1])];
+        }));
+
+        app(\App\Services\Devices\EmployeePush::class)->collect($employee, 'face');
+
+        $this->assertStringStartsWith('http://10.1.1.5:90/', $urls[0]);
+    }
+
+    public function test_removing_a_finger_deletes_it_on_the_terminal_and_in_laravel(): void
+    {
+        config([
+            'hikvision.host' => '192.168.1.156',
+            'hikvision.username' => 'admin',
+            'hikvision.password' => 'secret',
+        ]);
+        $org = $this->makeCompany('HIK');
+        $employee = $this->makeEmployee($org, 'AT0010');
+        Device::query()->create([
+            'company_id' => $org['company']->id,
+            'name' => 'Gate',
+            'register_id' => 'HIK1921681156',
+            'ip_address' => '192.168.1.156',
+            'status' => 'online',
+        ]);
+        $credential = \App\Models\EmployeeCredential::query()->create([
+            'employee_id' => $employee->id,
+            'kind' => 'finger',
+            'slot' => '2',
+            'content' => base64_encode('finger-template'),
+        ]);
+        $urls = [];
+        $this->app->instance(HikvisionClient::class, new HikvisionClient(function (string $method, string $url) use (&$urls) {
+            $urls[] = $method.' '.$url;
+
+            return ['status' => 200, 'body' => json_encode(['statusCode' => 1, 'statusString' => 'OK'])];
+        }));
+
+        app(\App\Services\Devices\EmployeePush::class)->removeCredential($employee, $credential);
+
+        $this->assertTrue(collect($urls)->contains(fn (string $url) => str_contains($url, 'FingerPrint/Delete')));
+        $this->assertDatabaseMissing('employee_credentials', ['id' => $credential->id]);
+    }
+
     public function test_the_pull_command_asks_for_the_terminal_password(): void
     {
         config(['hikvision.password' => '']);

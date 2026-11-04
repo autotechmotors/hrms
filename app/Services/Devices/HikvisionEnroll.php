@@ -33,15 +33,29 @@ class HikvisionEnroll
             return;
         }
         if ($kind === 'face') {
-            $this->people->storeItem($employee, ['PhotoData' => [base64_encode($this->takenFace($device, $userId, $name))]]);
+            $jpeg = $this->takenFace($device, $userId, $name);
+            $next = 0;
+            foreach (EmployeeCredential::query()->where('employee_id', $employee->id)->where('kind', 'face')->pluck('slot') as $slot) {
+                $next = max($next, (int) $slot + 1);
+            }
+            $this->people->storeItem($employee, ['PhotoData' => [['slot' => $next, 'data' => base64_encode($jpeg)]]]);
 
             return;
         }
         if ($kind === 'finger') {
-            $fingerNo = EmployeeCredential::query()
+            $used = EmployeeCredential::query()
                 ->where('employee_id', $employee->id)
                 ->where('kind', 'finger')
-                ->count() + 1;
+                ->pluck('slot')
+                ->map(fn ($slot) => (int) $slot)
+                ->all();
+            $fingerNo = 0;
+            for ($number = 1; $number <= 10; $number++) {
+                if (! in_array($number, $used, true)) {
+                    $fingerNo = $number;
+                    break;
+                }
+            }
             $data = $this->takenFinger($device, $userId, $name, $fingerNo);
             $this->people->storeItem($employee, ['FingerPrints' => [['FingerprintID' => $fingerNo, 'FingerprintData' => $data]]]);
 
@@ -68,7 +82,7 @@ class HikvisionEnroll
 
     public function remove(Device $device, string $userId): void
     {
-        [$username, $password] = $this->login();
+        [$username, $password] = $this->login($device);
         $response = $this->client->call('PUT', $this->base($device).'/ISAPI/AccessControl/UserInfo/Delete?format=json', $username, $password, [
             'UserInfoDelCond' => ['EmployeeNoList' => [['employeeNo' => $userId]]],
         ]);
@@ -77,8 +91,48 @@ class HikvisionEnroll
         }
     }
 
-    public function published(): bool
+    public function deleteFace(Device $device, string $userId): void
     {
+        [$username, $password] = $this->login($device);
+        $response = $this->client->call('PUT', $this->base($device).'/ISAPI/Intelligent/FDLib/FDSearch/Delete?format=json&FDID=1&faceLibType=blackFD', $username, $password, [
+            'FPID' => [['value' => $userId]],
+        ]);
+        if ($this->ok($response) || $this->missing($response)) {
+            return;
+        }
+
+        throw new RuntimeException($this->problem($response));
+    }
+
+    public function deleteFinger(Device $device, string $userId, int $fingerNo): void
+    {
+        [$username, $password] = $this->login($device);
+        $response = $this->client->call('PUT', $this->base($device).'/ISAPI/AccessControl/FingerPrint/Delete?format=json', $username, $password, [
+            'FingerPrintDelete' => [
+                'mode' => 'byEmployeeNo',
+                'EmployeeNoDetail' => [
+                    'employeeNo' => $userId,
+                    'fingerPrintID' => [$fingerNo],
+                ],
+            ],
+        ]);
+        if ($this->ok($response) || $this->missing($response)) {
+            return;
+        }
+
+        throw new RuntimeException($this->problem($response));
+    }
+
+    public function replaceFace(Device $device, string $userId, string $jpeg): void
+    {
+        $this->uploadJpeg($device, $userId, $jpeg);
+    }
+
+    public function published(Device $device): bool
+    {
+        if ((int) $device->port > 0 && trim((string) $device->ip_address) !== '') {
+            return true;
+        }
         $port = config('hikvision.port');
 
         return trim((string) config('hikvision.host')) !== '' && is_numeric($port) && (int) $port > 0;
@@ -86,7 +140,7 @@ class HikvisionEnroll
 
     public function reachable(Device $device): bool
     {
-        if ($this->published()) {
+        if ($this->published($device)) {
             return true;
         }
         if (trim((string) config('hikvision.password')) === '') {
@@ -128,7 +182,7 @@ class HikvisionEnroll
 
     public function ensureUser(Device $device, string $userId, string $name, ?string $password = null, bool $refresh = true): void
     {
-        [$username, $secret] = $this->login();
+        [$username, $secret] = $this->login($device);
         $body = $this->userBody($userId, $name, $password);
         $base = $this->base($device);
         $created = $this->client->call('POST', $base.'/ISAPI/AccessControl/UserInfo/Record?format=json', $username, $secret, $body);
@@ -159,7 +213,7 @@ class HikvisionEnroll
 
     private function captureFace(Device $device, string $userId): string
     {
-        [$username, $password] = $this->login();
+        [$username, $password] = $this->login($device);
         $base = $this->base($device);
         $response = $this->client->call('POST', $base.'/ISAPI/AccessControl/CaptureFaceData', $username, $password, $this->xml('CaptureFaceDataCond', '<captureInfrared>false</captureInfrared><dataType>url</dataType>'), 55);
         if (! $this->ok($response)) {
@@ -187,7 +241,7 @@ class HikvisionEnroll
 
     private function captureFinger(Device $device, string $userId, int $fingerNo): string
     {
-        [$username, $password] = $this->login();
+        [$username, $password] = $this->login($device);
         $response = $this->client->call('POST', $this->base($device).'/ISAPI/AccessControl/CaptureFingerPrint', $username, $password, $this->xml('CaptureFingerPrintCond', '<fingerNo>'.$fingerNo.'</fingerNo>'), 55);
         if (! $this->ok($response)) {
             throw new RuntimeException($this->problem($response));
@@ -205,7 +259,7 @@ class HikvisionEnroll
 
     private function bindFace(Device $device, string $userId, string $url, string $jpeg): void
     {
-        [$username, $password] = $this->login();
+        [$username, $password] = $this->login($device);
         $linked = $this->client->call('POST', $this->base($device).'/ISAPI/Intelligent/FDLib/FaceDataRecord?format=json', $username, $password, [
             'faceLibType' => 'blackFD',
             'FDID' => '1',
@@ -221,7 +275,7 @@ class HikvisionEnroll
 
     private function uploadJpeg(Device $device, string $userId, string $jpeg): void
     {
-        [$username, $password] = $this->login();
+        [$username, $password] = $this->login($device);
         $boundary = 'hrms'.bin2hex(random_bytes(8));
         $record = json_encode([
             'faceLibType' => 'blackFD',
@@ -253,7 +307,7 @@ class HikvisionEnroll
 
     private function saveFinger(Device $device, string $userId, int $fingerNo, string $data): void
     {
-        [$username, $password] = $this->login();
+        [$username, $password] = $this->login($device);
         $response = $this->client->call('POST', $this->base($device).'/ISAPI/AccessControl/FingerPrint/SetUp?format=json', $username, $password, [
             'FingerPrintCfg' => [
                 'employeeNo' => $userId,
@@ -299,14 +353,14 @@ class HikvisionEnroll
     /**
      * @return array{0: string, 1: string}
      */
-    private function login(): array
+    private function login(Device $device): array
     {
-        $password = trim((string) config('hikvision.password'));
+        $password = $device->terminalPassword();
         if ($password === '') {
-            throw new RuntimeException('Set HIKVISION_PASSWORD before enrolling on the face terminal.');
+            throw new RuntimeException('Set the face terminal password in Dahua Devices before enrolling.');
         }
 
-        return [(string) config('hikvision.username'), $password];
+        return [$device->terminalUsername(), $password];
     }
 
     private function base(Device $device): string
@@ -325,8 +379,12 @@ class HikvisionEnroll
      */
     private function endpoint(Device $device): array
     {
-        $configured = trim((string) config('hikvision.host'));
-        $port = is_numeric(config('hikvision.port')) ? (int) config('hikvision.port') : 0;
+        $configured = trim((string) $device->ip_address);
+        $port = (int) $device->port;
+        if ($configured === '' || $port < 1) {
+            $configured = trim((string) config('hikvision.host'));
+            $port = is_numeric(config('hikvision.port')) ? (int) config('hikvision.port') : 0;
+        }
         if ($configured !== '' && $port > 0) {
             $configured = (string) preg_replace('#^https?://#', '', $configured);
             $configured = explode('/', $configured)[0];

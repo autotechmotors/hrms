@@ -18,11 +18,12 @@ Schedule::command('dahua:ensure-listen')
 Schedule::command('hikvision:pull')
     ->everyMinute()
     ->when(function () {
-        if (trim((string) config('hikvision.password')) === '') {
-            return false;
-        }
-        $port = config('hikvision.port');
+        $ready = \App\Models\Device::query()->get()->contains(function ($device) {
+            return $device->isHikvision()
+                && $device->terminalPassword() !== ''
+                && ((int) $device->port > 0 || (bool) config('hikvision.pull') || (is_numeric(config('hikvision.port')) && (int) config('hikvision.port') > 0));
+        });
 
-        return (bool) config('hikvision.pull') || (is_numeric($port) && (int) $port > 0);
+        return $ready || (trim((string) config('hikvision.password')) !== '' && ((bool) config('hikvision.pull') || (is_numeric(config('hikvision.port')) && (int) config('hikvision.port') > 0)));
     })
     ->withoutOverlapping(5);

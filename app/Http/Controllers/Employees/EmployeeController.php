@@ -47,6 +47,7 @@ class EmployeeController extends Controller
         $canManage = $request->user()->isSuperAdmin();
         $canBlock = $request->user()->hasPermission('employees.edit');
         $credentialCounts = $this->credentialCounts($employees->getCollection());
+        $credentialSlots = $this->credentialSlots($employees->getCollection());
 
         if ($request->ajax() || $request->boolean('partial')) {
             return view('employees._list', [
@@ -54,6 +55,7 @@ class EmployeeController extends Controller
                 'canManage' => $canManage,
                 'canBlock' => $canBlock,
                 'credentialCounts' => $credentialCounts,
+                'credentialSlots' => $credentialSlots,
             ]);
         }
 
@@ -66,6 +68,7 @@ class EmployeeController extends Controller
             'departments' => Department::query()->visibleTo($request->user())->orderBy('name')->get(),
             'statuses' => EmploymentStatus::query()->visibleTo($request->user())->orderBy('name')->get(),
             'credentialCounts' => $credentialCounts,
+            'credentialSlots' => $credentialSlots,
         ]);
     }
 
@@ -153,6 +156,25 @@ class EmployeeController extends Controller
         return response()->json([
             'message' => $result['message'],
             'counts' => $this->countsFor($employee),
+            'slots' => $this->slotsFor($employee),
+        ]);
+    }
+
+    public function destroyCredential(Employee $employee, \App\Models\EmployeeCredential $credential): JsonResponse
+    {
+        $this->authorize('update', $employee);
+        abort_unless((int) $credential->employee_id === (int) $employee->id, 404);
+        set_time_limit(60);
+        try {
+            $result = app(\App\Services\Devices\EmployeePush::class)->removeCredential($employee, $credential);
+        } catch (RuntimeException $exception) {
+            return response()->json(['message' => $exception->getMessage()], 422);
+        }
+
+        return response()->json([
+            'message' => $result['message'],
+            'counts' => $this->countsFor($employee),
+            'slots' => $this->slotsFor($employee),
         ]);
     }
 
@@ -168,7 +190,10 @@ class EmployeeController extends Controller
             }
         });
 
-        return response()->json(['counts' => $this->countsFor($employee)]);
+        return response()->json([
+            'counts' => $this->countsFor($employee),
+            'slots' => $this->slotsFor($employee),
+        ]);
     }
 
     public function edit(Employee $employee): View
@@ -345,6 +370,50 @@ class EmployeeController extends Controller
         }
 
         return $counts;
+    }
+
+    /**
+     * @return array<string, list<array{id: int, slot: string}>>
+     */
+    private function slotsFor(Employee $employee): array
+    {
+        $slots = ['face' => [], 'finger' => []];
+        $rows = \App\Models\EmployeeCredential::query()
+            ->where('employee_id', $employee->id)
+            ->whereIn('kind', ['face', 'finger'])
+            ->orderBy('slot')
+            ->get(['id', 'kind', 'slot']);
+        foreach ($rows as $row) {
+            $slots[(string) $row->kind][] = ['id' => (int) $row->id, 'slot' => (string) $row->slot];
+        }
+
+        return $slots;
+    }
+
+    /**
+     * @param  \Illuminate\Support\Collection<int, Employee>  $employees
+     * @return array<int, array<string, list<array{id: int, slot: string}>>>
+     */
+    private function credentialSlots($employees): array
+    {
+        if ($employees->isEmpty()) {
+            return [];
+        }
+
+        $slots = [];
+        $rows = \App\Models\EmployeeCredential::query()
+            ->whereIn('employee_id', $employees->pluck('id'))
+            ->whereIn('kind', ['face', 'finger'])
+            ->orderBy('slot')
+            ->get(['id', 'employee_id', 'kind', 'slot']);
+        foreach ($rows as $row) {
+            $slots[(int) $row->employee_id][(string) $row->kind][] = [
+                'id' => (int) $row->id,
+                'slot' => (string) $row->slot,
+            ];
+        }
+
+        return $slots;
     }
 
     private function filteredEmployees(Request $request): LengthAwarePaginator
