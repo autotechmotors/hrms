@@ -508,6 +508,63 @@ class HikvisionEvents
         return is_numeric($number) ? (int) $number : null;
     }
 
+    /**
+     * @return list<array{code: string, faces: int, fingers: int}>
+     */
+    public function biometrics(string $host, string $username, string $password): array
+    {
+        $rows = [];
+        foreach ($this->users($this->baseUrl($host), $username, $password) as $person) {
+            $code = trim((string) ($person['employeeNo'] ?? ''));
+            if ($code === '') {
+                continue;
+            }
+            $rows[] = [
+                'code' => $code,
+                'faces' => (int) ($person['numOfFace'] ?? 0),
+                'fingers' => (int) ($person['numOfFP'] ?? 0),
+            ];
+        }
+
+        return $rows;
+    }
+
+    /**
+     * @return list<array{id: int, data: string}>
+     */
+    public function fingerprints(string $host, string $username, string $password, string $userId, int $expected): array
+    {
+        $base = $this->baseUrl($host);
+        $found = [];
+        $want = max(1, $expected);
+        for ($id = 1; $id <= 10 && count($found) < $want; $id++) {
+            $response = $this->client->call('POST', $base.'/ISAPI/AccessControl/FingerPrintUpload?format=json', $username, $password, [
+                'FingerPrintCond' => [
+                    'searchID' => 'hrms'.substr(sha1($userId.'|'.$id), 0, 8),
+                    'employeeNo' => $userId,
+                    'fingerPrintID' => $id,
+                ],
+            ]);
+            $list = data_get(json_decode($response['body'], true), 'FingerPrintInfo.FingerPrintList', []);
+            if (isset($list['fingerPrintID'])) {
+                $list = [$list];
+            }
+            foreach ($list as $row) {
+                if (! is_array($row)) {
+                    continue;
+                }
+                $data = trim((string) ($row['fingerData'] ?? ''));
+                $fingerId = (int) ($row['fingerPrintID'] ?? 0);
+                if ($data === '' || $fingerId < 1) {
+                    continue;
+                }
+                $found[$fingerId] = ['id' => $fingerId, 'data' => $data];
+            }
+        }
+
+        return array_values($found);
+    }
+
     public function facePhoto(string $host, string $username, string $password, string $userId, string $faceUrl = ''): ?string
     {
         return $this->enrolledFace($this->baseUrl($host), $username, $password, $userId, ['faceURL' => $faceUrl]);

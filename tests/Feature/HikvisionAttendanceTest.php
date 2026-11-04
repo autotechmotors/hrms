@@ -604,6 +604,75 @@ class HikvisionAttendanceTest extends TestCase
         $this->assertSame(1, app(\App\Services\Devices\EmployeePush::class)->saveToTerminals($employee));
     }
 
+    public function test_missing_faces_and_fingers_are_copied_from_the_terminal_without_passwords(): void
+    {
+        config([
+            'hikvision.host' => '192.168.1.156',
+            'hikvision.register_id' => 'HIK1921681156',
+            'hikvision.username' => 'admin',
+            'hikvision.password' => 'secret',
+        ]);
+        $org = $this->makeCompany('HIK');
+        $employee = $this->makeEmployee($org, 'AUTO002');
+        Device::query()->create([
+            'company_id' => $org['company']->id,
+            'name' => 'Gate',
+            'register_id' => 'HIK1921681156',
+            'ip_address' => '192.168.1.156',
+            'status' => 'online',
+        ]);
+        $jpeg = base64_decode('/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAb/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCwAA//2Q==');
+        $this->app->instance(HikvisionClient::class, new HikvisionClient(function (string $method, string $url) use ($jpeg) {
+            if (str_contains($url, 'UserInfo/Search')) {
+                return ['status' => 200, 'body' => json_encode([
+                    'UserInfoSearch' => [
+                        'responseStatusStrg' => 'OK',
+                        'numOfMatches' => 1,
+                        'UserInfo' => [[
+                            'employeeNo' => 'AUTO002',
+                            'name' => 'Auto User',
+                            'password' => 'do-not-store',
+                            'numOfFace' => 1,
+                            'numOfFP' => 1,
+                        ]],
+                    ],
+                ])];
+            }
+            if (str_contains($url, 'FDSearch')) {
+                return ['status' => 200, 'body' => json_encode([
+                    'statusCode' => 1,
+                    'numOfMatches' => 1,
+                    'MatchList' => [[
+                        'FPID' => 'AUTO002',
+                        'faceURL' => 'http://192.168.1.156/enrolled.jpg',
+                    ]],
+                ])];
+            }
+            if (str_contains($url, 'FingerPrintUpload')) {
+                return ['status' => 200, 'body' => json_encode([
+                    'FingerPrintInfo' => [
+                        'status' => 'OK',
+                        'FingerPrintList' => [[
+                            'fingerPrintID' => 1,
+                            'fingerData' => base64_encode('finger-template'),
+                        ]],
+                    ],
+                ])];
+            }
+            if ($method === 'GET') {
+                return ['status' => 200, 'body' => $jpeg];
+            }
+
+            return ['status' => 200, 'body' => ''];
+        }));
+
+        $this->artisan('hikvision:credentials')->assertSuccessful();
+
+        $this->assertDatabaseHas('employee_credentials', ['employee_id' => $employee->id, 'kind' => 'face', 'slot' => '0']);
+        $this->assertDatabaseHas('employee_credentials', ['employee_id' => $employee->id, 'kind' => 'finger', 'slot' => '1']);
+        $this->assertDatabaseMissing('employee_credentials', ['employee_id' => $employee->id, 'kind' => 'password']);
+    }
+
     public function test_the_pull_command_asks_for_the_terminal_password(): void
     {
         config(['hikvision.password' => '']);
