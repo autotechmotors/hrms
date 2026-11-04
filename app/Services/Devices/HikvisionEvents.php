@@ -509,7 +509,7 @@ class HikvisionEvents
     }
 
     /**
-     * @return list<array{code: string, faces: int, fingers: int}>
+     * @return list<array{code: string, name: string, faces: int, fingers: int}>
      */
     public function biometrics(string $host, string $username, string $password): array
     {
@@ -519,8 +519,10 @@ class HikvisionEvents
             if ($code === '') {
                 continue;
             }
+            $name = trim((string) ($person['name'] ?? ''));
             $rows[] = [
                 'code' => $code,
+                'name' => $name !== '' ? $name : $code,
                 'faces' => (int) ($person['numOfFace'] ?? 0),
                 'fingers' => (int) ($person['numOfFP'] ?? 0),
             ];

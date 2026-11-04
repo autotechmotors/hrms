@@ -3,6 +3,7 @@
 namespace App\Services\Devices;
 
 use App\Models\Device;
+use App\Models\DeviceTerminalUser;
 use App\Models\Employee;
 use App\Models\EmployeeCredential;
 use RuntimeException;
@@ -15,7 +16,7 @@ class HikvisionCredentials
     ) {}
 
     /**
-     * @return array{faces: int, fingers: int}
+     * @return array{added: int, faces: int, fingers: int}
      */
     public function copyMissing(): array
     {
@@ -26,16 +27,28 @@ class HikvisionCredentials
         }
 
         $host = $device->terminalHost();
+        $added = 0;
         $savedFaces = 0;
         $savedFingers = 0;
         foreach ($this->events->biometrics($host, $device->terminalUsername(), $password) as $person) {
+            if ($this->dismissed($device, $person['code'])) {
+                continue;
+            }
             $employee = Employee::query()
                 ->where('company_id', $device->company_id)
                 ->where('employee_code', $person['code'])
                 ->first();
             if (! $employee) {
-                continue;
+                $employee = $this->people->ensure($device, $person['code'], $person['name']);
+                if (! $employee) {
+                    continue;
+                }
+                $added++;
             }
+            DeviceTerminalUser::query()->updateOrCreate(
+                ['device_id' => $device->id, 'user_id' => $person['code']],
+                ['name' => $person['name'], 'employee_id' => $employee->id, 'dismissed_at' => null],
+            );
             if ($person['faces'] > 0 && ! $this->stored($employee, 'face')) {
                 $photo = $this->events->facePhoto($host, $device->terminalUsername(), $password, $person['code']);
                 if (is_string($photo) && $photo !== '') {
@@ -63,7 +76,16 @@ class HikvisionCredentials
             }
         }
 
-        return ['faces' => $savedFaces, 'fingers' => $savedFingers];
+        return ['added' => $added, 'faces' => $savedFaces, 'fingers' => $savedFingers];
+    }
+
+    private function dismissed(Device $device, string $code): bool
+    {
+        return DeviceTerminalUser::query()
+            ->where('device_id', $device->id)
+            ->where('user_id', $code)
+            ->whereNotNull('dismissed_at')
+            ->exists();
     }
 
     private function stored(Employee $employee, string $kind): int

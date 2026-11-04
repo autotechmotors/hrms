@@ -36,7 +36,7 @@ class CopyHikvisionCredentials extends Command
             return self::FAILURE;
         }
 
-        $this->info('Faces saved: '.$result['faces'].'. Fingers saved: '.$result['fingers'].'.');
+        $this->info('Employees added: '.$result['added'].'. Faces saved: '.$result['faces'].'. Fingers saved: '.$result['fingers'].'.');
 
         return self::SUCCESS;
     }
