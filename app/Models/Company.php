@@ -36,11 +36,6 @@ class Company extends Model
         return ['is_active' => 'boolean'];
     }
 
-    public function branches(): HasMany
-    {
-        return $this->hasMany(Branch::class);
-    }
-
     public function departments(): HasMany
     {
         return $this->hasMany(Department::class);

@@ -2,7 +2,6 @@
 
 namespace Database\Seeders;
 
-use App\Models\Branch;
 use App\Models\Company;
 use App\Models\Department;
 use App\Models\Designation;
@@ -40,17 +39,6 @@ class DemoDataSeeder extends Seeder
                 'is_active' => true,
             ]);
 
-            $branch = Branch::query()->updateOrCreate(['company_id' => $company->id, 'code' => 'HO'], [
-                'name' => 'Head Office',
-                'city' => 'Ahmedabad',
-                'is_active' => true,
-            ]);
-
-            $location = $branch->locations()->updateOrCreate(['company_id' => $company->id, 'code' => 'HO-01'], [
-                'name' => 'Head Office Floor 1',
-                'is_active' => true,
-            ]);
-
             $hr = Department::query()->updateOrCreate(['company_id' => $company->id, 'code' => 'HR'], ['name' => 'Human Resources', 'is_active' => true]);
             $ops = Department::query()->updateOrCreate(['company_id' => $company->id, 'code' => 'OPS'], ['name' => 'Operations', 'is_active' => true]);
             $permanent = EmployeeType::query()->updateOrCreate(['company_id' => $company->id, 'code' => 'PERM'], ['name' => 'Permanent', 'is_active' => true]);
@@ -67,7 +55,6 @@ class DemoDataSeeder extends Seeder
             ]);
 
             $calendar = WorkCalendar::query()->updateOrCreate(['company_id' => $company->id, 'name' => 'Head office week'], [
-                'branch_id' => null,
                 'effective_from' => '2026-04-01',
                 'is_active' => true,
             ]);
@@ -105,10 +92,10 @@ class DemoDataSeeder extends Seeder
                 'scope_id' => $company->id,
             ]);
 
-            $rahul = $this->employee($company->id, $branch->id, $location->id, $ops->id, $managerTitle->id, $permanent->id, $confirmed->id, null, 'AT0001', 'Rahul', 'Mehta', 'rahul@autotech.test');
-            $this->employee($company->id, $branch->id, $location->id, $ops->id, $executive->id, $permanent->id, $confirmed->id, $rahul->id, 'AT0002', 'Anita', 'Desai', 'anita@autotech.test');
-            $this->employee($company->id, $branch->id, $location->id, $ops->id, $executive->id, $permanent->id, $confirmed->id, $rahul->id, 'AT0003', 'Kiran', 'Patel', 'kiran@autotech.test');
-            $this->employee($company->id, $branch->id, $location->id, $hr->id, $executive->id, $permanent->id, $confirmed->id, null, 'AT0004', 'Sonal', 'Joshi', 'sonal@autotech.test');
+            $rahul = $this->employee($company->id, $ops->id, $managerTitle->id, $permanent->id, $confirmed->id, null, 'AT0001', 'Rahul', 'Mehta', 'rahul@autotech.test');
+            $this->employee($company->id, $ops->id, $executive->id, $permanent->id, $confirmed->id, $rahul->id, 'AT0002', 'Anita', 'Desai', 'anita@autotech.test');
+            $this->employee($company->id, $ops->id, $executive->id, $permanent->id, $confirmed->id, $rahul->id, 'AT0003', 'Kiran', 'Patel', 'kiran@autotech.test');
+            $this->employee($company->id, $hr->id, $executive->id, $permanent->id, $confirmed->id, null, 'AT0004', 'Sonal', 'Joshi', 'sonal@autotech.test');
 
             $managerUser = User::query()->updateOrCreate(['email' => 'manager@hrms.test'], [
                 'name' => 'Rahul Mehta',
@@ -126,11 +113,9 @@ class DemoDataSeeder extends Seeder
         });
     }
 
-    private function employee(int $companyId, int $branchId, int $locationId, int $departmentId, int $designationId, int $typeId, int $statusId, ?int $managerId, string $code, string $first, string $last, string $email): Employee
+    private function employee(int $companyId, int $departmentId, int $designationId, int $typeId, int $statusId, ?int $managerId, string $code, string $first, string $last, string $email): Employee
     {
         return Employee::query()->updateOrCreate(['company_id' => $companyId, 'employee_code' => $code], [
-            'branch_id' => $branchId,
-            'location_id' => $locationId,
             'department_id' => $departmentId,
             'designation_id' => $designationId,
             'employee_type_id' => $typeId,

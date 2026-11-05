@@ -17,7 +17,7 @@ class HolidayController extends Controller
 
     public function index(Request $request): View|RedirectResponse
     {
-        $this->authorizeView();
+        $this->authorizeAny('holidays.view');
         $year = (int) $request->input('year', now()->year);
         $clamped = max(1990, min(2100, $year));
         if ($clamped !== $year) {
@@ -32,7 +32,7 @@ class HolidayController extends Controller
                 ->whereYear('holiday_date', $year)
                 ->orderBy('holiday_date')
                 ->get(),
-            'canEdit' => $request->user()->hasPermission('employees.edit'),
+            'canEdit' => $request->user()->hasPermission('holidays.manage'),
             'kindMeta' => Holiday::KINDS,
             'kindHelp' => Holiday::KIND_HELP,
         ]);
@@ -40,7 +40,7 @@ class HolidayController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
-        $this->authorizePeople();
+        $this->authorizeAny('holidays.manage');
         $companyId = $this->companyId();
         $data = $request->validate([
             'holiday_date' => ['required', 'date', Rule::unique('holidays', 'holiday_date')->where('company_id', $companyId)],
@@ -64,7 +64,7 @@ class HolidayController extends Controller
 
     public function destroy(Request $request, Holiday $holiday): RedirectResponse
     {
-        $this->authorizePeople();
+        $this->authorizeAny('holidays.manage');
         abort_unless((int) $holiday->company_id === $this->companyId(), 404);
         $year = $holiday->holiday_date?->year ?? now()->year;
         $holiday->delete();

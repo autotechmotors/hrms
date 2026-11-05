@@ -1,7 +1,12 @@
 @extends('layouts.app')
 @section('title', 'Financial year')
 @section('content')
-    <h1 class="h3 mb-3">{{ $year ? 'Edit financial year' : 'New financial year' }}</h1>
+    <div class="ph">
+        <div>
+            <x-back :href="route('financial-years.index')" label="Financial years" />
+            <h1>{{ $year ? 'Edit financial year' : 'New financial year' }}</h1>
+        </div>
+    </div>
     <form class="card card-body" method="post" action="{{ $year ? route('financial-years.update', $year) : route('financial-years.store') }}">
         @csrf @if($year) @method('put') @endif
         @include('partials.workspace-ids', ['companyId' => $year->company_id ?? null])

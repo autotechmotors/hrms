@@ -10,7 +10,7 @@
 
     <div class="ph">
         <div>
-            <a class="ed-back" href="{{ route('employees.index') }}"><x-i name="back" :size="14" />Employees</a>
+            <x-back :href="route('employees.index')" label="Employees" />
             <h1>{{ $employee->full_name }}</h1>
             <p>{{ $employee->employee_code }} · {{ $employee->designation?->name ?? '—' }} · {{ $employee->department?->name ?? '—' }}</p>
         </div>
@@ -37,8 +37,6 @@
                     <p>{{ $employee->designation?->name ?? 'No designation' }}@if($category) · {{ $category }}@endif</p>
                     <div class="ed-chips">
                         <span>{{ $employee->department?->name ?? 'No department' }}</span>
-                        <span>{{ $employee->branch?->name ?? 'No branch' }}</span>
-                        <span>{{ $employee->location?->name ?? 'No location' }}</span>
                     </div>
                 </div>
             </div>
@@ -67,8 +65,8 @@
                 <section class="card ef-sec">
                     <header>
                         <div>
-                            <h3>Profile</h3>
-                            <p>Personal and contact details</p>
+                            <h3>Identity</h3>
+                            <p>Name and how they appear on the roster</p>
                         </div>
                     </header>
                     <div class="cb">
@@ -78,9 +76,39 @@
                             <div><span>Last name</span><b>{{ $employee->last_name }}</b></div>
                             <div><span>Gender</span><b>{{ $employee->gender ? ucfirst($employee->gender) : '—' }}</b></div>
                             <div><span>Date of birth</span><b>{{ $employee->date_of_birth?->format('d M Y') ?? '—' }}</b></div>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="card ef-sec">
+                    <header>
+                        <div>
+                            <h3>Contact</h3>
+                            <p>How you reach them at work</p>
+                        </div>
+                    </header>
+                    <div class="cb">
+                        <div class="ed-kv">
                             <div><span>Email</span><b>{{ $employee->email ?? '—' }}</b></div>
                             <div><span>Phone</span><b>{{ $employee->phone ?? '—' }}</b></div>
                             <div><span>Alternate phone</span><b>{{ $employee->alternate_phone ?? '—' }}</b></div>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="card ef-sec">
+                    <header>
+                        <div>
+                            <h3>Address</h3>
+                            <p>Where they live</p>
+                        </div>
+                    </header>
+                    <div class="cb">
+                        <div class="ed-kv">
+                            <div><span>Address</span><b>{{ $employee->address ?: '—' }}</b></div>
+                            <div><span>City</span><b>{{ $employee->city ?: '—' }}</b></div>
+                            <div><span>State</span><b>{{ $employee->state ?: '—' }}</b></div>
+                            <div><span>Postal code</span><b>{{ $employee->postal_code ?: '—' }}</b></div>
                         </div>
                     </div>
                 </section>
@@ -94,9 +122,6 @@
                     </header>
                     <div class="cb">
                         <div class="ed-kv">
-                            <div><span>Company</span><b>{{ $employee->company?->name ?? '—' }}</b></div>
-                            <div><span>Branch</span><b>{{ $employee->branch?->name ?? '—' }}</b></div>
-                            <div><span>Location</span><b>{{ $employee->location?->name ?? '—' }}</b></div>
                             <div><span>Department</span><b>{{ $employee->department?->name ?? '—' }}</b></div>
                             <div><span>Designation</span><b>{{ $employee->designation?->name ?? '—' }}</b></div>
                             <div><span>Category</span><b>{{ $category ?: '—' }}</b></div>
@@ -136,6 +161,36 @@
                                 @foreach($customFields as $field)
                                     @php $current = optional($employee->customValues->firstWhere('employee_custom_field_id', $field->id))->value; @endphp
                                     <div><span>{{ $field->name }}</span><b>{{ $current ?: '—' }}</b></div>
+                                @endforeach
+                            </div>
+                        </div>
+                    </section>
+                @endif
+
+                @if($attendanceRows !== null)
+                    <section class="card ef-sec" id="attendance">
+                        <header>
+                            <div>
+                                <h3>Attendance</h3>
+                                <p>Today first, then earlier days</p>
+                            </div>
+                            <a class="btn sm" href="{{ route('attendance.show', $employee) }}">Open register</a>
+                        </header>
+                        <div class="cb">
+                            <div class="ed-att">
+                                @foreach($attendanceRows as $row)
+                                    @php
+                                        $day = $row['day'];
+                                        $worked = $day?->minutes_worked;
+                                        $workedLabel = $worked === null || $worked === '' ? '—' : ((int) intdiv((int) $worked, 60) > 0 ? sprintf('%dh %02dm', intdiv((int) $worked, 60), ((int) $worked) % 60) : sprintf('%dm', (int) $worked));
+                                        $when = \Carbon\Carbon::parse($row['date']);
+                                    @endphp
+                                    <a class="ed-att-row" href="{{ route('attendance.show', ['employee' => $employee, 'date' => $when->toDateString()]) }}">
+                                        <b>{{ $when->isToday() ? 'Today' : $when->format('D, d M Y') }}</b>
+                                        <span>{{ \App\Support\Clock::time($day?->punch_in) }} – {{ \App\Support\Clock::time($day?->punch_out) }}</span>
+                                        <span>{{ $workedLabel }}</span>
+                                        <span class="b">{{ $day ? str_replace('_', ' ', (string) $day->status) : 'Not calculated' }}</span>
+                                    </a>
                                 @endforeach
                             </div>
                         </div>

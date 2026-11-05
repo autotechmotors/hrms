@@ -1,0 +1,30 @@
+---
+description: Where to put new Markdown notes. One module folder, one clear file name. Brand assets and system prompts stay in their own folders.
+alwaysApply: true
+---
+
+# Documentation files
+
+New notes go under `docs/`. Do not add loose `.md` files at the repo root. `README.md` stays the setup page only.
+
+| Kind | Path | File name |
+|---|---|---|
+| Brand assets | `docs/brand/` | `app-icon.png` and other assets. No notes here. |
+| System prompts | `docs/prompts/` | `HRMS-<TOPIC>.md` |
+| Module notes | `docs/<module>/` | `<TOPIC>.md` |
+
+One topic per file. Name the file for the subject, in uppercase words with hyphens.
+
+```
+docs/prompts/HRMS-LIQUID-GLASS-SYSTEM.md
+docs/employees/PLACEMENT.md
+docs/attendance/DAY-REGISTER.md
+```
+
+Module folders, and only these:
+
+`employees` `attendance` `shifts` `leave` `holidays` `payroll` `salary` `advances` `devices` `reports` `bank` `users` `roles` `organization` `auth`
+
+`organization` covers departments, designations, statuses, financial years, work calendars, custom fields, and branding. Do not recreate branch or location notes.
+
+Do not put a module note in `docs/prompts/` or `docs/brand/`. Do not append a new topic onto an existing file. Create the module folder if it is not there yet.

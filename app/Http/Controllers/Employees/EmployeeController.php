@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Employees;
 use App\Http\Controllers\Concerns\GuardsCompany;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\EmployeeRequest;
-use App\Models\Branch;
+use App\Models\AttendanceDay;
 use App\Models\Department;
 use App\Models\Device;
 use App\Models\Designation;
@@ -14,10 +14,11 @@ use App\Models\Employee;
 use App\Models\EmployeeCustomField;
 use App\Models\EmployeeType;
 use App\Models\EmploymentStatus;
-use App\Models\Location;
+use App\Services\AccessScope;
 use App\Services\Employees\EmployeeExporter;
 use App\Services\Employees\EmployeeImporter;
 use App\Services\Employees\EmployeeService;
+use App\Services\Workspace;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
@@ -63,8 +64,7 @@ class EmployeeController extends Controller
             'employees' => $employees,
             'canManage' => $canManage,
             'canBlock' => $canBlock,
-            'companies' => $this->visibleCompanies(),
-            'branches' => Branch::query()->visibleTo($request->user())->orderBy('name')->get(),
+            'perPage' => $this->pageSize($request),
             'departments' => Department::query()->visibleTo($request->user())->orderBy('name')->get(),
             'statuses' => EmploymentStatus::query()->visibleTo($request->user())->orderBy('name')->get(),
             'credentialCounts' => $credentialCounts,
@@ -98,18 +98,38 @@ class EmployeeController extends Controller
     {
         $this->authorize('view', $employee);
         $employee->load([
-            'company', 'branch', 'location', 'department', 'designation.employeeType', 'employeeType',
+            'department', 'designation.employeeType', 'employeeType',
             'employmentStatus', 'manager', 'documents', 'events', 'exits.employmentStatus',
             'bankAccounts', 'activeBankAccount', 'latestExit.employmentStatus', 'customValues.field',
         ]);
+
+        $attendanceRows = null;
+        $user = request()->user();
+        if ($user->hasPermission('attendance.view') && app(AccessScope::class)->canAccessEmployee($user, $employee)) {
+            $stored = AttendanceDay::query()
+                ->where('employee_id', $employee->id)
+                ->whereDate('work_date', '<=', now()->toDateString())
+                ->orderByDesc('work_date')
+                ->limit(31)
+                ->get()
+                ->keyBy(fn (AttendanceDay $day) => $day->work_date->toDateString());
+            $today = now()->toDateString();
+            $attendanceRows = collect([['date' => $today, 'day' => $stored->get($today)]]);
+            foreach ($stored as $date => $day) {
+                if ($date !== $today) {
+                    $attendanceRows->push(['date' => $date, 'day' => $day]);
+                }
+            }
+        }
 
         return view('employees.show', [
             'employee' => $employee,
             'customFields' => EmployeeCustomField::query()->where('company_id', $employee->company_id)->where('is_active', true)->orderBy('sort_order')->get(),
             'exitStatuses' => EmploymentStatus::query()->where('company_id', $employee->company_id)->where('is_exit', true)->where('is_active', true)->orderBy('name')->get(),
-            'canViewAccount' => request()->user()->hasPermission('bank_accounts.view'),
-            'canManageBank' => request()->user()->hasPermission('bank_accounts.manage'),
+            'canViewAccount' => $user->hasPermission('bank_accounts.view'),
+            'canManageBank' => $user->hasPermission('bank_accounts.manage'),
             'activeBank' => $employee->activeBankAccount,
+            'attendanceRows' => $attendanceRows,
         ]);
     }
 
@@ -416,17 +436,22 @@ class EmployeeController extends Controller
         return $slots;
     }
 
+    private function pageSize(Request $request): int
+    {
+        $size = (int) $request->query('per_page', 12);
+
+        return in_array($size, [12, 24, 48], true) ? $size : 12;
+    }
+
     private function filteredEmployees(Request $request): LengthAwarePaginator
     {
         return Employee::query()
-            ->with(['company', 'branch', 'department', 'designation', 'employmentStatus'])
+            ->with(['department', 'designation', 'employmentStatus'])
             ->withCount([
                 'documents',
                 'activeBankAccount as active_bank_accounts_count',
             ])
             ->visibleTo($request->user())
-            ->when($request->filled('company_id'), fn ($query) => $query->where('company_id', $request->integer('company_id')))
-            ->when($request->filled('branch_id'), fn ($query) => $query->where('branch_id', $request->integer('branch_id')))
             ->when($request->filled('department_id'), fn ($query) => $query->where('department_id', $request->integer('department_id')))
             ->when($request->filled('employment_status_id'), fn ($query) => $query->where('employment_status_id', $request->integer('employment_status_id')))
             ->when($request->filled('q'), function ($query) use ($request): void {
@@ -439,8 +464,9 @@ class EmployeeController extends Controller
                 });
             })
             ->orderBy('employee_code')
-            ->paginate(15)
-            ->withQueryString();
+            ->paginate($this->pageSize($request))
+            ->onEachSide(1)
+            ->appends($request->except(['page', 'partial']));
     }
 
     /**
@@ -449,20 +475,39 @@ class EmployeeController extends Controller
     private function formData(?Employee $employee): array
     {
         $user = request()->user();
-        $employee?->load('customValues');
+        $employee?->load(['customValues', 'user.roles']);
+        $companyId = $employee?->company_id ?? app(Workspace::class)->company($user)?->id;
+
+        $catalog = Employee::query()
+            ->visibleTo($user)
+            ->when($companyId, fn ($query) => $query->where('company_id', $companyId))
+            ->when($employee, fn ($query) => $query->whereKeyNot($employee->id))
+            ->orderBy('first_name');
+
+        $managers = (clone $catalog)
+            ->where(function ($query) use ($employee): void {
+                $query->canManagePeople();
+                if ($employee?->reporting_manager_id) {
+                    $query->orWhereKey($employee->reporting_manager_id);
+                }
+            })
+            ->get();
+
+        if ($managers->isEmpty()) {
+            $managers = $catalog->get();
+        }
 
         return [
             'employee' => $employee,
-            'companies' => $this->visibleCompanies(),
-            'branches' => Branch::query()->visibleTo($user)->orderBy('name')->get(),
-            'locations' => Location::query()->visibleTo($user)->orderBy('name')->get(),
-            'departments' => Department::query()->visibleTo($user)->orderBy('name')->get(),
-            'designations' => Designation::query()->with('employeeType')->visibleTo($user)->orderBy('name')->get(),
-            'types' => EmployeeType::query()->visibleTo($user)->orderBy('name')->get(),
-            'statuses' => EmploymentStatus::query()->visibleTo($user)->orderBy('name')->get(),
-            'managers' => Employee::query()->visibleTo($user)->when($employee, fn ($query) => $query->whereKeyNot($employee->id))->orderBy('first_name')->get(),
+            'needsReportingManager' => (bool) $employee?->needsReportingManager(),
+            'departments' => Department::query()->visibleTo($user)->when($companyId, fn ($query) => $query->where('company_id', $companyId))->orderBy('name')->get(),
+            'designations' => Designation::query()->with('employeeType')->visibleTo($user)->when($companyId, fn ($query) => $query->where('company_id', $companyId))->orderBy('name')->get(),
+            'types' => EmployeeType::query()->visibleTo($user)->when($companyId, fn ($query) => $query->where('company_id', $companyId))->orderBy('name')->get(),
+            'statuses' => EmploymentStatus::query()->visibleTo($user)->when($companyId, fn ($query) => $query->where('company_id', $companyId))->orderBy('name')->get(),
+            'managers' => $managers,
             'customFields' => EmployeeCustomField::query()
                 ->visibleTo($user)
+                ->when($companyId, fn ($query) => $query->where('company_id', $companyId))
                 ->where('is_active', true)
                 ->orderBy('sort_order')
                 ->get(),

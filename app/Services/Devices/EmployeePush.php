@@ -263,7 +263,7 @@ class EmployeePush
         $credential->delete();
         $label = $credential->kind === 'finger' ? 'Finger' : 'Face';
 
-        return ['devices' => $devices->count(), 'message' => $label.' removed from Laravel and the face terminal.'];
+        return ['devices' => $devices->count(), 'message' => $label.' removed from HRMS and the face terminal.'];
     }
 
     public function drop(Collection $devices, string $userId): void

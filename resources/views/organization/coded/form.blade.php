@@ -2,7 +2,12 @@
 @section('title', $title)
 @section('crumb', $title)
 @section('content')
-    <h1 class="h3 mb-3">{{ $title }}</h1>
+    <div class="ph">
+        <div>
+            <x-back :href="$listUrl" :label="$listLabel" />
+            <h1>{{ $title }}</h1>
+        </div>
+    </div>
     <form class="card card-body" method="post" action="{{ $action }}">
         @csrf
         @if($record) @method('put') @endif

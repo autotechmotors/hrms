@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\AuditsChanges;
+use App\Models\Concerns\DecidesGatePasses;
 use App\Services\AccessScope;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Builder;
@@ -16,7 +17,7 @@ use Illuminate\Notifications\Notifiable;
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
-    use AuditsChanges, HasFactory, Notifiable;
+    use AuditsChanges, DecidesGatePasses, HasFactory, Notifiable;
 
     protected $fillable = [
         'name',
@@ -85,6 +86,20 @@ class User extends Authenticatable
         return $this->roles
             ->flatMap(fn (Role $role) => $role->permissions)
             ->contains(fn (Permission $permission) => $permission->slug === $slug);
+    }
+
+    /**
+     * @param  list<string>  $slugs
+     */
+    public function hasAnyPermission(array $slugs): bool
+    {
+        foreach ($slugs as $slug) {
+            if ($this->hasPermission($slug)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function requiresMfa(): bool

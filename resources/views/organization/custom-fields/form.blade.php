@@ -1,7 +1,12 @@
 @extends('layouts.app')
 @section('title', 'Custom field')
 @section('content')
-    <h1 class="h3 mb-3">{{ $field ? 'Edit custom field' : 'New custom field' }}</h1>
+    <div class="ph">
+        <div>
+            <x-back :href="route('custom-fields.index')" label="Custom fields" />
+            <h1>{{ $field ? 'Edit custom field' : 'New custom field' }}</h1>
+        </div>
+    </div>
     <form class="card card-body" method="post" action="{{ $field ? route('custom-fields.update', $field) : route('custom-fields.store') }}">
         @csrf @if($field) @method('put') @endif
         @include('partials.workspace-ids', ['companyId' => $field->company_id ?? null])

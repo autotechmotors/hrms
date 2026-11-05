@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\UserRequest;
-use App\Models\Branch;
 use App\Models\Company;
 use App\Models\Department;
 use App\Models\Employee;
@@ -56,7 +55,7 @@ class UserController extends Controller
     {
         $this->authorize('update', $user);
 
-        return view('admin.users.form', ['account' => $user->load('roles', 'scopes')] + $this->options());
+        return view('admin.users.form', ['account' => $user->load('roles', 'scopes')] + $this->options($user));
     }
 
     public function update(UserRequest $request, User $user): RedirectResponse
@@ -90,18 +89,19 @@ class UserController extends Controller
     /**
      * @return array<string, mixed>
      */
-    private function options(): array
+    private function options(?User $account = null): array
     {
         $actor = request()->user();
+        $assigned = $account?->roles->pluck('id') ?? collect();
 
         return [
             'roles' => Role::query()
                 ->where('slug', '!=', 'employee')
+                ->where(fn ($query) => $query->where('is_active', true)->orWhereIn('id', $assigned))
                 ->when(! $actor->isSuperAdmin(), fn ($query) => $query->where('slug', '!=', 'super-admin'))
                 ->orderBy('name')
                 ->get(),
             'companies' => Company::query()->visibleTo($actor)->orderBy('name')->get(),
-            'branches' => Branch::query()->visibleTo($actor)->orderBy('name')->get(),
             'departments' => Department::query()->visibleTo($actor)->orderBy('name')->get(),
             'employees' => Employee::query()->visibleTo($actor)->orderBy('first_name')->get(),
         ];

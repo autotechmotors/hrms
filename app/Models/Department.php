@@ -26,6 +26,11 @@ class Department extends Model
         return $this->hasMany(Employee::class);
     }
 
+    public function workHour(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(DepartmentWorkHour::class);
+    }
+
     public function scopeVisibleTo(Builder $query, User $user): Builder
     {
         return app(AccessScope::class)->applyToDepartments($query, $user);

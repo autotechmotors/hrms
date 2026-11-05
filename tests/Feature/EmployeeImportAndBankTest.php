@@ -32,8 +32,8 @@ class EmployeeImportAndBankTest extends TestCase
         $this->actingAsScoped($hr)->post(route('employees.import.store'), [
             'company_id' => $org['company']->id,
             'file' => $this->spreadsheet([
-                ['employee_code', 'first_name', 'last_name', 'email', 'phone', 'joining_date', 'branch_code', 'department_code', 'designation_code', 'employee_type_code', 'employment_status_code', 'reporting_manager_code'],
-                ['E100', 'Rita', 'Shah', '', '', '2026-04-01', 'MISSING', 'DEP', 'DES', 'PERM', 'CONF', ''],
+                ['employee_code', 'first_name', 'last_name', 'email', 'phone', 'joining_date', 'department_code', 'designation_code', 'employee_type_code', 'employment_status_code', 'reporting_manager_code'],
+                ['E100', 'Rita', 'Shah', '', '', '2026-04-01', 'MISSING', 'DES', 'PERM', 'CONF', ''],
             ]),
         ])->assertRedirect()->assertSessionHas('error');
 
@@ -48,8 +48,8 @@ class EmployeeImportAndBankTest extends TestCase
         $this->actingAsScoped($hr)->post(route('employees.import.store'), [
             'company_id' => $org['company']->id,
             'file' => $this->spreadsheet([
-                ['employee_code', 'first_name', 'last_name', 'email', 'phone', 'joining_date', 'branch_code', 'department_code', 'designation_code', 'employee_type_code', 'employment_status_code', 'reporting_manager_code'],
-                ['E100', 'Rita', 'Shah', 'rita@example.test', '', '2026-04-01', 'BR', 'DEP', 'DES', 'PERM', 'CONF', ''],
+                ['employee_code', 'first_name', 'last_name', 'email', 'phone', 'joining_date', 'department_code', 'designation_code', 'employee_type_code', 'employment_status_code', 'reporting_manager_code'],
+                ['E100', 'Rita', 'Shah', 'rita@example.test', '', '2026-04-01', 'DEP', 'DES', 'PERM', 'CONF', ''],
             ]),
         ])->assertRedirect(route('employees.index'));
 

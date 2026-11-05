@@ -19,24 +19,29 @@ class RoleAndPermissionSeeder extends Seeder
 
             $all = Permission::query()->pluck('id', 'slug');
 
-            $this->role('Super Admin', 'super-admin', true, true, $all->values()->all());
+            $this->role('Super Admin', 'super-admin', true, true, $all->values()->all(), false, true);
             $this->role('HR Admin', 'hr-admin', true, false, $all->except([
-                'roles.create', 'roles.edit', 'roles.delete', 'users.delete', 'settings.manage',
+                'roles.delete', 'users.delete', 'settings.manage',
                 'payments.release', 'payroll.lock', 'payroll.reopen',
-            ])->values()->all());
+            ])->values()->all(), false, true);
             $this->role('Payroll Admin', 'payroll-admin', true, true, $all->only([
-                'dashboard.view', 'employees.view', 'employees.export', 'bank_accounts.view', 'audit_logs.view',
-                'payroll.process', 'payroll.approve', 'payroll.lock', 'payroll.reopen',
+                'dashboard.view', 'employees.view', 'employees.export', 'bank_accounts.view', 'bank.view', 'audit_logs.view',
+                'payroll.view', 'payroll.process', 'payroll.approve', 'payroll.lock', 'payroll.reopen',
+                'advances.view', 'advances.manage',
             ])->values()->all());
             $this->role('Accounts', 'accounts', true, true, $all->only([
-                'dashboard.view', 'employees.view', 'bank_accounts.view', 'bank_accounts.manage', 'payments.release', 'audit_logs.view',
+                'dashboard.view', 'employees.view', 'bank.view', 'bank_accounts.view', 'bank_accounts.manage', 'payments.release', 'audit_logs.view',
             ])->values()->all());
             $this->role('Manager', 'manager', true, false, $all->only([
-                'dashboard.view', 'employees.view', 'departments.view', 'branches.view',
-            ])->values()->all());
+                'dashboard.view', 'employees.view', 'departments.view',
+                'attendance.view', 'shifts.view', 'leave.view', 'holidays.view',
+                'gate_passes.view', 'gate_passes.create', 'gate_passes.decide',
+            ])->values()->all(), true, true);
             $this->role('Director', 'director', true, false, $all->only([
                 'dashboard.view', 'employees.view', 'departments.view', 'audit_logs.view',
-            ])->values()->all());
+                'attendance.view', 'reports.view',
+                'gate_passes.view', 'gate_passes.create', 'gate_passes.decide',
+            ])->values()->all(), true, true);
             $this->role('Device Administrator', 'device-administrator', true, false, $all->only([
                 'dashboard.view', 'devices.manage', 'employees.view',
             ])->values()->all());
@@ -53,12 +58,15 @@ class RoleAndPermissionSeeder extends Seeder
     /**
      * @param  list<int>  $permissionIds
      */
-    private function role(string $name, string $slug, bool $system, bool $mfa, array $permissionIds): void
+    private function role(string $name, string $slug, bool $system, bool $mfa, array $permissionIds, bool $hasParent = false, bool $hasChild = false): void
     {
         $role = Role::query()->updateOrCreate(['slug' => $slug], [
             'name' => $name,
             'is_system' => $system,
             'requires_mfa' => $mfa,
+            'has_parent' => $hasParent,
+            'has_child' => $hasChild,
+            'is_active' => true,
         ]);
         $role->permissions()->sync($permissionIds);
     }

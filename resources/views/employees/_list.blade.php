@@ -3,7 +3,7 @@
     $canBlock = $canBlock ?? false;
     $credentialCounts = $credentialCounts ?? [];
 @endphp
-<div class="el-body" data-total="{{ $employees->total() }}" data-count="{{ $employees->count() }}">
+<div class="el-body" data-total="{{ $employees->total() }}" data-count="{{ $employees->count() }}" data-page="{{ $employees->currentPage() }}" data-last="{{ $employees->lastPage() }}">
     <div class="el-table tw">
         <table>
             <thead>
@@ -99,28 +99,31 @@
             @endphp
             <article class="el-card {{ $pending ? 'el-pending' : '' }} {{ $blocked ? 'el-blocked' : '' }}" data-employee-row="{{ $employee->id }}">
                 <a class="el-card-main" href="{{ route('employees.show', $employee) }}">
-                    <x-employee-avatar :employee="$employee" :size="40" />
+                    <x-employee-avatar :employee="$employee" :size="44" />
                     <div class="el-card-copy">
-                        <b>{{ $employee->full_name }}</b>
+                        <div class="el-card-title">
+                            <b>{{ $employee->full_name }}</b>
+                            <span class="b {{ $badge }}">{{ $status }}</span>
+                        </div>
                         <small>{{ $employee->employee_code }} · {{ $employee->designation?->name ?? '—' }}</small>
                         <span>{{ $employee->department?->name ?? '—' }}</span>
                     </div>
-                    <span class="b {{ $badge }}">{{ $status }}</span>
                 </a>
-                <div class="el-check">
-                    <a class="el-pill {{ $hasDocs ? 'ok' : 'wn' }}" href="{{ route('employees.show', $employee) }}#documents">
-                        <span class="el-dot"></span>Docs {{ $hasDocs ? 'done' : 'pending' }}
-                    </a>
-                    <a class="el-pill {{ $hasBank ? 'ok' : 'wn' }}" href="{{ route('employees.show', $employee) }}#bank">
-                        <span class="el-dot"></span>Bank {{ $hasBank ? 'done' : 'pending' }}
-                    </a>
+                <div class="el-card-body">
+                    <div class="el-check">
+                        <a class="el-pill {{ $hasDocs ? 'ok' : 'wn' }}" href="{{ route('employees.show', $employee) }}#documents">
+                            <span class="el-dot"></span>Docs {{ $hasDocs ? 'done' : 'pending' }}
+                        </a>
+                        <a class="el-pill {{ $hasBank ? 'ok' : 'wn' }}" href="{{ route('employees.show', $employee) }}#bank">
+                            <span class="el-dot"></span>Bank {{ $hasBank ? 'done' : 'pending' }}
+                        </a>
+                    </div>
+                    <div class="el-card-access">
+                        <span>Access</span>
+                        @include('employees._credentials', ['employee' => $employee, 'counts' => $credentialCounts[$employee->id] ?? [], 'slots' => ($credentialSlots[$employee->id] ?? []), 'canAdd' => $canBlock])
+                    </div>
                 </div>
-                <div class="ac-cred-card">
-                    <span>Access Credentials</span>
-                    @include('employees._credentials', ['employee' => $employee, 'counts' => $credentialCounts[$employee->id] ?? [], 'slots' => ($credentialSlots[$employee->id] ?? []), 'canAdd' => $canBlock])
-                </div>
-                <div class="el-card-block">
-                    <span>Blocked</span>
+                <footer class="el-card-foot">
                     @if($canBlock)
                         <label class="el-block-switch" title="{{ $blocked ? 'Blocked — click to unblock' : 'Active — click to block' }}">
                             <input type="checkbox" class="el-block-toggle" data-url="{{ route('employees.blocked', $employee) }}" @checked($blocked)>
@@ -130,25 +133,33 @@
                     @else
                         <span class="b {{ $blocked ? 'er' : 'ok' }}">{{ $blocked ? 'Blocked' : 'Active' }}</span>
                     @endif
-                </div>
-                <div class="el-ops">
-                    <a class="ib" href="{{ route('employees.show', $employee) }}" title="View" aria-label="View"><x-i name="eye" :size="15" /></a>
-                    @if($canManage)
-                        <a class="ib" href="{{ route('employees.edit', $employee) }}" title="Edit" aria-label="Edit"><x-i name="pen" :size="15" /></a>
-                        <form class="el-del" method="post" action="{{ route('employees.destroy', $employee) }}" data-confirm="Delete {{ $employee->full_name }}? This cannot be undone.">
-                            @csrf @method('delete')
-                            <button class="ib er" type="submit" title="Delete" aria-label="Delete"><x-i name="trash" :size="15" /></button>
-                        </form>
-                    @endif
-                </div>
+                    <div class="el-ops">
+                        <a class="ib" href="{{ route('employees.show', $employee) }}" title="View" aria-label="View"><x-i name="eye" :size="15" /></a>
+                        @if($canManage)
+                            <a class="ib" href="{{ route('employees.edit', $employee) }}" title="Edit" aria-label="Edit"><x-i name="pen" :size="15" /></a>
+                            <form class="el-del" method="post" action="{{ route('employees.destroy', $employee) }}" data-confirm="Delete {{ $employee->full_name }}? This cannot be undone.">
+                                @csrf @method('delete')
+                                <button class="ib er" type="submit" title="Delete" aria-label="Delete"><x-i name="trash" :size="15" /></button>
+                            </form>
+                        @endif
+                    </div>
+                </footer>
             </article>
         @empty
             <div class="el-empty">No employees match your filters</div>
         @endforelse
     </div>
 
-    <div class="pgn">
-        <span>Showing {{ $employees->count() }} of {{ $employees->total() }} employees</span>
-        <div class="el-pages">{{ $employees->links() }}</div>
+    <div class="pgn el-pgn">
+        <span class="el-range">
+            @if ($employees->total() > 0)
+                Showing {{ $employees->firstItem() }}–{{ $employees->lastItem() }} of {{ $employees->total() }}
+            @else
+                No employees to show
+            @endif
+        </span>
+        @if ($employees->hasPages())
+            <div class="el-pages">{{ $employees->links('employees._pager') }}</div>
+        @endif
     </div>
 </div>

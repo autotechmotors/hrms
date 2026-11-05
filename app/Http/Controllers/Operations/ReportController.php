@@ -20,7 +20,7 @@ class ReportController extends Controller
 
     public function index(Request $request): View
     {
-        $this->authorizeView();
+        $this->authorizeAny('reports.view');
         $month = Carbon::create(
             (int) $request->input('year', now()->year),
             (int) $request->input('month', now()->month),

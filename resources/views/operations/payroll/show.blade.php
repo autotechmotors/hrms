@@ -29,10 +29,9 @@
         }
     @endphp
 
-    <a class="ed-back" href="{{ route('payroll.index') }}"><x-i name="back" :size="14" />All months</a>
-
     <div class="ph">
         <div>
+            <x-back :href="route('payroll.index')" label="All months" />
             <h1>{{ $label }}</h1>
             <p>
                 <span class="b {{ $run->statusBadgeClass() }}">{{ $run->statusLabel() }}</span>

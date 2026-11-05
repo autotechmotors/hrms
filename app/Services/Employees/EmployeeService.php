@@ -2,7 +2,6 @@
 
 namespace App\Services\Employees;
 
-use App\Models\Branch;
 use App\Models\Company;
 use App\Models\Department;
 use App\Models\Designation;
@@ -12,10 +11,10 @@ use App\Models\EmployeeCustomFieldValue;
 use App\Models\EmployeeType;
 use App\Models\EmploymentEvent;
 use App\Models\EmploymentStatus;
-use App\Models\Location;
 use App\Models\User;
 use App\Services\AccessScope;
 use App\Services\NumberSequenceService;
+use App\Services\Workspace;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -34,10 +33,19 @@ class EmployeeService
     public function create(array $data, User $actor, ?UploadedFile $photo = null): Employee
     {
         return DB::transaction(function () use ($data, $actor, $photo): Employee {
+            $requestedCompanyId = (int) ($data['company_id'] ?? 0);
+            $company = $requestedCompanyId > 0 && $this->access->canAccessCompany($actor, $requestedCompanyId)
+                ? Company::query()->find($requestedCompanyId)
+                : null;
+            $company ??= app(Workspace::class)->company($actor);
+            if (! $company) {
+                throw ValidationException::withMessages(['department_id' => 'No company is available for this account.']);
+            }
+            $data['company_id'] = $company->id;
             $this->assertPlacement($actor, $data, null);
-
-            $company = Company::query()->findOrFail($data['company_id']);
-            $data['employee_code'] = $this->sequences->nextEmployeeCode($company);
+            if (blank($data['employee_code'] ?? null)) {
+                $data['employee_code'] = $this->sequences->nextEmployeeCode($company);
+            }
             $data = $this->nullBlanks($data);
 
             $employee = Employee::query()->create($data);
@@ -57,6 +65,7 @@ class EmployeeService
     public function update(Employee $employee, array $data, User $actor, ?UploadedFile $photo = null): Employee
     {
         return DB::transaction(function () use ($employee, $data, $actor, $photo): Employee {
+            $data['company_id'] = $employee->company_id;
             $this->assertPlacement($actor, $data, $employee);
             unset($data['employee_code']);
             $data = $this->nullBlanks($data);
@@ -67,7 +76,7 @@ class EmployeeService
 
             if (($placementChanged || $statusChanged) && blank($data['movement_reason'] ?? null)) {
                 throw ValidationException::withMessages([
-                    'movement_reason' => 'A reason is required when branch, department, designation, manager, or status changes.',
+                    'movement_reason' => 'A reason is required when department, designation, manager, or status changes.',
                 ]);
             }
 
@@ -77,8 +86,6 @@ class EmployeeService
                     'event_type' => $placementChanged ? 'transfer' : 'status_change',
                     'effective_date' => $data['movement_effective_date'] ?? now()->toDateString(),
                     'reason' => $data['movement_reason'],
-                    'from_branch_id' => $employee->branch_id,
-                    'to_branch_id' => $data['branch_id'],
                     'from_department_id' => $employee->department_id,
                     'to_department_id' => $data['department_id'],
                     'from_designation_id' => $employee->designation_id,
@@ -115,15 +122,11 @@ class EmployeeService
             throw ValidationException::withMessages(['company_id' => 'You cannot use this company.']);
         }
 
-        $branch = Branch::query()->find($data['branch_id'] ?? null);
         $department = Department::query()->find($data['department_id'] ?? null);
         $designation = Designation::query()->find($data['designation_id'] ?? null);
         $type = EmployeeType::query()->find($data['employee_type_id'] ?? null);
         $status = EmploymentStatus::query()->find($data['employment_status_id'] ?? null);
 
-        if (! $branch || (int) $branch->company_id !== $companyId) {
-            throw ValidationException::withMessages(['branch_id' => 'Select a branch from the chosen company.']);
-        }
         if (! $department || (int) $department->company_id !== $companyId) {
             throw ValidationException::withMessages(['department_id' => 'Select a department from the chosen company.']);
         }
@@ -141,13 +144,6 @@ class EmployeeService
             throw ValidationException::withMessages(['employment_status_id' => 'Select a status from the chosen company.']);
         }
 
-        if (! empty($data['location_id'])) {
-            $location = Location::query()->find($data['location_id']);
-            if (! $location || (int) $location->company_id !== $companyId || (int) $location->branch_id !== (int) $branch->id) {
-                throw ValidationException::withMessages(['location_id' => 'Select a location from the chosen branch.']);
-            }
-        }
-
         if (! empty($data['reporting_manager_id'])) {
             $manager = Employee::query()->find($data['reporting_manager_id']);
             if (! $manager || (int) $manager->company_id !== $companyId) {
@@ -156,20 +152,26 @@ class EmployeeService
             if ($employee && $this->createsManagerCycle($employee, $manager)) {
                 throw ValidationException::withMessages(['reporting_manager_id' => 'That manager would create a reporting cycle.']);
             }
+
+            $hasCatalog = Employee::query()
+                ->where('company_id', $companyId)
+                ->canManagePeople()
+                ->exists();
+            $keepingCurrent = $employee && (int) $employee->reporting_manager_id === (int) $manager->id;
+            if ($hasCatalog && ! $keepingCurrent && ! $manager->canBeReportingManager()) {
+                throw ValidationException::withMessages(['reporting_manager_id' => 'Select someone whose role can have children.']);
+            }
+        }
+
+        if ($employee?->needsReportingManager() && empty($data['reporting_manager_id'])) {
+            throw ValidationException::withMessages(['reporting_manager_id' => 'This employee’s role requires a parent / reporting manager.']);
         }
 
         $actor->loadMissing('scopes');
         $companyScopes = $actor->scopes->where('scope_type', 'company');
-        $branchScopes = $actor->scopes->where('scope_type', 'branch');
         $departmentScopes = $actor->scopes->where('scope_type', 'department');
 
-        if (! $actor->isSuperAdmin() && $branchScopes->isNotEmpty() && $companyScopes->isEmpty()) {
-            if (! $branchScopes->pluck('scope_id')->contains((int) $branch->id)) {
-                throw ValidationException::withMessages(['branch_id' => 'You cannot assign this branch.']);
-            }
-        }
-
-        if (! $actor->isSuperAdmin() && $departmentScopes->isNotEmpty() && $companyScopes->isEmpty() && $branchScopes->isEmpty()) {
+        if (! $actor->isSuperAdmin() && $departmentScopes->isNotEmpty() && $companyScopes->isEmpty()) {
             if (! $departmentScopes->pluck('scope_id')->contains((int) $department->id)) {
                 throw ValidationException::withMessages(['department_id' => 'You cannot assign this department.']);
             }
@@ -223,8 +225,7 @@ class EmployeeService
      */
     private function placementChanged(Employee $employee, array $data): bool
     {
-        return (int) $employee->branch_id !== (int) $data['branch_id']
-            || (int) $employee->department_id !== (int) $data['department_id']
+        return (int) $employee->department_id !== (int) $data['department_id']
             || (int) $employee->designation_id !== (int) $data['designation_id']
             || (int) ($employee->reporting_manager_id ?? 0) !== (int) ($data['reporting_manager_id'] ?? 0);
     }
@@ -284,7 +285,7 @@ class EmployeeService
      */
     private function nullBlanks(array $data): array
     {
-        foreach (['email', 'phone', 'middle_name', 'location_id', 'reporting_manager_id', 'confirmation_date', 'date_of_birth', 'probation_days', 'notice_period_days'] as $key) {
+        foreach (['email', 'phone', 'alternate_phone', 'address', 'city', 'state', 'postal_code', 'middle_name', 'reporting_manager_id', 'confirmation_date', 'date_of_birth', 'probation_days', 'notice_period_days'] as $key) {
             if (array_key_exists($key, $data) && $data[$key] === '') {
                 $data[$key] = null;
             }

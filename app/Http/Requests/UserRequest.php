@@ -32,7 +32,7 @@ class UserRequest extends FormRequest
             'roles' => ['required', 'array', 'min:1'],
             'roles.*' => ['integer', 'exists:roles,id'],
             'scopes' => ['nullable', 'array'],
-            'scopes.*.scope_type' => ['nullable', Rule::in(['company', 'branch', 'department', 'employee'])],
+            'scopes.*.scope_type' => ['nullable', Rule::in(['company', 'department', 'employee'])],
             'scopes.*.scope_id' => ['nullable', 'integer'],
         ];
     }

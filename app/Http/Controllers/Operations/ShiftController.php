@@ -21,7 +21,7 @@ class ShiftController extends Controller
 
     public function index(Request $request): View
     {
-        $this->authorizeView();
+        $this->authorizeAny('shifts.view');
         $start = Carbon::parse($request->input('week', now()->startOfWeek()->toDateString()))->startOfWeek()->startOfDay();
         $dates = collect(range(0, 6))->map(fn (int $offset) => $start->copy()->addDays($offset));
         $end = $dates->last();
@@ -57,14 +57,14 @@ class ShiftController extends Controller
                 'q' => trim((string) $request->input('q', '')),
                 'department_id' => $request->input('department_id'),
             ],
-            'canEdit' => $request->user()->hasPermission('employees.edit'),
+            'canEdit' => $request->user()->hasPermission('shifts.manage'),
             'isThisWeek' => $start->toDateString() === now()->startOfWeek()->toDateString(),
         ]);
     }
 
     public function store(Request $request): RedirectResponse
     {
-        $this->authorizePeople();
+        $this->authorizeAny('shifts.manage');
         $companyId = $this->companyId();
         $data = $request->validate([
             'name' => ['required', 'string', 'max:120'],
@@ -91,7 +91,7 @@ class ShiftController extends Controller
 
     public function destroy(Request $request, Shift $shift): RedirectResponse
     {
-        $this->authorizePeople();
+        $this->authorizeAny('shifts.manage');
         abort_unless((int) $shift->company_id === $this->companyId(), 404);
         $shift->delete();
 
@@ -100,7 +100,7 @@ class ShiftController extends Controller
 
     public function roster(Request $request): RedirectResponse
     {
-        $this->authorizePeople();
+        $this->authorizeAny('shifts.manage');
         $data = $request->validate([
             'employee_id' => ['required', 'integer'],
             'work_date' => ['required', 'date'],
@@ -128,7 +128,7 @@ class ShiftController extends Controller
 
     public function rosterBulk(Request $request): RedirectResponse
     {
-        $this->authorizePeople();
+        $this->authorizeAny('shifts.manage');
         $data = $request->validate([
             'week' => ['required', 'date'],
             'employee_id' => ['nullable', 'integer'],

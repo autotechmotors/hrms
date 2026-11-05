@@ -2,7 +2,12 @@
 @section('title', 'Work calendar')
 @section('content')
     @php $days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']; @endphp
-    <h1 class="h3 mb-3">{{ $calendar ? 'Edit work calendar' : 'New work calendar' }}</h1>
+    <div class="ph">
+        <div>
+            <x-back :href="route('work-calendars.index')" label="Work calendars" />
+            <h1>{{ $calendar ? 'Edit work calendar' : 'New work calendar' }}</h1>
+        </div>
+    </div>
     <form class="card card-body" method="post" action="{{ $calendar ? route('work-calendars.update', $calendar) : route('work-calendars.store') }}">
         @csrf @if($calendar) @method('put') @endif
         @include('partials.workspace-ids', ['companyId' => $calendar->company_id ?? null])

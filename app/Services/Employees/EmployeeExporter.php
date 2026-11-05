@@ -19,7 +19,6 @@ class EmployeeExporter
             'email',
             'phone',
             'joining_date',
-            'branch',
             'department',
             'designation',
             'employee_type',
@@ -28,7 +27,7 @@ class EmployeeExporter
         ], null, 'A1');
 
         $row = 2;
-        $query->with(['branch', 'department', 'designation', 'employeeType', 'employmentStatus', 'manager'])
+        $query->with(['department', 'designation', 'employeeType', 'employmentStatus', 'manager'])
             ->orderBy('employee_code')
             ->chunk(200, function ($employees) use ($sheet, &$row): void {
                 foreach ($employees as $employee) {
@@ -38,7 +37,6 @@ class EmployeeExporter
                         $employee->email,
                         $employee->phone,
                         optional($employee->joining_date)->toDateString(),
-                        $employee->branch?->name,
                         $employee->department?->name,
                         $employee->designation?->name,
                         $employee->employeeType?->name,

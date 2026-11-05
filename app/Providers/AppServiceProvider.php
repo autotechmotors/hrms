@@ -2,7 +2,6 @@
 
 namespace App\Providers;
 
-use App\Models\Branch;
 use App\Models\Company;
 use App\Models\Department;
 use App\Models\Designation;
@@ -11,7 +10,6 @@ use App\Models\EmployeeCustomField;
 use App\Models\EmployeeType;
 use App\Models\EmploymentStatus;
 use App\Models\FinancialYear;
-use App\Models\Location;
 use App\Models\User;
 use App\Models\WorkCalendar;
 use App\Services\Workspace;
@@ -48,7 +46,6 @@ class AppServiceProvider extends ServiceProvider
 
             $workspace = app(Workspace::class);
             $view->with('workspaceCompany', $workspace->company(auth()->user()));
-            $view->with('workspaceBranch', $workspace->branch(auth()->user()));
         });
 
         Blade::if('permission', function (string $permission): bool {
@@ -70,8 +67,6 @@ class AppServiceProvider extends ServiceProvider
         });
 
         $this->bindVisible('company', Company::class);
-        $this->bindVisible('branch', Branch::class);
-        $this->bindVisible('location', Location::class);
         $this->bindVisible('department', Department::class);
         $this->bindVisible('designation', Designation::class);
         $this->bindVisible('employee_type', EmployeeType::class);

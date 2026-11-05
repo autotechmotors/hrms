@@ -3,6 +3,11 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#E10613">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <link rel="manifest" href="{{ asset('manifest.webmanifest') }}">
+    <link rel="apple-touch-icon" href="{{ asset('icons/apple-touch-icon.png') }}">
     <title>@yield('title', 'Dashboard') — {{ config('app.name') }}</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -10,9 +15,19 @@
     <link rel="stylesheet" href="{{ asset('assets/vendor/bootstrap/bootstrap.min.css') }}">
     <link rel="stylesheet" href="{{ asset('assets/vendor/select2/select2.min.css') }}">
     <link rel="stylesheet" href="{{ asset('assets/vendor/flatpickr/flatpickr.min.css') }}">
-    <link rel="stylesheet" href="{{ asset('assets/css/app.css') }}?v=42">
+    <link rel="stylesheet" href="{{ asset('assets/css/app.css') }}?v=68">
+    @stack('styles')
+    <script>
+        (function () {
+            var theme = localStorage.getItem('hrms-theme');
+            if (theme === 'dark' || theme === 'light') {
+                document.documentElement.setAttribute('data-theme', theme);
+            }
+        })();
+    </script>
 </head>
-<body>
+<body class="@yield('body-class')">
+    <div class="glass-wave" aria-hidden="true"></div>
     @php
         $flashToasts = collect([
             session('success') ? ['type' => 'ok', 'message' => session('success')] : null,
@@ -28,19 +43,31 @@
     <div class="mn">
         <header class="tb">
             <button class="ib" type="button" id="mb" aria-label="Toggle sidebar"><x-i name="menu" :size="18" /></button>
+            <a class="tb-logo" href="{{ route('dashboard') }}">
+                <img class="brand-icon" src="{{ asset('icons/icon-192.png') }}" alt="" width="42" height="42">
+                <span>{{ config('app.name') }}</span>
+            </a>
             <div class="crumb">{{ config('app.name') }} / <b>@yield('title', 'Dashboard')</b></div>
             <div class="sp"></div>
+            {{-- White / Dark stays available. Small screens hide this control in CSS; the buttons are not removed. --}}
+            <div class="theme-set" role="group" aria-label="Appearance">
+                <button type="button" data-theme-set="light">White</button>
+                <button type="button" data-theme-set="dark">Dark</button>
+            </div>
             <div class="sr dw" id="gs">
                 <span><x-i name="search" /></span>
                 <input id="q" placeholder="Search pages…" autocomplete="off">
                 <div class="dm" id="sres"></div>
             </div>
+            @php
+                $bits = preg_split('/\s+/', trim(auth()->user()->name)) ?: [];
+                $initials = strtoupper(collect($bits)->map(fn ($part) => mb_substr($part, 0, 1))->take(2)->join(''));
+                $hue = abs(crc32(auth()->user()->name)) % 360;
+            @endphp
+            <a class="tb-avatar" href="{{ route('profile.edit') }}" aria-label="Profile">
+                <span class="av" style="--h:{{ $hue }};width:42px;height:42px">{{ $initials }}</span>
+            </a>
             <div class="dw" id="usd">
-                @php
-                    $bits = preg_split('/\s+/', trim(auth()->user()->name)) ?: [];
-                    $initials = strtoupper(collect($bits)->map(fn ($part) => mb_substr($part, 0, 1))->take(2)->join(''));
-                    $hue = abs(crc32(auth()->user()->name)) % 360;
-                @endphp
                 <button class="ib" type="button" data-dd="usd" style="width:auto;gap:6px" aria-label="Profile">
                     <span class="av" style="--h:{{ $hue }};width:30px;height:30px">{{ $initials }}</span>
                 </button>
@@ -57,6 +84,13 @@
             @yield('content')
         </main>
     </div>
+    @php $phoneNav = \App\Support\Navigation::phoneBar(auth()->user()); @endphp
+    <nav class="tabbar" aria-label="Primary">
+        @foreach($phoneNav['primary'] as $link)
+            <a class="{{ request()->routeIs(...$link['active']) ? 'on' : '' }}" href="{{ route($link['route']) }}"><x-i :name="$link['icon']" :size="18" /><span>{{ $link['label'] }}</span></a>
+        @endforeach
+        <a class="{{ request()->routeIs('more', 'profile.edit') ? 'on' : '' }}" href="{{ route('more') }}"><x-i name="menu" :size="18" /><span>More</span></a>
+    </nav>
 
     <div class="toast-host" id="toastHost" aria-live="polite" aria-relevant="additions"></div>
     <script>window.__TOASTS__ = @json($flashToasts);</script>
@@ -80,7 +114,7 @@
     <script src="{{ asset('assets/vendor/select2/select2.min.js') }}"></script>
     <script src="{{ asset('assets/vendor/flatpickr/flatpickr.min.js') }}"></script>
     <script src="{{ asset('assets/vendor/bootstrap/bootstrap.bundle.min.js') }}"></script>
-    <script src="{{ asset('assets/js/app.js') }}?v=14"></script>
+    <script src="{{ asset('assets/js/app.js') }}?v=19"></script>
     @stack('scripts')
 </body>
 </html>

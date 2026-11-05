@@ -5,7 +5,6 @@ namespace App\Models;
 use App\Models\Concerns\AuditsChanges;
 use App\Models\Concerns\BelongsToCompany;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class WorkCalendar extends Model
@@ -14,7 +13,6 @@ class WorkCalendar extends Model
 
     protected $fillable = [
         'company_id',
-        'branch_id',
         'name',
         'effective_from',
         'effective_to',
@@ -28,11 +26,6 @@ class WorkCalendar extends Model
             'effective_to' => 'date',
             'is_active' => 'boolean',
         ];
-    }
-
-    public function branch(): BelongsTo
-    {
-        return $this->belongsTo(Branch::class);
     }
 
     public function days(): HasMany

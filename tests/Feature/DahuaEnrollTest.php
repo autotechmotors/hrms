@@ -95,8 +95,6 @@ class DahuaEnrollTest extends TestCase
             ->assertSee('Save sends the name and this photo to Gate');
 
         $this->put(route('employees.update', $employee), [
-            'company_id' => $org['company']->id,
-            'branch_id' => $org['branch']->id,
             'department_id' => $org['department']->id,
             'designation_id' => $org['designation']->id,
             'employee_type_id' => $org['type']->id,

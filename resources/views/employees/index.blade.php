@@ -21,25 +21,45 @@
 
     <section class="card el" id="employeeList" data-url="{{ route('employees.index') }}">
         <form class="tbar el-bar" id="employeeFilters" data-ajax-filter method="get" action="{{ route('employees.index') }}">
-            <div class="sr el-search">
-                <span><x-i name="search" /></span>
-                <input type="search" name="q" value="{{ request('q') }}" placeholder="Search name, code, email…" autocomplete="off">
+            <div class="el-find">
+                <div class="sr el-search">
+                    <span><x-i name="search" /></span>
+                    <input type="search" name="q" value="{{ request('q') }}" placeholder="Search name, code, email…" autocomplete="off">
+                </div>
+                <button class="btn el-filter-open" id="elFilterOpen" type="button" aria-controls="elFilterSheet" aria-expanded="false" aria-label="Filter">
+                    <x-i name="set" :size="18" />
+                </button>
             </div>
-            <select class="in" name="department_id" data-filter>
-                <option value="">All departments</option>
-                @foreach($departments as $department)
-                    <option value="{{ $department->id }}" @selected(request('department_id') == $department->id)>{{ $department->name }}</option>
+            <div class="el-sheet" id="elFilterSheet">
+                <div class="el-sheet-bar">
+                    <b>Filters</b>
+                    <button class="ib" id="elFilterClose" type="button" aria-label="Close filters">×</button>
+                </div>
+                <select class="in" name="department_id" data-filter form="employeeFilters">
+                    <option value="">All departments</option>
+                    @foreach($departments as $department)
+                        <option value="{{ $department->id }}" @selected(request('department_id') == $department->id)>{{ $department->name }}</option>
+                    @endforeach
+                </select>
+                <select class="in" name="employment_status_id" data-filter form="employeeFilters">
+                    <option value="">All statuses</option>
+                    @foreach($statuses as $status)
+                        <option value="{{ $status->id }}" @selected(request('employment_status_id') == $status->id)>{{ $status->name }}</option>
+                    @endforeach
+                </select>
+                <div class="el-sheet-actions">
+                    <button class="btn el-reset" type="button" id="employeeReset" title="Reset filters">
+                        <x-i name="reset" :size="14" />Reset
+                    </button>
+                    <button class="btn pr" id="elFilterApply" type="button">Apply</button>
+                </div>
+            </div>
+            <div class="el-sheet-bg" id="elFilterBg"></div>
+            <select class="in el-per" name="per_page" data-filter data-native aria-label="Employees per page">
+                @foreach ([12, 24, 48] as $size)
+                    <option value="{{ $size }}" @selected(($perPage ?? 12) === $size)>{{ $size }} / page</option>
                 @endforeach
             </select>
-            <select class="in" name="employment_status_id" data-filter>
-                <option value="">All statuses</option>
-                @foreach($statuses as $status)
-                    <option value="{{ $status->id }}" @selected(request('employment_status_id') == $status->id)>{{ $status->name }}</option>
-                @endforeach
-            </select>
-            <button class="btn el-reset" type="button" id="employeeReset" title="Reset filters">
-                <x-i name="reset" :size="14" />Reset
-            </button>
             <div class="sp"></div>
             <div class="el-toggle" role="group" aria-label="View mode">
                 <button class="ib on" type="button" data-view="list" title="List view" aria-pressed="true"><x-i name="list" :size="16" /></button>
@@ -67,11 +87,15 @@
     let timer = null;
     let req = null;
 
+    const phone = function () { return window.matchMedia('(max-width: 700px)').matches; };
+    let loadingMore = false;
+
     setView(localStorage.getItem('employees.view') || 'list');
 
     function setView(mode) {
+        if (phone()) mode = 'block';
         results.attr('data-view', mode);
-        localStorage.setItem('employees.view', mode);
+        if (!phone()) localStorage.setItem('employees.view', mode);
         form.find('[data-view]').each(function () {
             const on = $(this).data('view') === mode;
             $(this).toggleClass('on', on).attr('aria-pressed', on ? 'true' : 'false');
@@ -86,35 +110,62 @@
         return $.param(data);
     }
 
-    function load(extra) {
+    function load(extra, append) {
         if (req) req.abort();
-        results.addClass('is-loading');
+        if (!append) results.addClass('is-loading');
         const query = params(extra);
         const nextUrl = url + (query ? '?' + query : '');
 
-        req = $.ajax({
+        const current = req = $.ajax({
             url: nextUrl,
             method: 'GET',
             headers: { 'X-Requested-With': 'XMLHttpRequest' },
             data: { partial: 1 },
         }).done(function (html) {
-            results.html(html);
-            const body = results.find('.el-body');
-            const total = body.data('total');
+            const incoming = $('<div>').html(html);
+            const body = incoming.find('.el-body');
+            if (append) {
+                results.find('.el-blocks').append(body.find('.el-card'));
+                results.find('tbody').append(body.find('tbody').children());
+                const host = results.find('.el-body');
+                host.attr('data-page', body.attr('data-page'));
+                host.attr('data-last', body.attr('data-last'));
+                results.find('.el-pgn').replaceWith(body.find('.el-pgn'));
+            } else {
+                results.html(html);
+            }
+            const shown = results.find('.el-body');
+            const total = shown.attr('data-total');
             if (typeof total !== 'undefined') {
                 meta.text(total + ' people in your scope');
             }
-            if (window.history && window.history.replaceState) {
+            if (!append && window.history && window.history.replaceState) {
                 window.history.replaceState({}, '', nextUrl);
             }
             bindRowActions();
+            paintFilterMark();
+            window.requestAnimationFrame(maybeMore);
         }).fail(function (xhr) {
             if (xhr.statusText === 'abort') return;
             meta.text('Could not refresh the list');
         }).always(function () {
+            if (req !== current) return;
             results.removeClass('is-loading');
+            loadingMore = false;
             req = null;
         });
+    }
+
+    function maybeMore() {
+        if (!phone() || loadingMore || req) return;
+        const host = results.find('.el-body');
+        const page = Number(host.attr('data-page') || 1);
+        const last = Number(host.attr('data-last') || 1);
+        if (page >= last) return;
+        const edge = results.get(0).getBoundingClientRect().bottom;
+        if (edge > window.innerHeight + 360) return;
+        loadingMore = true;
+        load({ page: page + 1 }, true);
     }
 
     function applyBlockedState(row, blocked) {
@@ -203,18 +254,74 @@
     });
 
     form.on('change', '[data-filter]', function () {
+        if (phone()) return;
         load();
+    });
+
+    const sheet = document.getElementById('elFilterSheet');
+    const sheetBg = document.getElementById('elFilterBg');
+    const sheetAnchor = form.find('.el-per').get(0);
+    function placeSheet() {
+        if (!sheet || !sheetAnchor) return;
+        if (phone()) {
+            document.body.appendChild(sheetBg);
+            document.body.appendChild(sheet);
+        } else if (sheet.nextElementSibling !== sheetAnchor) {
+            sheetAnchor.parentNode.insertBefore(sheet, sheetAnchor);
+            sheetAnchor.parentNode.insertBefore(sheetBg, sheetAnchor);
+        }
+    }
+    placeSheet();
+    let sheetSnapshot = null;
+    function setSheet(open) {
+        if (!sheet) return;
+        if (open) {
+            sheetSnapshot = {
+                department_id: $(form.get(0).elements.department_id).val(),
+                employment_status_id: $(form.get(0).elements.employment_status_id).val(),
+            };
+        }
+        sheet.classList.toggle('open', open);
+        if (sheetBg) sheetBg.classList.toggle('open', open);
+        $('#elFilterOpen').attr('aria-expanded', open ? 'true' : 'false');
+    }
+    function restoreSheet() {
+        if (!sheetSnapshot) return;
+        $(form.get(0).elements.department_id).val(sheetSnapshot.department_id).trigger('change.select2');
+        $(form.get(0).elements.employment_status_id).val(sheetSnapshot.employment_status_id).trigger('change.select2');
+    }
+    $('#elFilterOpen').on('click', function () { setSheet(true); });
+    $('#elFilterClose, #elFilterBg').on('click', function () {
+        restoreSheet();
+        setSheet(false);
+    });
+    $('#elFilterApply').on('click', function () {
+        setSheet(false);
+        load();
+    });
+    function paintFilterMark() {
+        const active = String($(form.get(0).elements.department_id).val() || '') !== '' || String($(form.get(0).elements.employment_status_id).val() || '') !== '';
+        $('#elFilterOpen').toggleClass('on', active);
+    }
+    paintFilterMark();
+    window.addEventListener('scroll', maybeMore, { passive: true });
+    window.requestAnimationFrame(maybeMore);
+    window.addEventListener('resize', function () {
+        placeSheet();
+        setView(localStorage.getItem('employees.view') || 'list');
     });
 
     $('#employeeReset').on('click', function () {
         form.find('[name=q]').val('');
-        form.find('[data-filter]').each(function () {
+        $(form.get(0).elements).filter('[data-filter]').each(function () {
             const select = $(this);
-            select.val('');
+            select.val(select.attr('name') === 'per_page' ? '12' : '');
             if (select.data('select2')) {
                 select.trigger('change.select2');
             }
         });
+        sheetSnapshot = null;
+        setSheet(false);
         load();
     });
 
@@ -279,29 +386,38 @@
         });
         if (!pairs.length) return;
         const kind = button.attr('data-kind');
-        let chosen = pairs[0];
+        const run = function (target) {
+            if (!target) return;
+            button.addClass('wait');
+            $.ajax({
+                url: button.attr('data-remove') + '/' + target.id,
+                method: 'DELETE',
+                timeout: 60000,
+                headers: { 'X-CSRF-TOKEN': csrf }
+            }).done(function (data) {
+                paintCounts(button.closest('.ac-cred'), data.counts || {}, data.slots || null);
+                if (window.toast) window.toast(data.message || 'Removed from the terminal.');
+            }).fail(function (xhr) {
+                const message = xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'The terminal could not remove it.';
+                if (window.toast) window.toast(message, 'er');
+            }).always(function () {
+                button.removeClass('wait');
+            });
+        };
+
         if (pairs.length > 1) {
             const answer = window.prompt('Remove which ' + kind + '? ' + pairs.map(function (pair) { return pair.slot; }).join(', '), pairs[pairs.length - 1].slot);
             if (!answer) return;
-            chosen = pairs.find(function (pair) { return pair.slot === answer; });
-            if (!chosen) return;
-        } else if (!window.confirm('Remove this ' + kind + ' from Laravel and the face terminal?')) {
+            run(pairs.find(function (pair) { return pair.slot === answer; }));
             return;
         }
-        button.addClass('wait');
-        $.ajax({
-            url: button.attr('data-remove') + '/' + chosen.id,
-            method: 'DELETE',
-            timeout: 60000,
-            headers: { 'X-CSRF-TOKEN': csrf }
-        }).done(function (data) {
-            paintCounts(button.closest('.ac-cred'), data.counts || {}, data.slots || null);
-            if (window.toast) window.toast(data.message || 'Removed from the terminal.');
-        }).fail(function (xhr) {
-            const message = xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'The terminal could not remove it.';
-            if (window.toast) window.toast(message, 'er');
-        }).always(function () {
-            button.removeClass('wait');
+
+        const label = kind === 'finger' ? 'fingerprint' : kind;
+        window.askConfirm(
+            'Remove this ' + label + ' from the employee record and the face terminal? This cannot be undone.',
+            { label: 'Remove', danger: true }
+        ).then(function (ok) {
+            if (ok) run(pairs[0]);
         });
     }
 

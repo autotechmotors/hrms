@@ -3,6 +3,7 @@
 @section('content')
     <div class="ph">
         <div>
+            <x-back :href="route('employees.index')" label="Employees" />
             <h1>{{ $employee ? 'Edit employee' : 'New employee' }}</h1>
             <p>{{ $employee ? $employee->full_name.' · '.$employee->employee_code : 'Add someone to your company roster' }}</p>
         </div>
@@ -15,7 +16,6 @@
     <form id="employeeForm" class="ef" method="post" enctype="multipart/form-data" action="{{ $employee ? route('employees.update', $employee) : route('employees.store') }}">
         @csrf
         @if($employee) @method('put') @endif
-        @include('partials.workspace-ids', ['companyId' => $employee->company_id ?? null, 'branchId' => $employee->branch_id ?? null, 'withBranch' => true])
 
         <div class="ef-grid">
             <div class="ef-main">
@@ -62,6 +62,24 @@
                         <div class="g c2">
                             <x-text-field name="email" label="Email" type="email" :value="$employee->email ?? ''" />
                             <x-text-field name="phone" label="Phone" :value="$employee->phone ?? ''" />
+                            <x-text-field name="alternate_phone" label="Alternate phone" :value="$employee->alternate_phone ?? ''" />
+                        </div>
+                    </div>
+                </section>
+
+                <section class="card ef-sec">
+                    <header>
+                        <div>
+                            <h3>Address</h3>
+                            <p>Where they live</p>
+                        </div>
+                    </header>
+                    <div class="cb">
+                        <div class="g c2">
+                            <x-text-field name="address" label="Address" :value="$employee->address ?? ''" />
+                            <x-text-field name="city" label="City" :value="$employee->city ?? ''" />
+                            <x-text-field name="state" label="State" :value="$employee->state ?? ''" />
+                            <x-text-field name="postal_code" label="Postal code" :value="$employee->postal_code ?? ''" />
                         </div>
                     </div>
                 </section>
@@ -75,22 +93,16 @@
                     </header>
                     <div class="cb">
                         <div class="g c3">
-                            <x-select-field name="location_id" label="Location" data-depends-on="company">
-                                <option value="">Select</option>
-                                @foreach($locations as $location)
-                                    <option value="{{ $location->id }}" data-company="{{ $location->company_id }}" @selected(old('location_id', $employee->location_id ?? '') == $location->id)>{{ $location->name }}</option>
-                                @endforeach
-                            </x-select-field>
-                            <x-select-field name="department_id" label="Department" required data-depends-on="company">
+                            <x-select-field name="department_id" label="Department" required>
                                 <option value="">Select</option>
                                 @foreach($departments as $department)
-                                    <option value="{{ $department->id }}" data-company="{{ $department->company_id }}" @selected(old('department_id', $employee->department_id ?? '') == $department->id)>{{ $department->name }}</option>
+                                    <option value="{{ $department->id }}" @selected(old('department_id', $employee->department_id ?? '') == $department->id)>{{ $department->name }}</option>
                                 @endforeach
                             </x-select-field>
-                            <x-select-field name="designation_id" label="Designation" required data-depends-on="company">
+                            <x-select-field name="designation_id" label="Designation" required>
                                 <option value="">Select</option>
                                 @foreach($designations as $designation)
-                                    <option value="{{ $designation->id }}" data-company="{{ $designation->company_id }}" data-category="{{ $designation->employeeType?->name }}" @selected(old('designation_id', $employee->designation_id ?? '') == $designation->id)>{{ $designation->name }}</option>
+                                    <option value="{{ $designation->id }}" data-category="{{ $designation->employeeType?->name }}" @selected(old('designation_id', $employee->designation_id ?? '') == $designation->id)>{{ $designation->name }}</option>
                                 @endforeach
                             </x-select-field>
                             <div class="mb-3">
@@ -98,18 +110,27 @@
                                 <input class="form-control" id="designationCategory" value="{{ $employee?->employeeType?->name }}" readonly>
                                 <div class="form-text">Inherited from the designation</div>
                             </div>
-                            <x-select-field name="employment_status_id" label="Status" required data-depends-on="company">
+                            <x-select-field name="employment_status_id" label="Status" required>
                                 <option value="">Select</option>
                                 @foreach($statuses as $status)
-                                    <option value="{{ $status->id }}" data-company="{{ $status->company_id }}" @selected(old('employment_status_id', $employee->employment_status_id ?? '') == $status->id)>{{ $status->name }}</option>
+                                    <option value="{{ $status->id }}" @selected(old('employment_status_id', $employee->employment_status_id ?? '') == $status->id)>{{ $status->name }}</option>
                                 @endforeach
                             </x-select-field>
-                            <x-select-field name="reporting_manager_id" label="Reporting manager" data-depends-on="company">
-                                <option value="">None</option>
-                                @foreach($managers as $manager)
-                                    <option value="{{ $manager->id }}" data-company="{{ $manager->company_id }}" @selected(old('reporting_manager_id', $employee->reporting_manager_id ?? '') == $manager->id)>{{ $manager->full_name }} ({{ $manager->employee_code }})</option>
-                                @endforeach
-                            </x-select-field>
+                            <div>
+                                <x-select-field name="reporting_manager_id" label="Reporting manager / Parent" :required="$needsReportingManager ?? false">
+                                    <option value="">{{ ($needsReportingManager ?? false) ? 'Select parent' : 'None' }}</option>
+                                    @foreach($managers as $manager)
+                                        <option value="{{ $manager->id }}" @selected(old('reporting_manager_id', $employee->reporting_manager_id ?? '') == $manager->id)>{{ $manager->full_name }} ({{ $manager->employee_code }})</option>
+                                    @endforeach
+                                </x-select-field>
+                                <div class="form-text">
+                                    @if($needsReportingManager ?? false)
+                                        This person’s role has a parent — reporting manager is required.
+                                    @else
+                                        Only people whose role has children appear in this list.
+                                    @endif
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </section>
@@ -124,6 +145,7 @@
                     <div class="cb">
                         <div class="g c3">
                             <x-text-field name="joining_date" label="Joining date" type="date" :value="optional($employee?->joining_date)->toDateString()" required />
+                            <x-text-field name="confirmation_date" label="Confirmation date" type="date" :value="optional($employee?->confirmation_date)->toDateString()" />
                             <x-text-field name="probation_days" label="Probation days" type="number" :value="$employee->probation_days ?? ''" />
                             <x-text-field name="notice_period_days" label="Notice period days" type="number" :value="$employee->notice_period_days ?? ''" />
                         </div>
@@ -150,7 +172,7 @@
                             <div class="g c2">
                                 @foreach($customFields as $field)
                                     @php $current = optional($employee?->customValues?->firstWhere('employee_custom_field_id', $field->id))->value; @endphp
-                                    <div data-company-panel="{{ $field->company_id }}">
+                                    <div>
                                         @if($field->field_type === 'select')
                                             <x-select-field name="field_values[{{ $field->id }}]" :label="$field->name" :required="$field->is_required">
                                                 <option value="">Select</option>
@@ -178,18 +200,22 @@
                         </div>
                     </header>
                     <div class="cb">
-                        @if($employee?->photograph_path)
-                            <button type="button" class="att-zoom ef-thumb" data-photo="{{ route('employees.photo', $employee) }}" title="View photo">
-                                <img src="{{ route('employees.photo', $employee) }}" alt="{{ $employee->full_name }}">
-                            </button>
-                        @else
-                            <p class="ed-empty">No photo uploaded yet.</p>
-                        @endif
-                        <x-text-field name="photograph" label="Upload photo" type="file" accept="image/jpeg,image/png,image/webp" />
+                        <div class="ef-photo-row">
+                            @if($employee?->photograph_path)
+                                <button type="button" class="att-zoom ef-thumb" data-photo="{{ route('employees.photo', $employee) }}" title="View photo">
+                                    <img src="{{ route('employees.photo', $employee) }}" alt="{{ $employee->full_name }}">
+                                </button>
+                            @else
+                                <p class="ed-empty">No photo uploaded yet.</p>
+                            @endif
+                            <div class="ef-photo-up">
+                                <x-text-field name="photograph" label="Upload photo" type="file" accept="image/jpeg,image/png,image/webp" />
+                            </div>
+                        </div>
                         @if($employee && $terminals->isNotEmpty())
-                            <p class="ef-hint">Save sends the name and this photo to {{ $terminals->pluck('name')->join(', ') }}.</p>
+                            <p class="ef-photo-note">Saving also sends this photo to {{ $terminals->pluck('name')->join(', ') }}.</p>
                         @elseif($employee)
-                            <p class="ef-hint">Save sends the name and this photo to the company terminal.</p>
+                            <p class="ef-photo-note">Saving also sends this photo to the company terminal.</p>
                         @endif
                     </div>
                 </section>

@@ -14,8 +14,6 @@ class PermissionCatalog
     {
         $modules = [
             'companies' => 'Companies',
-            'branches' => 'Branches',
-            'locations' => 'Locations',
             'departments' => 'Departments',
             'designations' => 'Designations',
             'employee_types' => 'Employee types',
@@ -58,12 +56,22 @@ class PermissionCatalog
             'employee_exits' => ['view' => 'View', 'create' => 'Create', 'edit' => 'Edit'],
             'bank_accounts' => ['view' => 'View', 'manage' => 'Manage'],
             'devices' => ['manage' => 'Manage devices'],
+            'attendance' => ['view' => 'View attendance', 'edit' => 'Edit attendance'],
+            'shifts' => ['view' => 'View shifts', 'manage' => 'Manage shifts'],
+            'leave' => ['view' => 'View leave', 'decide' => 'Decide leave'],
+            'gate_passes' => ['view' => 'View gate passes', 'create' => 'Create gate passes', 'decide' => 'Decide gate passes', 'manage' => 'Manage gate pass rules'],
+            'holidays' => ['view' => 'View holidays', 'manage' => 'Manage holidays'],
+            'salary' => ['view' => 'View salary', 'manage' => 'Manage salary'],
+            'advances' => ['view' => 'View advances', 'manage' => 'Manage advances'],
             'payroll' => [
+                'view' => 'View payroll',
                 'process' => 'Process payroll',
                 'approve' => 'Approve payroll',
                 'lock' => 'Lock payroll',
                 'reopen' => 'Reopen payroll',
             ],
+            'reports' => ['view' => 'View reports'],
+            'bank' => ['view' => 'View bank transfers'],
             'payments' => ['release' => 'Release payments'],
         ];
 

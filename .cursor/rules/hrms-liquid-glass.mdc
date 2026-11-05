@@ -1,0 +1,31 @@
+---
+description: HRMS liquid glass, liquid-glass, iOS liquid glass, frosted glass, PWA, iPhone layout, safe-area, and app icon. Module notes use one file name per topic.
+alwaysApply: true
+---
+
+# HRMS liquid glass
+
+Before a layout, CSS, PWA, nav, attendance, or employee UI edit, read `docs/prompts/HRMS-SYSTEM.md` and the one module file for that screen. The index is `docs/README.md`.
+
+## Future notes
+
+Create a new `.md` note. Do not append a second topic to a file that already exists.
+
+| Kind | Path | File name |
+|---|---|---|
+| System prompt | `docs/prompts/` | `HRMS-<TOPIC>.md` |
+| Module note | `docs/<module>/` | `<TOPIC>.md` |
+| Icon | `docs/brand/` | `app-icon.png` only |
+
+Module folders: `auth`, `roles`, `employees`, `attendance`, `shifts`, `leave`, `holidays`, `payroll`, `salary`, `advances`, `devices`, `reports`, `bank`, `users`, `organization`.
+
+Add the new file to the index table in `docs/README.md` in the same change. A new product module gets a new folder, then a row in that index.
+
+## Do not break
+
+- Blade, Bootstrap, jQuery, Select2, Flatpickr. No Vite rewrite. Filters, saves, and lists stay on the page (`docs/prompts/HRMS-LIVE-UI.md`).
+- Auth, MFA, `AccessScope`, attendance math, payroll math, Dahua, Hikvision, and ezapi routes.
+- Menus follow `docs/roles/NAV-PERMISSIONS.md`. "All employees" means employees that user may already see.
+- Mark: `docs/brand/app-icon.png`. Accent follows that red. Status colours stay green, amber, and red.
+- Liquid glass is chrome only, with a solid fallback for `prefers-reduced-transparency`.
+- PWA caches the app shell only, never employee, payroll, or device payloads.

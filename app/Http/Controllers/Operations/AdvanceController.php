@@ -15,19 +15,19 @@ class AdvanceController extends Controller
 
     public function index(Request $request): View
     {
-        $this->authorizeView();
+        $this->authorizeAny('advances.view', 'payroll.process');
         $employeeIds = $this->activeEmployees()->pluck('id');
 
         return view('operations.advances.index', [
             'advances' => Advance::query()->whereIn('employee_id', $employeeIds)->with('employee')->latest()->paginate(20),
             'employees' => $this->activeEmployees()->get(),
-            'canEdit' => $request->user()->hasPermission('employees.edit') || $request->user()->hasPermission('payroll.process'),
+            'canEdit' => $request->user()->hasPermission('advances.manage') || $request->user()->hasPermission('payroll.process'),
         ]);
     }
 
     public function store(Request $request): RedirectResponse
     {
-        abort_unless($request->user()->hasPermission('employees.edit') || $request->user()->hasPermission('payroll.process'), 403);
+        abort_unless($request->user()->hasPermission('advances.manage') || $request->user()->hasPermission('payroll.process'), 403);
         $data = $request->validate([
             'employee_id' => ['required', 'integer'],
             'title' => ['required', 'string', 'max:120'],
@@ -51,7 +51,7 @@ class AdvanceController extends Controller
 
     public function close(Advance $advance): RedirectResponse
     {
-        abort_unless(request()->user()->hasPermission('employees.edit') || request()->user()->hasPermission('payroll.process'), 403);
+        abort_unless(request()->user()->hasPermission('advances.manage') || request()->user()->hasPermission('payroll.process'), 403);
         $advance->load('employee');
         abort_unless($advance->employee && (int) $advance->employee->company_id === $this->companyId(), 404);
         $advance->update(['status' => 'closed']);

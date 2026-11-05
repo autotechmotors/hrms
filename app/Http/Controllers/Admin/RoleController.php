@@ -40,6 +40,9 @@ class RoleController extends Controller
             'description' => $request->input('description'),
             'is_system' => false,
             'requires_mfa' => $request->boolean('requires_mfa'),
+            'has_parent' => $request->boolean('has_parent'),
+            'has_child' => $request->boolean('has_child'),
+            'is_active' => $request->boolean('is_active'),
         ]);
         $role->permissions()->sync($request->input('permissions', []));
 
@@ -63,6 +66,9 @@ class RoleController extends Controller
             'slug' => $role->is_system ? $role->slug : Str::slug($request->string('slug')->toString()),
             'description' => $request->input('description'),
             'requires_mfa' => $request->boolean('requires_mfa'),
+            'has_parent' => $request->boolean('has_parent'),
+            'has_child' => $request->boolean('has_child'),
+            'is_active' => $role->slug === 'super-admin' ? true : $request->boolean('is_active'),
         ]);
 
         if ($role->slug !== 'super-admin') {

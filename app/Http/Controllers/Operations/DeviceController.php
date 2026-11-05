@@ -22,7 +22,7 @@ class DeviceController extends Controller
 
     public function index(Request $request): View
     {
-        $this->authorizeView();
+        $this->authorizeDevices();
 
         $devices = Device::query()->visibleTo($request->user())->where('company_id', $this->companyId())->withCount('users')->orderBy('name')->get();
 
@@ -30,7 +30,7 @@ class DeviceController extends Controller
 
         return view('operations.devices.index', [
             'devices' => $devices,
-            'canEdit' => $request->user()->hasPermission('devices.manage') || $request->user()->hasPermission('employees.edit'),
+            'canEdit' => $request->user()->hasPermission('devices.manage'),
             'listenerOpen' => app(DahuaPush::class)->listenerOpen(),
             'enrolledCount' => (int) $devices->sum('users_count'),
             'localPc' => $pc->status(),
@@ -83,7 +83,7 @@ class DeviceController extends Controller
 
     public function show(Request $request, Device $device): View
     {
-        $this->authorizeView();
+        $this->authorizeDevices();
         abort_unless((int) $device->company_id === $this->companyId(), 404);
 
         $push = app(DahuaPush::class);
@@ -93,7 +93,7 @@ class DeviceController extends Controller
             'device' => $device->load(['users.employee', 'terminalUsers.employee']),
             'imported' => $imported,
             'employees' => $this->activeEmployees()->orderBy('employee_code')->get(),
-            'canEdit' => $request->user()->hasPermission('devices.manage') || $request->user()->hasPermission('employees.edit'),
+            'canEdit' => $request->user()->hasPermission('devices.manage'),
             'pushHost' => config('dahua.host'),
             'pushPort' => config('dahua.port'),
             'listenerOpen' => $push->listenerOpen(),

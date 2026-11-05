@@ -23,6 +23,21 @@ class FoundationAccessTest extends TestCase
         $this->get('/')->assertRedirect('/login');
     }
 
+    public function test_manager_cannot_open_payroll_or_devices(): void
+    {
+        $org = $this->makeCompany('NAV');
+        $user = $this->makeUser('manager', $org['company']);
+
+        $this->actingAsScoped($user)->get(route('payroll.index'))->assertForbidden();
+        $this->actingAsScoped($user)->get(route('devices.index'))->assertForbidden();
+        $this->actingAsScoped($user)->get(route('attendance.index'))
+            ->assertOk()
+            ->assertSee('Attendance')
+            ->assertSee('Phone')
+            ->assertDontSee('Payroll')
+            ->assertDontSee('Dahua Devices');
+    }
+
     public function test_manager_cannot_open_company_master(): void
     {
         $user = $this->makeUser('manager');
@@ -62,8 +77,6 @@ class FoundationAccessTest extends TestCase
         $org['company']->update(['name' => 'Autotech']);
         $hr = $this->makeUser('hr-admin', $org['company']);
         $payload = [
-            'company_id' => $org['company']->id,
-            'branch_id' => $org['branch']->id,
             'department_id' => $org['department']->id,
             'designation_id' => $org['designation']->id,
             'employee_type_id' => $org['type']->id,

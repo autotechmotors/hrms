@@ -5,12 +5,10 @@ namespace App\Http\Controllers\Organization;
 use App\Http\Controllers\Concerns\GuardsCompany;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\WorkCalendarRequest;
-use App\Models\Branch;
 use App\Models\WorkCalendar;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class WorkCalendarController extends Controller
@@ -20,7 +18,7 @@ class WorkCalendarController extends Controller
     public function index(Request $request): View
     {
         $this->authorize('viewAny', WorkCalendar::class);
-        $calendars = WorkCalendar::query()->with(['company', 'branch'])->visibleTo($request->user())->orderByDesc('effective_from')->paginate(15);
+        $calendars = WorkCalendar::query()->with('company')->visibleTo($request->user())->orderByDesc('effective_from')->paginate(15);
 
         return view('organization.calendars.index', compact('calendars'));
     }
@@ -32,7 +30,6 @@ class WorkCalendarController extends Controller
         return view('organization.calendars.form', [
             'calendar' => null,
             'companies' => $this->visibleCompanies(),
-            'branches' => Branch::query()->visibleTo(request()->user())->orderBy('name')->get(),
             'workingDays' => [1, 2, 3, 4, 5],
         ]);
     }
@@ -52,7 +49,6 @@ class WorkCalendarController extends Controller
         return view('organization.calendars.form', [
             'calendar' => $workCalendar->load('days'),
             'companies' => $this->visibleCompanies(),
-            'branches' => Branch::query()->visibleTo(request()->user())->orderBy('name')->get(),
             'workingDays' => $workCalendar->days->where('is_working', true)->pluck('weekday')->all(),
         ]);
     }
@@ -76,18 +72,10 @@ class WorkCalendarController extends Controller
     private function persist(WorkCalendar $calendar, WorkCalendarRequest $request): void
     {
         $this->guardCompany((int) $request->integer('company_id'));
-        $branchId = $request->input('branch_id');
-        if ($branchId) {
-            $branch = Branch::query()->findOrFail($branchId);
-            if ((int) $branch->company_id !== (int) $request->integer('company_id')) {
-                throw ValidationException::withMessages(['branch_id' => 'Select a branch from the chosen company.']);
-            }
-        }
 
-        DB::transaction(function () use ($calendar, $request, $branchId): void {
+        DB::transaction(function () use ($calendar, $request): void {
             $calendar->fill([
                 'company_id' => $request->integer('company_id'),
-                'branch_id' => $branchId ?: null,
                 'name' => $request->string('name')->toString(),
                 'effective_from' => $request->date('effective_from'),
                 'effective_to' => $request->input('effective_to') ?: null,

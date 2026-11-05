@@ -1,7 +1,12 @@
 @extends('layouts.app')
 @section('title', $account ? 'Edit user' : 'New user')
 @section('content')
-    <h1 class="h3 mb-3">{{ $account ? 'Edit user' : 'New user' }}</h1>
+    <div class="ph">
+        <div>
+            <x-back :href="route('users.index')" label="Users" />
+            <h1>{{ $account ? 'Edit user' : 'New user' }}</h1>
+        </div>
+    </div>
     <form class="card card-body" method="post" action="{{ $account ? route('users.update', $account) : route('users.store') }}">
         @csrf @if($account) @method('put') @endif
         <x-text-field name="name" label="Name" :value="$account->name ?? ''" required />
@@ -22,14 +27,14 @@
         </div>
         <div class="mb-3">
             <div class="form-label">Data scope</div>
-            <p class="small text-secondary">Scopes add access. A company scope includes that company. A branch scope does not include the rest of the company. Super Admin ignores scopes.</p>
+            <p class="small text-secondary">Scopes add access. A company scope includes that company. A department scope includes that department. Super Admin ignores scopes.</p>
             @for($i = 0; $i < 3; $i++)
                 @php $existing = $account ? ($account->scopes[$i] ?? null) : null; @endphp
                 <div class="row g-2 mb-2">
                     <div class="col-md-4">
                         <select class="form-select" name="scopes[{{ $i }}][scope_type]">
                             <option value="">None</option>
-                            @foreach(['company' => 'Company', 'branch' => 'Branch', 'department' => 'Department', 'employee' => 'Employee'] as $value => $label)
+                            @foreach(['company' => 'Company', 'department' => 'Department', 'employee' => 'Employee'] as $value => $label)
                                 <option value="{{ $value }}" @selected(old('scopes.'.$i.'.scope_type', $existing->scope_type ?? '') === $value)>{{ $label }}</option>
                             @endforeach
                         </select>

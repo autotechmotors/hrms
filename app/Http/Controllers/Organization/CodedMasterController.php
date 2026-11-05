@@ -67,6 +67,8 @@ abstract class CodedMasterController extends Controller
             'companies' => $this->visibleCompanies(),
             'title' => 'New '.$this->title(),
             'action' => route($this->routeName().'.store'),
+            'listUrl' => route($this->routeName().'.index'),
+            'listLabel' => \Illuminate\Support\Str::plural($this->title()),
             'showExit' => $this->hasExitFlag(),
         ] + $this->formExtras(null));
     }
@@ -92,6 +94,8 @@ abstract class CodedMasterController extends Controller
             'companies' => $this->visibleCompanies(),
             'title' => 'Edit '.$record->name,
             'action' => route($this->routeName().'.update', $record),
+            'listUrl' => route($this->routeName().'.index'),
+            'listLabel' => \Illuminate\Support\Str::plural($this->title()),
             'showExit' => $this->hasExitFlag(),
         ] + $this->formExtras($record));
     }

@@ -2,7 +2,6 @@
 
 namespace App\Services\Devices;
 
-use App\Models\Branch;
 use App\Models\Department;
 use App\Models\Designation;
 use App\Models\Device;
@@ -37,12 +36,11 @@ class DevicePeople
             return null;
         }
 
-        $branch = Branch::query()->where('company_id', $device->company_id)->where('is_active', true)->orderBy('id')->first();
         $department = Department::query()->where('company_id', $device->company_id)->where('is_active', true)->orderBy('id')->first();
         $designation = Designation::query()->where('company_id', $device->company_id)->where('is_active', true)->orderBy('id')->first();
         $type = EmployeeType::query()->where('company_id', $device->company_id)->where('is_active', true)->orderBy('id')->first();
         $status = EmploymentStatus::query()->where('company_id', $device->company_id)->where('is_exit', false)->orderBy('id')->first();
-        if (! $branch || ! $department || ! $designation || ! $type || ! $status) {
+        if (! $department || ! $designation || ! $type || ! $status) {
             return null;
         }
 
@@ -50,7 +48,6 @@ class DevicePeople
 
         return Employee::query()->create([
             'company_id' => $device->company_id,
-            'branch_id' => $branch->id,
             'department_id' => $department->id,
             'designation_id' => $designation->id,
             'employee_type_id' => $type->id,

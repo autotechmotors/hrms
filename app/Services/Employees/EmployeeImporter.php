@@ -2,7 +2,6 @@
 
 namespace App\Services\Employees;
 
-use App\Models\Branch;
 use App\Models\Department;
 use App\Models\Designation;
 use App\Models\Employee;
@@ -26,7 +25,6 @@ class EmployeeImporter
         'email',
         'phone',
         'joining_date',
-        'branch_code',
         'department_code',
         'designation_code',
         'employee_type_code',
@@ -72,7 +70,6 @@ class EmployeeImporter
             $read = fn (string $column) => trim((string) ($row[$indexes[$column]] ?? ''));
             $joining = $this->normalizeDate($row[$indexes['joining_date']] ?? null);
 
-            $branch = Branch::query()->where('company_id', $companyId)->where('code', strtoupper($read('branch_code')))->first();
             $department = Department::query()->where('company_id', $companyId)->where('code', strtoupper($read('department_code')))->first();
             $designation = Designation::query()->where('company_id', $companyId)->where('code', strtoupper($read('designation_code')))->first();
             $typeFromSheet = $read('employee_type_code') === ''
@@ -86,9 +83,6 @@ class EmployeeImporter
             $rowErrors = [];
             if ($read('first_name') === '' || $read('last_name') === '') {
                 $rowErrors[] = 'first and last name are required';
-            }
-            if (! $branch) {
-                $rowErrors[] = 'branch code was not found';
             }
             if (! $department) {
                 $rowErrors[] = 'department code was not found';
@@ -135,7 +129,6 @@ class EmployeeImporter
                 'email' => $read('email'),
                 'phone' => $read('phone'),
                 'joining_date' => $joining,
-                'branch_id' => $branch->id,
                 'department_id' => $department->id,
                 'designation_id' => $designation->id,
                 'employee_type_id' => $type->id,

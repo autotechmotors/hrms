@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Models\Employee;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -15,14 +16,15 @@ class EmployeeRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'company_id' => ['required', 'integer', 'exists:companies,id'],
-            'branch_id' => ['required', 'integer', 'exists:branches,id'],
-            'location_id' => ['nullable', 'integer', 'exists:locations,id'],
             'department_id' => ['required', 'integer', 'exists:departments,id'],
             'designation_id' => ['required', 'integer', 'exists:designations,id'],
             'employee_type_id' => ['nullable', 'integer', 'exists:employee_types,id'],
             'employment_status_id' => ['required', 'integer', 'exists:employment_statuses,id'],
-            'reporting_manager_id' => ['nullable', 'integer', 'exists:employees,id'],
+            'reporting_manager_id' => [
+                $this->employeeNeedsParent() ? 'required' : 'nullable',
+                'integer',
+                'exists:employees,id',
+            ],
             'first_name' => ['required', 'string', 'max:80'],
             'middle_name' => ['nullable', 'string', 'max:80'],
             'last_name' => ['required', 'string', 'max:80'],
@@ -46,5 +48,12 @@ class EmployeeRequest extends FormRequest
             'field_values' => ['nullable', 'array'],
             'field_values.*' => ['nullable', 'string', 'max:1000'],
         ];
+    }
+
+    private function employeeNeedsParent(): bool
+    {
+        $employee = $this->route('employee');
+
+        return $employee instanceof Employee && $employee->needsReportingManager();
     }
 }

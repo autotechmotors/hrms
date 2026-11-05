@@ -30,11 +30,11 @@ class AttendanceController extends Controller
 
     public function index(Request $request): View
     {
-        $this->authorizeView();
+        $this->authorizeAny('attendance.view');
         $this->pull();
         $date = Carbon::parse($request->input('date', now()->toDateString()))->startOfDay();
         $companyId = $this->companyId();
-        $canEdit = $request->user()->hasPermission('employees.edit');
+        $canEdit = $request->user()->hasPermission('attendance.edit');
         $status = trim((string) $request->input('status', ''));
 
         $filtered = $this->activeEmployees()->with(['department', 'designation']);
@@ -83,7 +83,7 @@ class AttendanceController extends Controller
 
     public function updateRule(Request $request): RedirectResponse
     {
-        $this->authorizePeople();
+        $this->authorizeAny('attendance.edit');
         $data = $request->validate([
             'grace_minutes' => ['required', 'integer', 'min:0', 'max:240'],
             'half_day_minutes' => ['nullable', 'integer', 'min:1', 'max:1440'],
@@ -108,7 +108,7 @@ class AttendanceController extends Controller
 
     public function punch(Request $request, AttendanceCalculator $calculator): RedirectResponse
     {
-        $this->authorizePeople();
+        $this->authorizeAny('attendance.edit');
         $data = $request->validate([
             'employee_id' => ['required', 'integer'],
             'work_date' => ['required', 'date'],
@@ -143,7 +143,7 @@ class AttendanceController extends Controller
 
     public function updateDay(Request $request, Employee $employee, AttendanceCalculator $calculator): RedirectResponse
     {
-        $this->authorizePeople();
+        $this->authorizeAny('attendance.edit');
         $this->guardEmployee($employee);
         $data = $request->validate([
             'work_date' => ['required', 'date'],
@@ -166,7 +166,7 @@ class AttendanceController extends Controller
 
     public function destroyDay(Request $request, Employee $employee, AttendanceCalculator $calculator): RedirectResponse
     {
-        $this->authorizePeople();
+        $this->authorizeAny('attendance.edit');
         $this->guardEmployee($employee);
         $data = $request->validate([
             'work_date' => ['required', 'date'],
@@ -180,7 +180,7 @@ class AttendanceController extends Controller
 
     public function recalculate(Request $request, AttendanceCalculator $calculator): RedirectResponse
     {
-        $this->authorizePeople();
+        $this->authorizeAny('attendance.edit');
         $data = $request->validate(['work_date' => ['required', 'date']]);
         $date = Carbon::parse($data['work_date'])->startOfDay();
         $this->activeEmployees()->each(fn ($employee) => $calculator->recalculate($employee, $date));
@@ -190,7 +190,7 @@ class AttendanceController extends Controller
 
     public function show(Request $request, Employee $employee): View
     {
-        $this->authorizeView();
+        $this->authorizeAny('attendance.view');
         $this->guardEmployee($employee);
         $this->pull();
         $selected = Carbon::parse($request->input('date', now()->toDateString()))->startOfDay();
@@ -202,13 +202,13 @@ class AttendanceController extends Controller
             'selected' => $selected->toDateString(),
             'payload' => $this->monthPayload($employee, $selected->copy()->startOfMonth()),
             'credentials' => $employee->credentials,
-            'canEdit' => $request->user()->hasPermission('employees.edit'),
+            'canEdit' => $request->user()->hasPermission('attendance.edit'),
         ]);
     }
 
     public function feed(Request $request): JsonResponse
     {
-        $this->authorizeView();
+        $this->authorizeAny('attendance.view');
         $this->pull();
         $date = Carbon::parse($request->input('date', now()->toDateString()))->startOfDay();
         $filtered = $this->activeEmployees()->with(['department', 'designation']);
@@ -262,7 +262,7 @@ class AttendanceController extends Controller
 
     public function employeeFeed(Request $request, Employee $employee): JsonResponse
     {
-        $this->authorizeView();
+        $this->authorizeAny('attendance.view');
         $this->guardEmployee($employee);
         $this->pull();
         $month = $request->filled('month')
@@ -284,7 +284,7 @@ class AttendanceController extends Controller
 
     public function punchPhoto(AttendancePunch $punch): Response
     {
-        $this->authorizeView();
+        $this->authorizeAny('attendance.view');
         $punch->loadMissing('employee');
         $this->guardEmployee($punch->employee);
 
@@ -293,7 +293,7 @@ class AttendanceController extends Controller
 
     public function credentialPhoto(EmployeeCredential $credential): Response
     {
-        $this->authorizeView();
+        $this->authorizeAny('attendance.view');
         $credential->loadMissing('employee');
         $this->guardEmployee($credential->employee);
 

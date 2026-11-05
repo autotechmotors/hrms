@@ -15,8 +15,6 @@ class EmploymentEvent extends Model
         'event_type',
         'effective_date',
         'reason',
-        'from_branch_id',
-        'to_branch_id',
         'from_department_id',
         'to_department_id',
         'from_designation_id',

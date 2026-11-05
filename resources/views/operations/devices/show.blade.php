@@ -14,7 +14,7 @@
 
     <div class="ph">
         <div>
-            <a class="ed-back" href="{{ route('devices.index') }}"><x-i name="back" :size="14" />Dahua Devices</a>
+            <x-back :href="route('devices.index')" label="Dahua Devices" />
             <h1>{{ $device->name }}</h1>
             <p>{{ $device->place ?: 'No place' }} · {{ $device->model ?: 'No model' }}</p>
         </div>

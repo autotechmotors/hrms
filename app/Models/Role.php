@@ -16,6 +16,9 @@ class Role extends Model
         'description',
         'is_system',
         'requires_mfa',
+        'has_parent',
+        'has_child',
+        'is_active',
     ];
 
     protected function casts(): array
@@ -23,6 +26,9 @@ class Role extends Model
         return [
             'is_system' => 'boolean',
             'requires_mfa' => 'boolean',
+            'has_parent' => 'boolean',
+            'has_child' => 'boolean',
+            'is_active' => 'boolean',
         ];
     }
 
@@ -34,5 +40,15 @@ class Role extends Model
     public function users(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'user_roles')->withTimestamps();
+    }
+
+    public function requiresReportingManager(): bool
+    {
+        return $this->is_active && $this->has_parent;
+    }
+
+    public function appearsInManagerList(): bool
+    {
+        return $this->is_active && $this->has_child;
     }
 }

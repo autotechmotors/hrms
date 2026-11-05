@@ -2,7 +2,6 @@
 
 namespace App\Services;
 
-use App\Models\Branch;
 use App\Models\Company;
 use App\Models\User;
 
@@ -17,16 +16,5 @@ class Workspace
         }
 
         return $query->first();
-    }
-
-    public function branch(?User $user = null): ?Branch
-    {
-        $company = $this->company($user);
-
-        if (! $company) {
-            return null;
-        }
-
-        return Branch::query()->where('company_id', $company->id)->orderBy('id')->first();
     }
 }

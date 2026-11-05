@@ -20,10 +20,10 @@ class BankController extends Controller
     {
         $user = $request->user();
         abort_unless(
-            $user->hasPermission('bank_accounts.view')
+            $user->hasPermission('bank.view')
+            || $user->hasPermission('bank_accounts.view')
             || $user->hasPermission('bank_accounts.manage')
-            || $user->hasPermission('employees.view')
-            || $user->hasPermission('employees.edit'),
+            || $user->hasPermission('payments.release'),
             403,
         );
         $companyId = $this->companyId();
@@ -32,7 +32,7 @@ class BankController extends Controller
             'accounts' => CompanyBankAccount::query()->visibleTo($user)->where('company_id', $companyId)->orderByDesc('is_primary')->get(),
             'batches' => PaymentBatch::query()->visibleTo($user)->where('company_id', $companyId)->with(['run', 'account'])->latest()->get(),
             'runs' => PayrollRun::query()->visibleTo($user)->where('company_id', $companyId)->where('status', 'approved')->latest('period_year')->get(),
-            'canEdit' => $user->hasPermission('bank_accounts.manage') || $user->hasPermission('employees.edit') || $user->hasPermission('payments.release'),
+            'canEdit' => $user->hasPermission('bank_accounts.manage') || $user->hasPermission('payments.release'),
         ]);
     }
 

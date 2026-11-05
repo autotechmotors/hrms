@@ -18,7 +18,7 @@ class PayrollController extends Controller
 
     public function index(Request $request): View
     {
-        $this->authorizeView();
+        $this->authorizeAny('payroll.view', 'payroll.process', 'payroll.approve', 'payroll.lock', 'payroll.reopen');
 
         $runs = PayrollRun::query()
             ->visibleTo($request->user())
@@ -39,7 +39,7 @@ class PayrollController extends Controller
                 'computed' => $runs->where('status', 'computed')->count(),
                 'approved' => $runs->where('status', 'approved')->count(),
             ],
-            'canProcess' => $request->user()->hasPermission('payroll.process') || $request->user()->hasPermission('employees.edit'),
+            'canProcess' => $request->user()->hasPermission('payroll.process'),
         ]);
     }
 
@@ -64,7 +64,7 @@ class PayrollController extends Controller
 
     public function show(Request $request, PayrollRun $payroll): View
     {
-        $this->authorizeView();
+        $this->authorizeAny('payroll.view', 'payroll.process', 'payroll.approve', 'payroll.lock', 'payroll.reopen');
         abort_unless((int) $payroll->company_id === $this->companyId(), 404);
         $payroll->load('items.employee');
         $paidIds = $payroll->items->pluck('employee_id');
@@ -85,8 +85,8 @@ class PayrollController extends Controller
                 'deductions' => (float) $payroll->items->sum('deductions'),
                 'net' => (float) $payroll->items->sum('net'),
             ],
-            'canProcess' => $request->user()->hasPermission('payroll.process') || $request->user()->hasPermission('employees.edit'),
-            'canApprove' => $request->user()->hasPermission('payroll.approve') || $request->user()->hasPermission('employees.edit'),
+            'canProcess' => $request->user()->hasPermission('payroll.process'),
+            'canApprove' => $request->user()->hasPermission('payroll.approve'),
         ]);
     }
 

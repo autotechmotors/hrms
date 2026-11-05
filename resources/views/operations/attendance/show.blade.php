@@ -10,7 +10,7 @@
 
     <div class="ph">
         <div>
-            <a class="ed-back" href="{{ route('attendance.index', ['date' => $selected]) }}"><x-i name="back" :size="14" />Attendance</a>
+            <x-back :href="route('attendance.index', ['date' => $selected])" label="Attendance" />
             <h1>{{ $employee->full_name }}</h1>
             <p>{{ $employee->employee_code }} · {{ $employee->department?->name ?? 'No department' }} · {{ $month->format('F Y') }}</p>
         </div>

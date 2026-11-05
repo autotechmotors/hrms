@@ -8,6 +8,8 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
+Schedule::command('gatepass:expire')->everyMinute()->withoutOverlapping();
+
 Schedule::command('devices:sync')->everyMinute()->withoutOverlapping(5);
 
 Schedule::command('dahua:ensure-listen')

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AccountController;
 use App\Http\Controllers\Admin\AuditLogController;
 use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\UserController;
@@ -18,12 +19,13 @@ use App\Http\Controllers\Operations\DeviceEventController;
 use App\Http\Controllers\Operations\EzapiController;
 use App\Http\Controllers\Operations\HikvisionEventController;
 use App\Http\Controllers\Operations\HolidayController;
+use App\Http\Controllers\Operations\HoursPayController;
+use App\Http\Controllers\Operations\GatePassController;
 use App\Http\Controllers\Operations\LeaveController;
 use App\Http\Controllers\Operations\PayrollController;
 use App\Http\Controllers\Operations\ReportController;
 use App\Http\Controllers\Operations\SalaryController;
 use App\Http\Controllers\Operations\ShiftController;
-use App\Http\Controllers\Organization\BranchController;
 use App\Http\Controllers\Organization\BrandingController;
 use App\Http\Controllers\Organization\CompanyController;
 use App\Http\Controllers\Organization\CustomFieldController;
@@ -32,7 +34,6 @@ use App\Http\Controllers\Organization\DesignationController;
 use App\Http\Controllers\Organization\EmployeeTypeController;
 use App\Http\Controllers\Organization\EmploymentStatusController;
 use App\Http\Controllers\Organization\FinancialYearController;
-use App\Http\Controllers\Organization\LocationController;
 use App\Http\Controllers\Organization\WorkCalendarController;
 use Illuminate\Support\Facades\Route;
 
@@ -80,6 +81,9 @@ Route::get('two-factor/recovery', [TwoFactorController::class, 'recovery'])->mid
 
 Route::middleware(['auth', 'mfa'])->group(function (): void {
     Route::get('/', DashboardController::class)->name('dashboard');
+    Route::get('more', [AccountController::class, 'more'])->name('more');
+    Route::get('profile', [AccountController::class, 'edit'])->name('profile.edit');
+    Route::put('profile', [AccountController::class, 'update'])->name('profile.update');
 
     Route::get('attendance', [AttendanceController::class, 'index'])->name('attendance.index');
     Route::get('attendance/feed', [AttendanceController::class, 'feed'])->name('attendance.feed');
@@ -106,9 +110,26 @@ Route::middleware(['auth', 'mfa'])->group(function (): void {
     Route::delete('leave/{leaveRequest}', [LeaveController::class, 'destroy'])->name('leave.destroy');
     Route::post('leave/{leaveRequest}/decide', [LeaveController::class, 'decide'])->name('leave.decide');
 
+    Route::prefix('gate-passes')->name('gate-passes.')->group(function (): void {
+        Route::get('/', [GatePassController::class, 'index'])->name('index');
+        Route::get('create', [GatePassController::class, 'create'])->name('create');
+        Route::post('/', [GatePassController::class, 'store'])->name('store');
+        Route::get('settings', [GatePassController::class, 'settings'])->name('settings');
+        Route::put('settings', [GatePassController::class, 'updateSettings'])->name('settings.update');
+        Route::get('{gatePass}', [GatePassController::class, 'show'])->name('show');
+        Route::post('{gatePass}/approve', [GatePassController::class, 'approve'])->name('approve');
+        Route::post('{gatePass}/reject', [GatePassController::class, 'reject'])->name('reject');
+    });
+
     Route::get('holidays', [HolidayController::class, 'index'])->name('holidays.index');
     Route::post('holidays', [HolidayController::class, 'store'])->name('holidays.store');
     Route::delete('holidays/{holiday}', [HolidayController::class, 'destroy'])->name('holidays.destroy');
+
+    Route::get('hours-pay', [HoursPayController::class, 'index'])->name('hours-pay.index');
+    Route::post('hours-pay/departments/{department}', [HoursPayController::class, 'storeDepartment'])->name('hours-pay.departments.store');
+    Route::get('hours-pay/employees/{employee}', [HoursPayController::class, 'show'])->name('hours-pay.show');
+    Route::post('hours-pay/employees/{employee}/hours', [HoursPayController::class, 'storeEmployeeHours'])->name('hours-pay.employees.hours');
+    Route::post('hours-pay/employees/{employee}/salary', [HoursPayController::class, 'storeEmployeeSalary'])->name('hours-pay.employees.salary');
 
     Route::get('salary', [SalaryController::class, 'index'])->name('salary.index');
     Route::post('salary/heads', [SalaryController::class, 'storeHead'])->name('salary.heads.store');
@@ -148,8 +169,6 @@ Route::middleware(['auth', 'mfa'])->group(function (): void {
     Route::get('bank/batches/{batch}/export', [BankController::class, 'export'])->name('bank.export');
 
     Route::resource('companies', CompanyController::class)->except(['show']);
-    Route::resource('branches', BranchController::class)->except(['show']);
-    Route::resource('locations', LocationController::class)->except(['show']);
     Route::resource('departments', DepartmentController::class)->except(['show']);
     Route::resource('designations', DesignationController::class)->except(['show']);
     Route::resource('employee-types', EmployeeTypeController::class)->except(['show']);

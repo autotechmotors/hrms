@@ -2,7 +2,6 @@
 
 namespace Tests\Concerns;
 
-use App\Models\Branch;
 use App\Models\Company;
 use App\Models\Department;
 use App\Models\Designation;
@@ -28,20 +27,18 @@ trait BuildsOrganization
             'code' => $code,
             'is_active' => true,
         ]);
-        $branch = Branch::query()->create(['company_id' => $company->id, 'name' => 'Branch', 'code' => 'BR', 'is_active' => true]);
         $department = Department::query()->create(['company_id' => $company->id, 'name' => 'Dept', 'code' => 'DEP', 'is_active' => true]);
         $type = EmployeeType::query()->create(['company_id' => $company->id, 'name' => 'Permanent', 'code' => 'PERM', 'is_active' => true]);
         $designation = Designation::query()->create(['company_id' => $company->id, 'name' => 'Role', 'code' => 'DES', 'employee_type_id' => $type->id, 'is_active' => true]);
         $status = EmploymentStatus::query()->create(['company_id' => $company->id, 'name' => 'Confirmed', 'code' => 'CONF', 'is_exit' => false, 'is_active' => true]);
 
-        return compact('company', 'branch', 'department', 'designation', 'type', 'status');
+        return compact('company', 'department', 'designation', 'type', 'status');
     }
 
     protected function makeEmployee(array $org, string $code, ?int $managerId = null): Employee
     {
         return Employee::query()->create([
             'company_id' => $org['company']->id,
-            'branch_id' => $org['branch']->id,
             'department_id' => $org['department']->id,
             'designation_id' => $org['designation']->id,
             'employee_type_id' => $org['type']->id,

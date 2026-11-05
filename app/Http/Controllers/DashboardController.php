@@ -6,6 +6,7 @@ use App\Models\AuditLog;
 use App\Models\Department;
 use App\Models\Employee;
 use App\Models\EmployeeExit;
+use App\Models\GatePass;
 use Illuminate\View\View;
 
 class DashboardController extends Controller
@@ -40,6 +41,12 @@ class DashboardController extends Controller
             'recentAudits' => $user->hasPermission('audit_logs.view')
                 ? AuditLog::query()->with('user')->latest()->limit(8)->get()
                 : collect(),
+            'gatePassPending' => $user->hasPermission('gate_passes.view')
+                ? GatePass::query()->forEmployees((clone $employees)->select('employees.id'))->pending()->count()
+                : null,
+            'gatePassActive' => $user->hasPermission('gate_passes.view')
+                ? GatePass::query()->forEmployees((clone $employees)->select('employees.id'))->active()->count()
+                : null,
         ]);
     }
 }

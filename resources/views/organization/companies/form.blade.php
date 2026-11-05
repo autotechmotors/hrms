@@ -1,7 +1,12 @@
 @extends('layouts.app')
 @section('title', $company ? 'Edit company' : 'New company')
 @section('content')
-    <h1 class="h3 mb-3">{{ $company ? 'Edit company' : 'New company' }}</h1>
+    <div class="ph">
+        <div>
+            <x-back :href="route('companies.index')" label="Companies" />
+            <h1>{{ $company ? 'Edit company' : 'New company' }}</h1>
+        </div>
+    </div>
     <form class="card card-body" method="post" action="{{ $company ? route('companies.update', $company) : route('companies.store') }}" enctype="multipart/form-data">
         @csrf
         @if($company) @method('put') @endif

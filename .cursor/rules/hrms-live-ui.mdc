@@ -1,0 +1,16 @@
+---
+description: Filters, saves, deletes, and pagination stay on the page with jQuery ajax or Laravel Livewire. No full reload. No Vite.
+alwaysApply: true
+---
+
+# Live UI
+
+Read `docs/prompts/HRMS-LIVE-UI.md` before changing a filter, list, form, delete, toggle, or pagination.
+
+- Stay on the page. Update the region that changed. Do not reload the layout.
+- Lists that already use `partial=1` stay jQuery `$.ajax` (`X-Requested-With: XMLHttpRequest`), then swap the fragment. Copy `resources/views/employees/index.blade.php`.
+- New multi-field screens use Laravel Livewire (`wire:submit.prevent`, `wire:click`). Install with Composer only. No Vite, no npm, no Vue, no React, no Inertia.
+- jQuery, Select2, and Flatpickr stay. Select2 and Flatpickr inside Livewire use `wire:ignore`.
+- Success and failure use `window.toast`. Destructive actions use `window.askConfirm`.
+- Login, logout, MFA, file download, and device push routes stay normal HTTP.
+- Keep `visibleTo` and the existing policies. A partial or Livewire response is not a scope bypass.

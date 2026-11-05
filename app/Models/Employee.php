@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Models\Concerns\AuditsChanges;
 use App\Models\Concerns\BelongsToCompany;
+use App\Models\Concerns\HasReportingTree;
 use App\Services\AccessScope;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -13,12 +14,10 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Employee extends Model
 {
-    use AuditsChanges, BelongsToCompany;
+    use AuditsChanges, BelongsToCompany, HasReportingTree;
 
     protected $fillable = [
         'company_id',
-        'branch_id',
-        'location_id',
         'department_id',
         'designation_id',
         'employee_type_id',
@@ -75,19 +74,19 @@ class Employee extends Model
         return $this->hasMany(AttendancePunch::class);
     }
 
-    public function branch(): BelongsTo
-    {
-        return $this->belongsTo(Branch::class);
-    }
-
-    public function location(): BelongsTo
-    {
-        return $this->belongsTo(Location::class);
-    }
-
     public function department(): BelongsTo
     {
         return $this->belongsTo(Department::class);
+    }
+
+    public function workHour(): HasOne
+    {
+        return $this->hasOne(EmployeeWorkHour::class);
+    }
+
+    public function salaries(): HasMany
+    {
+        return $this->hasMany(EmployeeSalary::class);
     }
 
     public function designation(): BelongsTo
@@ -118,6 +117,32 @@ class Employee extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function needsReportingManager(): bool
+    {
+        $this->loadMissing('user.roles');
+
+        return (bool) $this->user?->roles->contains(
+            fn (Role $role) => $role->requiresReportingManager()
+        );
+    }
+
+    public function canBeReportingManager(): bool
+    {
+        $this->loadMissing('user.roles');
+
+        return (bool) $this->user?->roles->contains(
+            fn (Role $role) => $role->appearsInManagerList()
+        );
+    }
+
+    public function scopeCanManagePeople(Builder $query): Builder
+    {
+        return $query->whereHas(
+            'user.roles',
+            fn (Builder $roles) => $roles->where('has_child', true)->where('is_active', true)
+        );
     }
 
     public function documents(): HasMany
@@ -153,6 +178,11 @@ class Employee extends Model
     public function customValues(): HasMany
     {
         return $this->hasMany(EmployeeCustomFieldValue::class);
+    }
+
+    public function gatePasses(): HasMany
+    {
+        return $this->hasMany(GatePass::class);
     }
 
     public function scopeVisibleTo(Builder $query, User $user): Builder

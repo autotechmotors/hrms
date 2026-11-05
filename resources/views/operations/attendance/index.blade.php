@@ -131,12 +131,89 @@
             <span class="att-fresh" id="attFresh"></span>
         </form>
 
+        <div class="att-cards">
+            @forelse($employees as $employee)
+                @php
+                    $day = $days->get($employee->id);
+                    $statusKey = $day?->status ?? 'pending';
+                    if ($day?->punch_in && $statusKey === 'absent') {
+                        $statusKey = 'present';
+                    }
+                    $badge = $statusClass[$statusKey] ?? '';
+                    $label = $statusLabels[$statusKey] ?? str_replace('_', ' ', $statusKey);
+                    $rows = $punches->get($employee->id, collect());
+                    $inPunch = $rows->firstWhere('direction', 'in') ?? $rows->first();
+                    $outPunch = $rows->where('direction', 'out')->last();
+                    $portrait = $portraits->get($employee->id);
+                @endphp
+                <article class="att-card {{ $statusKey === 'absent' ? 'att-row-absent' : ($statusKey === 'pending' ? 'att-row-pending' : '') }}" data-employee="{{ $employee->id }}">
+                    <div class="who">
+                        @if($portrait)
+                            <button type="button" class="att-zoom" data-photo="{{ $portrait }}" title="View photo">
+                                <img class="att-list-photo js-portrait" src="{{ $portrait }}" alt="{{ $employee->full_name }}">
+                            </button>
+                        @else
+                            <x-employee-avatar :employee="$employee" :size="40" />
+                        @endif
+                        <div>
+                            <a class="el-link" href="{{ route('attendance.show', ['employee' => $employee, 'date' => $date->toDateString()]) }}"><b>{{ $employee->full_name }}</b></a>
+                            <small>{{ $employee->employee_code }}@if($employee->designation) · {{ $employee->designation->name }}@endif · {{ $employee->department?->name ?? '—' }}</small>
+                        </div>
+                    </div>
+                    @if($employee->phone)
+                        <a class="att-phone" href="tel:{{ preg_replace('/[^\d+]/', '', $employee->phone) }}">{{ $employee->phone }}</a>
+                    @else
+                        <span class="att-phone">—</span>
+                    @endif
+                    <div class="att-card-times">
+                        <div class="att-time js-in">
+                            <small>In</small>
+                            <span class="js-clock">{{ $formatTime($day?->punch_in) }}</span>
+                            @if($inPunch && (int) $inPunch->has_image === 1)
+                                <button type="button" class="att-zoom" data-photo="{{ route('attendance.punch.photo', $inPunch) }}" title="View in photo"><img class="att-shot" src="{{ route('attendance.punch.photo', $inPunch) }}" alt="In photo"></button>
+                            @endif
+                        </div>
+                        <div class="att-time js-out">
+                            <small>Out</small>
+                            <span class="js-clock">{{ $formatTime($day?->punch_out) }}</span>
+                            @if($outPunch && (int) $outPunch->has_image === 1)
+                                <button type="button" class="att-zoom" data-photo="{{ route('attendance.punch.photo', $outPunch) }}" title="View out photo"><img class="att-shot" src="{{ route('attendance.punch.photo', $outPunch) }}" alt="Out photo"></button>
+                            @endif
+                        </div>
+                        <div>
+                            <small>Worked</small>
+                            <b class="js-worked">{{ $formatMinutes($day?->minutes_worked) }}</b>
+                        </div>
+                        <div>
+                            <span class="b {{ $badge }} js-status">{{ $label }}</span>
+                        </div>
+                    </div>
+                    @if($canEdit)
+                        <button
+                            class="btn sm"
+                            type="button"
+                            data-bs-toggle="modal"
+                            data-bs-target="#attPunchModal"
+                            data-mode="edit"
+                            data-employee-id="{{ $employee->id }}"
+                            data-punch-in="{{ $formatInput($day?->punch_in) }}"
+                            data-punch-out="{{ $formatInput($day?->punch_out) }}"
+                            data-remarks="{{ $day?->remarks }}"
+                        >Edit</button>
+                    @endif
+                </article>
+            @empty
+                <p class="att-empty">No employees match this day and filters.</p>
+            @endforelse
+        </div>
+
         <div class="tw att-table">
             <table>
                 <thead>
                     <tr>
                         <th>Employee</th>
                         <th>Department</th>
+                        <th>Phone</th>
                         <th>In</th>
                         <th>Out</th>
                         <th>Worked</th>
@@ -173,6 +250,13 @@
                             </div>
                         </td>
                         <td>{{ $employee->department?->name ?? '—' }}</td>
+                        <td>
+                            @if($employee->phone)
+                                <a href="tel:{{ preg_replace('/[^\d+]/', '', $employee->phone) }}">{{ $employee->phone }}</a>
+                            @else
+                                —
+                            @endif
+                        </td>
                         @php
                             $rows = $punches->get($employee->id, collect());
                             $inPunch = $rows->firstWhere('direction', 'in') ?? $rows->first();
@@ -218,7 +302,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="{{ $canEdit ? 7 : 6 }}" class="att-empty">
+                        <td colspan="{{ $canEdit ? 8 : 7 }}" class="att-empty">
                             No employees match this day and filters.
                         </td>
                     </tr>
@@ -382,29 +466,30 @@
             if (fresh) fresh.textContent = 'Updated ' + data.refreshed_at;
             if (data.unchanged) return;
             Object.keys(data.rows || {}).forEach(function (id) {
-                const row = list.querySelector('tr[data-employee="' + id + '"]');
                 const item = data.rows[id];
-                if (!row || !item) return;
-                const worked = row.querySelector('.js-worked');
-                const status = row.querySelector('.js-status');
-                setClock(row.querySelector('.js-in'), item.in, item.in_photo);
-                setClock(row.querySelector('.js-out'), item.out, item.out_photo);
-                const portrait = row.querySelector('.js-portrait');
-                if (portrait && item.photo && portrait.getAttribute('src') !== item.photo) {
-                    portrait.src = item.photo;
-                    const opener = portrait.closest('[data-photo]');
-                    if (opener) opener.setAttribute('data-photo', item.photo);
-                }
-                if (worked) worked.textContent = item.worked;
-                if (status) {
-                    status.textContent = item.status;
-                    status.className = 'b js-status ' + (item.status_class || '');
-                }
-                const edit = row.querySelector('[data-punch-in]');
-                if (edit) {
-                    edit.setAttribute('data-punch-in', item.in_input || '');
-                    edit.setAttribute('data-punch-out', item.out_input || '');
-                }
+                if (!item) return;
+                list.querySelectorAll('[data-employee="' + id + '"]').forEach(function (row) {
+                    const worked = row.querySelector('.js-worked');
+                    const status = row.querySelector('.js-status');
+                    setClock(row.querySelector('.js-in'), item.in, item.in_photo);
+                    setClock(row.querySelector('.js-out'), item.out, item.out_photo);
+                    const portrait = row.querySelector('.js-portrait');
+                    if (portrait && item.photo && portrait.getAttribute('src') !== item.photo) {
+                        portrait.src = item.photo;
+                        const opener = portrait.closest('[data-photo]');
+                        if (opener) opener.setAttribute('data-photo', item.photo);
+                    }
+                    if (worked) worked.textContent = item.worked;
+                    if (status) {
+                        status.textContent = item.status;
+                        status.className = 'b js-status ' + (item.status_class || '');
+                    }
+                    const edit = row.querySelector('[data-punch-in]');
+                    if (edit) {
+                        edit.setAttribute('data-punch-in', item.in_input || '');
+                        edit.setAttribute('data-punch-out', item.out_input || '');
+                    }
+                });
             });
         }
         setInterval(function () {

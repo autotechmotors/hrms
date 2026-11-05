@@ -18,7 +18,7 @@ class SalaryController extends Controller
 
     public function index(Request $request): View
     {
-        $this->authorizeView();
+        $this->authorizeAny('salary.view');
         $companyId = $this->companyId();
         $q = trim((string) $request->input('q', ''));
 
@@ -65,13 +65,13 @@ class SalaryController extends Controller
                 'assignments' => $assignments->count(),
             ],
             'filters' => ['q' => $q],
-            'canEdit' => $request->user()->hasPermission('employees.edit'),
+            'canEdit' => $request->user()->hasPermission('salary.manage'),
         ]);
     }
 
     public function storeHead(Request $request): RedirectResponse
     {
-        $this->authorizePeople();
+        $this->authorizeAny('salary.manage');
         $companyId = $this->companyId();
         $data = $request->validate([
             'name' => ['required', 'string', 'max:120'],
@@ -97,7 +97,7 @@ class SalaryController extends Controller
 
     public function storeStructure(Request $request): RedirectResponse
     {
-        $this->authorizePeople();
+        $this->authorizeAny('salary.manage');
         $companyId = $this->companyId();
         $data = $request->validate([
             'name' => ['required', 'string', 'max:120'],
@@ -123,7 +123,7 @@ class SalaryController extends Controller
 
     public function assign(Request $request): RedirectResponse
     {
-        $this->authorizePeople();
+        $this->authorizeAny('salary.manage');
         $data = $request->validate([
             'employee_id' => ['required', 'integer'],
             'salary_structure_id' => ['required', 'integer'],

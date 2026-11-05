@@ -1,0 +1,201 @@
+/* Digital Gate Pass — GMS card structure inside HRMS glass shell */
+.gp-shell{
+  display:flex;
+  justify-content:center;
+  padding:8px 0 28px;
+}
+.pass-screen{
+  --pass-ink:#12172B;
+  --pass-soft:#6B7690;
+  --pass-tile:#F2F5FD;
+  --pass-line:#E7EAF3;
+  --at-primary:#E10613;
+  --at-ink:#12172B;
+  width:min(400px,100%);
+  position:relative;
+  overflow:hidden;
+  padding:18px 20px 22px;
+  color:var(--pass-ink);
+  font-family:"Plus Jakarta Sans",Inter,system-ui,sans-serif;
+  border-radius:28px;
+  background:rgba(247,247,250,.72);
+  border:1px solid rgba(255,255,255,.88);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.95),0 20px 50px rgba(18,23,43,.08);
+  backdrop-filter:var(--glass-blur);
+  -webkit-backdrop-filter:var(--glass-blur);
+}
+.pass-screen::before{
+  content:"";
+  position:absolute;
+  width:440px;height:440px;
+  top:-250px;left:-110px;
+  border-radius:50%;
+  background:color-mix(in srgb,var(--at-primary) 11%,#fff);
+  pointer-events:none;
+}
+.pass-screen > *{position:relative;z-index:1}
+
+.pass-top{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.pass-logo img{display:block;height:30px;width:auto;max-width:160px;object-fit:contain}
+.pass-no{
+  background:#fff;
+  border-radius:999px;
+  padding:7px 13px;
+  font-size:12px;font-weight:700;letter-spacing:.02em;
+  color:var(--pass-soft);
+  box-shadow:0 2px 10px rgba(18,23,43,.06);
+  white-space:nowrap;
+}
+.pass-heading{
+  margin:14px 0 0;
+  text-align:center;
+  font-size:clamp(22px,6.4vw,27px);
+  font-weight:800;
+  letter-spacing:-.02em;
+}
+
+.pass-card-wrap{position:relative;margin-top:14px}
+.pass-avatar{
+  position:absolute;top:-10px;left:50%;transform:translateX(-50%);z-index:3;
+  width:92px;height:92px;padding:4px;border-radius:50%;
+  background:#fff;
+  box-shadow:0 10px 30px color-mix(in srgb,var(--at-primary) 28%,transparent);
+  overflow:hidden;
+}
+.pass-avatar img,.pass-avatar .pass-initials{
+  width:100%;height:100%;border-radius:50%;object-fit:cover;
+  display:grid;place-items:center;background:#eef0f6;font-weight:800;color:#12172B;
+}
+.pass-avatar.is-void{box-shadow:0 8px 22px rgba(18,23,43,.12)}
+.pass-avatar.is-void img,.pass-avatar.is-void .pass-initials{filter:grayscale(1);opacity:.75}
+
+.pass-card{
+  position:relative;z-index:2;
+  background:#fff;
+  border-radius:26px;
+  padding:90px 18px 18px;
+  text-align:center;
+  box-shadow:0 16px 36px rgba(18,23,43,.08);
+}
+.pass-name{margin:0;font-size:clamp(19px,5.4vw,23px);font-weight:800;letter-spacing:-.01em;overflow-wrap:anywhere}
+.pass-id-pill{
+  display:inline-block;margin-top:8px;padding:6px 13px;border-radius:999px;
+  background:#F1F3F8;color:#4A5470;font-size:12.5px;font-weight:600;
+}
+.pass-dept{margin-top:6px;font-size:12px;font-weight:600;color:var(--pass-soft)}
+.pass-duration{margin:12px 0 14px;font-size:clamp(15px,4.6vw,18px);font-weight:700;color:#A7B1C8}
+.pass-early-note{margin:-6px 0 12px;color:var(--pass-soft);font-size:12px;font-weight:700}
+
+.pass-type{
+  margin:0 0 10px;
+  padding:11px 14px;
+  border-radius:16px;
+  text-align:left;
+  background:var(--pass-tile);
+}
+.pass-type strong{display:block;margin-top:4px;font-size:clamp(15px,4.4vw,18px);font-weight:800}
+.pass-type.type-office{background:#FDECEE}
+.pass-type.type-office .pass-label{color:#C81E1E}
+.pass-type.type-office strong{color:#B10510}
+.pass-type.type-personal{background:#EEF3FB}
+.pass-tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px;text-align:left}
+.pass-tile,.pass-reason{
+  background:var(--pass-tile);
+  border-radius:16px;
+  padding:11px 14px;
+}
+.pass-label{display:block;font-size:10.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--pass-soft)}
+.pass-tile strong{display:block;margin-top:4px;font-size:clamp(14px,4.2vw,18px);font-weight:800;line-height:1.2;white-space:nowrap}
+.pass-reason{margin-top:10px;text-align:left}
+.pass-reason p{margin:4px 0 0;font-size:14.5px;font-weight:700;line-height:1.45;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word}
+
+.pass-actor{
+  display:flex;align-items:center;gap:12px;margin-top:10px;padding:10px 14px;
+  border:1px solid var(--pass-line);border-radius:16px;text-align:left;
+}
+.pass-actor img,.pass-actor .pass-initials{
+  width:40px;height:40px;border-radius:50%;object-fit:cover;flex-shrink:0;
+  background:#eef0f6;display:grid;place-items:center;font-size:13px;font-weight:800;color:#12172B;
+}
+.pass-actor > div{min-width:0}
+.pass-actor .pass-label{font-size:10px}
+.pass-actor strong{display:block;margin-top:2px;font-size:clamp(15px,4.4vw,18px);font-weight:800;overflow-wrap:anywhere}
+.pass-actor small{display:block;margin-top:1px;font-size:11px;font-weight:600;color:var(--pass-soft)}
+
+.pass-status{margin-top:12px;padding:12px 10px;border-radius:18px;color:#fff;display:flex;flex-direction:column;align-items:center;gap:2px}
+.pass-status-main{display:inline-flex;align-items:center;gap:9px;font-size:clamp(20px,6vw,25px);font-weight:800;letter-spacing:.01em}
+.pass-status-main svg{width:22px;height:22px;flex-shrink:0}
+.pass-status-sub{font-size:12px;font-weight:600;opacity:.92}
+.status-approved{background:linear-gradient(135deg,#17AD57,#0B7F3C);box-shadow:0 14px 28px rgba(18,161,80,.32)}
+.status-pending{background:linear-gradient(135deg,#F5A524,#D97706);box-shadow:0 14px 28px rgba(217,119,6,.28)}
+.status-rejected{background:linear-gradient(135deg,#EF4444,#C81E1E);box-shadow:0 14px 28px rgba(200,30,30,.28)}
+.status-expired{background:linear-gradient(135deg,#9AA3B5,#727C92);box-shadow:0 12px 24px rgba(114,124,146,.25)}
+.pass-warning,.pass-note{margin:10px 4px 0;font-size:12px;line-height:1.45;font-weight:600;white-space:pre-wrap;overflow-wrap:anywhere}
+.pass-warning{color:#B42318}
+.pass-note{color:var(--pass-soft);font-weight:500}
+
+.act-btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  width:100%;min-height:48px;border-radius:15px;border:1px solid transparent;
+  font-family:inherit;font-size:14.5px;font-weight:800;cursor:pointer;
+  text-decoration:none;padding:0 10px;color:inherit;
+  transition:transform .15s ease,filter .15s ease;
+}
+.act-btn:active{transform:scale(.98)}
+.act-btn svg{width:19px;height:19px;flex-shrink:0}
+.act-btn-primary{background:var(--at-primary);color:#fff;box-shadow:0 12px 26px color-mix(in srgb,var(--at-primary) 35%,transparent)}
+.act-btn-primary:hover{color:#fff;filter:brightness(1.05)}
+.act-btn-success{background:#12A150;color:#fff;box-shadow:0 12px 26px rgba(18,161,80,.3)}
+.act-btn-success:hover{color:#fff}
+.act-btn-light{background:#fff;color:var(--at-ink);border-color:#DCE0EC}
+.act-btn-light:hover{color:var(--at-ink);background:#fafbff}
+.act-btn-danger-text{color:#C81E1E}
+.act-btn-wide{grid-column:1 / -1}
+.act-btn-icon{padding:0}
+.act-btn-icon svg{width:21px;height:21px}
+
+.page-actions-bar{
+  display:grid;
+  grid-template-columns:1.1fr 1fr;
+  gap:10px;
+  margin-top:16px;
+}
+.page-actions-bar > :only-child{grid-column:1 / -1}
+.page-actions-bar form{display:flex;min-width:0}
+.page-actions-bar.pass-bar-usable{grid-template-columns:1fr 48px}
+.page-actions-bar.pass-bar-decide{grid-template-columns:1fr 1fr}
+
+html[data-theme="dark"] .pass-screen{
+  --pass-ink:#f6f4f7;--pass-soft:#b7b1bc;--pass-tile:rgba(255,255,255,.06);--pass-line:rgba(255,255,255,.12);--at-ink:#f6f4f7;
+  background:rgba(28,22,26,.62);border-color:rgba(255,255,255,.14);
+}
+html[data-theme="dark"] .pass-screen::before{background:radial-gradient(circle,rgba(225,6,19,.2),transparent 70%)}
+html[data-theme="dark"] .pass-card,
+html[data-theme="dark"] .pass-no,
+html[data-theme="dark"] .act-btn-light{
+  background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.14);color:var(--pass-ink);
+}
+html[data-theme="dark"] .pass-id-pill,
+html[data-theme="dark"] .pass-type{background:rgba(255,255,255,.08);color:#d8d2dc}
+html[data-theme="dark"] .pass-type.type-office{background:rgba(225,6,19,.18)}
+html[data-theme="dark"] .pass-type.type-office strong{color:#ff8a93}
+html[data-theme="dark"] .pass-avatar{background:rgba(42,36,44,.9)}
+html[data-theme="dark"] .pass-avatar .pass-initials,
+html[data-theme="dark"] .pass-actor .pass-initials{background:rgba(255,255,255,.1);color:#f6f4f7}
+
+@media(max-width:700px){
+  .gp-shell{padding:0 0 12px}
+  .pass-screen{width:100%;padding:16px 14px 18px;border-radius:22px}
+}
+
+@media print{
+  @page{margin:12mm}
+  .sb,.tb,.tabbar,.glass-wave,.toast-host,.modal,.page-actions-bar{display:none!important}
+  .mn{margin:0!important}
+  .pg{padding:0!important}
+  .gp-shell{padding:0}
+  .pass-screen{max-width:420px;margin:0 auto;box-shadow:none;background:#fff;backdrop-filter:none}
+  .pass-screen::before{display:none}
+  .pass-card{box-shadow:none;border:1px solid var(--pass-line)}
+  .pass-status,.pass-avatar{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}

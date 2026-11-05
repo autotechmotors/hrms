@@ -20,7 +20,7 @@ class LeaveController extends Controller
 
     public function index(Request $request): View
     {
-        $this->authorizeView();
+        $this->authorizeAny('leave.view');
         $companyId = $this->companyId();
         $employeeIds = $this->activeEmployees()->pluck('id');
         $status = trim((string) $request->input('status', ''));
@@ -70,13 +70,13 @@ class LeaveController extends Controller
                 'status' => $status,
                 'leave_type_id' => $typeId,
             ],
-            'canEdit' => $request->user()->hasPermission('employees.edit'),
+            'canEdit' => $request->user()->hasPermission('leave.decide'),
         ]);
     }
 
     public function storeType(Request $request): RedirectResponse
     {
-        $this->authorizePeople();
+        $this->authorizeAny('leave.decide');
         $companyId = $this->companyId();
         $data = $request->validate([
             'name' => ['required', 'string', 'max:120'],
@@ -104,7 +104,7 @@ class LeaveController extends Controller
 
     public function store(Request $request, WorkCalendarResolver $calendar): RedirectResponse
     {
-        $this->authorizePeople();
+        $this->authorizeAny('leave.decide');
         $data = $request->validate([
             'employee_id' => ['required', 'integer'],
             'leave_type_id' => ['required', 'integer'],
@@ -138,7 +138,7 @@ class LeaveController extends Controller
 
     public function update(Request $request, LeaveRequest $leaveRequest, WorkCalendarResolver $calendar): RedirectResponse
     {
-        $this->authorizePeople();
+        $this->authorizeAny('leave.decide');
         $leaveRequest->load('employee');
         abort_unless($leaveRequest->employee && (int) $leaveRequest->employee->company_id === $this->companyId(), 404);
         $this->activeEmployees()->findOrFail($leaveRequest->employee_id);
@@ -192,7 +192,7 @@ class LeaveController extends Controller
 
     public function destroy(Request $request, LeaveRequest $leaveRequest): RedirectResponse
     {
-        $this->authorizePeople();
+        $this->authorizeAny('leave.decide');
         $leaveRequest->load('employee');
         abort_unless($leaveRequest->employee && (int) $leaveRequest->employee->company_id === $this->companyId(), 404);
         $this->activeEmployees()->findOrFail($leaveRequest->employee_id);
@@ -204,7 +204,7 @@ class LeaveController extends Controller
 
     public function decide(Request $request, LeaveRequest $leaveRequest): RedirectResponse
     {
-        $this->authorizePeople();
+        $this->authorizeAny('leave.decide');
         $leaveRequest->load('employee', 'leaveType');
         abort_unless($leaveRequest->employee && (int) $leaveRequest->employee->company_id === $this->companyId(), 404);
         $this->activeEmployees()->findOrFail($leaveRequest->employee_id);

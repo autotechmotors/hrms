@@ -19,6 +19,10 @@
         <div class="card kp"><small><span class="ki"><x-i name="building" :size="14" /></span>Departments</small><b>{{ $departments }}</b><span>In scope</span></div>
         <div class="card kp"><small><span class="ki"><x-i name="clock" :size="14" /></span>Open exits</small><b>{{ $openExits }}</b><span>Settlement not completed</span></div>
         <div class="card kp"><small><span class="ki"><x-i name="wallet" :size="14" /></span>Payroll</small><b>—</b><span>Starts with the payroll module</span></div>
+        @if($gatePassPending !== null)
+            <a class="card kp" href="{{ route('gate-passes.index', ['status' => 'pending']) }}"><small><span class="ki"><x-i name="clock" :size="14" /></span>Gate Pass pending</small><b>{{ $gatePassPending }}</b><span>Waiting approval</span></a>
+            <a class="card kp" href="{{ route('gate-passes.index', ['status' => 'approved']) }}"><small><span class="ki"><x-i name="clock" :size="14" /></span>Active passes</small><b>{{ $gatePassActive }}</b><span>Still valid</span></a>
+        @endif
     </div>
     <div class="g c2 x">
         <section class="card">

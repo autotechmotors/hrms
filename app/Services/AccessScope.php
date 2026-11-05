@@ -2,7 +2,6 @@
 
 namespace App\Services;
 
-use App\Models\Branch;
 use App\Models\Department;
 use App\Models\Employee;
 use App\Models\User;
@@ -12,7 +11,6 @@ class AccessScope
 {
     /**
      * Scopes are additive. A company scope grants that company.
-     * A branch scope does not grant the rest of the company.
      * A manager also sees direct reports, without a company-wide grant.
      *
      * @return list<int>
@@ -26,7 +24,6 @@ class AccessScope
         foreach ($user->scopes as $scope) {
             $ids[] = match ($scope->scope_type) {
                 'company' => (int) $scope->scope_id,
-                'branch' => (int) Branch::query()->whereKey($scope->scope_id)->value('company_id'),
                 'department' => (int) Department::query()->whereKey($scope->scope_id)->value('company_id'),
                 'employee' => (int) Employee::query()->whereKey($scope->scope_id)->value('company_id'),
                 default => 0,
@@ -75,25 +72,6 @@ class AccessScope
             : $query->whereIn($column, $ids);
     }
 
-    public function applyToBranches(Builder $query, User $user): Builder
-    {
-        if ($user->isSuperAdmin()) {
-            return $query;
-        }
-
-        $query = $this->applyToCompanyRecords($query, $user, 'branches.company_id');
-        $user->loadMissing('scopes');
-
-        $companyScopes = $user->scopes->where('scope_type', 'company');
-        $branchScopes = $user->scopes->where('scope_type', 'branch');
-
-        if ($branchScopes->isNotEmpty() && $companyScopes->isEmpty()) {
-            $query->whereIn('branches.id', $branchScopes->pluck('scope_id'));
-        }
-
-        return $query;
-    }
-
     public function applyToDepartments(Builder $query, User $user): Builder
     {
         if ($user->isSuperAdmin()) {
@@ -103,7 +81,7 @@ class AccessScope
         $query = $this->applyToCompanyRecords($query, $user, 'departments.company_id');
         $user->loadMissing('scopes');
 
-        $broader = $user->scopes->whereIn('scope_type', ['company', 'branch']);
+        $broader = $user->scopes->where('scope_type', 'company');
         $departmentScopes = $user->scopes->where('scope_type', 'department');
 
         if ($departmentScopes->isNotEmpty() && $broader->isEmpty()) {
@@ -130,7 +108,6 @@ class AccessScope
                 $outer->orWhere(function (Builder $inner) use ($scope, $table): void {
                     match ($scope->scope_type) {
                         'company' => $inner->where($table.'.company_id', $scope->scope_id),
-                        'branch' => $inner->where($table.'.branch_id', $scope->scope_id),
                         'department' => $inner->where($table.'.department_id', $scope->scope_id),
                         'employee' => $inner->where($table.'.id', $scope->scope_id),
                         default => $inner->whereRaw('1 = 0'),
@@ -138,12 +115,11 @@ class AccessScope
                 });
             }
 
-            if ($user->hasRole('manager') && $user->employee) {
+            if ($user->employee && ($user->hasRole('manager') || $user->hasRole('director'))) {
                 $applied = true;
-                $outer->orWhere($table.'.reporting_manager_id', $user->employee->id);
-            }
-
-            if ($user->employee) {
+                $ids = $user->employee->familyMemberIds();
+                $outer->orWhereIn($table.'.id', $ids->all());
+            } elseif ($user->employee) {
                 $applied = true;
                 $outer->orWhere($table.'.id', $user->employee->id);
             }

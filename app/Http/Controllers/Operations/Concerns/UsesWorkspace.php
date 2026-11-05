@@ -26,49 +26,28 @@ trait UsesWorkspace
             ->orderBy('first_name');
     }
 
-    protected function authorizeView(): void
+    protected function authorizeAny(string ...$permissions): void
     {
-        $user = request()->user();
-        abort_unless(
-            $user->hasPermission('employees.view')
-            || $user->hasPermission('payroll.process')
-            || $user->hasPermission('devices.manage')
-            || $user->hasPermission('bank_accounts.view'),
-            403,
-        );
-    }
-
-    protected function authorizePeople(): void
-    {
-        abort_unless(request()->user()->hasPermission('employees.edit'), 403);
+        abort_unless(request()->user()->hasAnyPermission($permissions), 403);
     }
 
     protected function authorizePayroll(): void
     {
-        $user = request()->user();
-        abort_unless($user->hasPermission('payroll.process') || $user->hasPermission('employees.edit'), 403);
+        $this->authorizeAny('payroll.process');
     }
 
     protected function authorizePayrollApprove(): void
     {
-        $user = request()->user();
-        abort_unless($user->hasPermission('payroll.approve') || $user->hasPermission('employees.edit'), 403);
+        $this->authorizeAny('payroll.approve');
     }
 
     protected function authorizeDevices(): void
     {
-        $user = request()->user();
-        abort_unless($user->hasPermission('devices.manage') || $user->hasPermission('employees.edit'), 403);
+        $this->authorizeAny('devices.manage');
     }
 
     protected function authorizeBank(): void
     {
-        $user = request()->user();
-        abort_unless(
-            $user->hasPermission('bank_accounts.manage')
-            || $user->hasPermission('employees.edit')
-            || $user->hasPermission('payments.release'),
-            403,
-        );
+        $this->authorizeAny('bank_accounts.manage', 'payments.release');
     }
 }
