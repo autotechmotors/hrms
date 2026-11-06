@@ -44,4 +44,18 @@
             </div>
         </form>
     </section>
+
+    <section class="card" style="margin-top:16px">
+        <div class="cb">
+            <h3>How OUT and hours work</h3>
+            <ul class="st-list">
+                <li>Any role can request a pass. Parent approval opens the gate OUT machine. Reject leaves the machine closed and notifies the employee with the reason.</li>
+                <li>After an approved OUT punch, time away is not desk work until they return.</li>
+                <li>Personal work: actual minutes out are cut from that day’s working hours. Coming back 1 minute early keeps that leftover minute as work.</li>
+                <li>Office work: authorized outing minutes count as working hours.</li>
+                <li>If a 1-hour pass expires and they are still out, clock-in starts from the next punch. No return that day is half-day early leave.</li>
+                <li>Mark a terminal as <b>Gate OUT (pass only)</b> on Devices. People are pushed there only after approval and removed on reject or expire.</li>
+            </ul>
+        </div>
+    </section>
 @endsection

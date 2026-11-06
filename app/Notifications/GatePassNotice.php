@@ -16,22 +16,40 @@ class GatePassNotice extends Notification
 
     public function toArray(object $notifiable): array
     {
-        $employee = $this->gatePass->employee?->full_name ?? 'An employee';
-        $when = $this->gatePass->formatted_date.' at '.$this->gatePass->formatted_out_time;
-        $type = $this->gatePass->work_type_label;
+        $pass = $this->gatePass->loadMissing(['employee.department', 'employee.manager', 'decider']);
+        $employee = $pass->employee;
+        $name = $employee?->full_name ?? 'An employee';
+        $when = $pass->formatted_date.' at '.$pass->formatted_out_time;
+        $type = $pass->work_type_label;
 
         [$title, $body] = match ($this->event) {
-            'approved' => ['Gate Pass Approved', 'Your '.$type.' Gate Pass for '.$when.' has been approved.'],
-            'rejected' => ['Gate Pass Rejected', trim('Your '.$type.' Gate Pass request for '.$this->gatePass->formatted_date.' has been rejected.'.($this->gatePass->decision_note ? ' Reason: '.$this->gatePass->decision_note : ''))],
-            default => ['New Gate Pass Request', $employee.' requested a '.$type.' Gate Pass for '.$when.'.'],
+            'approved' => ['Gate Pass Approved', $name.' · '.$type.' for '.$when.' has been approved.'.($pass->decider ? ' By '.$pass->decider->name.'.' : '').' OUT machine is available until '.$pass->expires_at?->format('h:i A').'.'],
+            'rejected' => ['Gate Pass Rejected', trim($name.' · '.$type.' for '.$pass->formatted_date.' has been rejected. OUT machine was not opened.'.($pass->decision_note ? ' Reason: '.$pass->decision_note : ''))],
+            'expired' => ['Gate Pass Expired', $name.' · '.$type.' for '.$when.' has expired. OUT machine access is removed.'],
+            'still_out' => ['Still out after Gate Pass', $name.' has not returned. Clock-in will start from the next punch. If there is no return today, this counts as half-day early leave.'],
+            default => ['New Gate Pass Request', $name.' requested a '.$type.' Gate Pass for '.$when.'. Parent must approve before the OUT machine will allow exit.'],
         };
 
         return [
             'type' => 'gate_pass_'.$this->event,
-            'gate_pass_id' => $this->gatePass->id,
+            'icon' => match ($this->event) {
+                'approved' => 'ok',
+                'rejected' => 'er',
+                default => 'wn',
+            },
+            'gate_pass_id' => $pass->id,
+            'number' => $pass->number,
             'title' => $title,
             'body' => $body,
-            'action_url' => route('gate-passes.show', $this->gatePass, false),
+            'employee' => $name,
+            'employee_code' => $employee?->employee_code,
+            'department' => $employee?->department?->name,
+            'parent' => $employee?->manager?->full_name,
+            'work_type' => $type,
+            'when' => $when,
+            'reason' => $pass->reason,
+            'status' => $pass->status_label,
+            'action_url' => route('gate-passes.show', $pass, false),
         ];
     }
 }

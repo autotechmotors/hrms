@@ -2,7 +2,7 @@
 
 return [
     /*
-    | The terminal posts scans itself to /hikvision-events/{DAHUA_FORWARD_TOKEN}.
+    | The terminal posts scans itself to /hikvision-events/{DEVICE_FORWARD_TOKEN}.
     | When HIKVISION_PORT is set, the live server also pulls through that port,
     | so the office PC does not have to stay on.
     */

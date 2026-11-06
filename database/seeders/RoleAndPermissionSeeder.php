@@ -20,10 +20,7 @@ class RoleAndPermissionSeeder extends Seeder
             $all = Permission::query()->pluck('id', 'slug');
 
             $this->role('Super Admin', 'super-admin', true, true, $all->values()->all(), false, true);
-            $this->role('HR Admin', 'hr-admin', true, false, $all->except([
-                'roles.delete', 'users.delete', 'settings.manage',
-                'payments.release', 'payroll.lock', 'payroll.reopen',
-            ])->values()->all(), false, true);
+            $this->role('HR Admin', 'hr-admin', true, false, $all->values()->all(), false, true);
             $this->role('Payroll Admin', 'payroll-admin', true, true, $all->only([
                 'dashboard.view', 'employees.view', 'employees.export', 'bank_accounts.view', 'bank.view', 'audit_logs.view',
                 'payroll.view', 'payroll.process', 'payroll.approve', 'payroll.lock', 'payroll.reopen',
@@ -37,21 +34,24 @@ class RoleAndPermissionSeeder extends Seeder
                 'attendance.view', 'shifts.view', 'leave.view', 'holidays.view',
                 'gate_passes.view', 'gate_passes.create', 'gate_passes.decide',
             ])->values()->all(), true, true);
+            $this->role('Head', 'head', true, false, $all->only([
+                'dashboard.view', 'employees.view', 'departments.view',
+                'attendance.view', 'shifts.view', 'leave.view', 'holidays.view',
+                'gate_passes.view', 'gate_passes.create', 'gate_passes.decide',
+            ])->values()->all(), true, true);
             $this->role('Director', 'director', true, false, $all->only([
                 'dashboard.view', 'employees.view', 'departments.view', 'audit_logs.view',
                 'attendance.view', 'reports.view',
                 'gate_passes.view', 'gate_passes.create', 'gate_passes.decide',
-            ])->values()->all(), true, true);
+            ])->values()->all(), false, true);
             $this->role('Device Administrator', 'device-administrator', true, false, $all->only([
                 'dashboard.view', 'devices.manage', 'employees.view',
             ])->values()->all());
-
-            $employeeRole = Role::query()->where('slug', 'employee')->first();
-            if ($employeeRole) {
-                $employeeRole->users()->detach();
-                $employeeRole->permissions()->detach();
-                $employeeRole->delete();
-            }
+            $this->role('Employee', 'employee', true, false, $all->only([
+                'dashboard.view', 'employees.view', 'attendance.view',
+                'leave.view', 'holidays.view',
+                'gate_passes.view', 'gate_passes.create',
+            ])->values()->all(), true, false);
         });
     }
 

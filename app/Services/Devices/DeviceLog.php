@@ -4,21 +4,23 @@ namespace App\Services\Devices;
 
 use Illuminate\Support\Facades\Log;
 
-class DahuaLog
+class DeviceLog
 {
     public static function debug(string $message, array $context = []): void
     {
+        $payload = self::clean($context);
         try {
-            Log::channel('dahua')->debug($message, self::clean($context));
+            Log::channel('devices')->debug($message, $payload);
         } catch (\Throwable) {
         }
     }
 
-    /** Attendance / movement moment for daily review (storage/logs/dahua-YYYY-MM-DD.log). */
+    /** Attendance / movement moment for daily review. */
     public static function moment(string $message, array $context = []): void
     {
+        $payload = self::clean($context);
         try {
-            Log::channel('dahua')->info('moment '.$message, self::clean($context));
+            Log::channel('devices')->info('moment '.$message, $payload);
         } catch (\Throwable) {
         }
     }

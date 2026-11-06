@@ -113,4 +113,114 @@ class RoleHierarchyTest extends TestCase
         $this->assertSame($lead->id, $member->fresh()->reporting_manager_id);
         $this->assertInstanceOf(Employee::class, $shop);
     }
+
+    public function test_create_form_lists_roles_and_stores_the_chosen_role(): void
+    {
+        $org = $this->makeCompany('RL3');
+        $hr = $this->makeUser('hr-admin', $org['company']);
+        $hrRole = Role::query()->where('slug', 'hr-admin')->firstOrFail();
+        $managerRole = Role::query()->where('slug', 'manager')->firstOrFail();
+
+        $this->actingAsScoped($hr)
+            ->get(route('employees.create'))
+            ->assertOk()
+            ->assertSee('name="role_id"', false)
+            ->assertSee('HR Admin')
+            ->assertSee('Manager')
+            ->assertSee('can be a parent');
+
+        $base = [
+            'department_id' => $org['department']->id,
+            'designation_id' => $org['designation']->id,
+            'employee_type_id' => $org['type']->id,
+            'employment_status_id' => $org['status']->id,
+            'first_name' => 'Lead',
+            'last_name' => 'Parent',
+            'joining_date' => '2026-04-01',
+            'role_id' => $hrRole->id,
+        ];
+
+        $this->actingAsScoped($hr)
+            ->post(route('employees.store'), $base)
+            ->assertRedirect();
+
+        $lead = Employee::query()->where('employee_code', '!=', '')->where('first_name', 'Lead')->firstOrFail();
+        $this->assertSame($hrRole->id, $lead->role_id);
+        $this->assertTrue($lead->canBeReportingManager());
+
+        $this->actingAsScoped($hr)
+            ->post(route('employees.store'), [
+                'department_id' => $org['department']->id,
+                'designation_id' => $org['designation']->id,
+                'employee_type_id' => $org['type']->id,
+                'employment_status_id' => $org['status']->id,
+                'first_name' => 'New',
+                'last_name' => 'Manager',
+                'joining_date' => '2026-04-02',
+                'role_id' => $managerRole->id,
+            ])
+            ->assertSessionHasErrors('reporting_manager_id');
+
+        $this->actingAsScoped($hr)
+            ->post(route('employees.store'), [
+                'department_id' => $org['department']->id,
+                'designation_id' => $org['designation']->id,
+                'employee_type_id' => $org['type']->id,
+                'employment_status_id' => $org['status']->id,
+                'first_name' => 'New',
+                'last_name' => 'Manager',
+                'joining_date' => '2026-04-02',
+                'role_id' => $managerRole->id,
+                'reporting_manager_id' => $lead->id,
+            ])
+            ->assertRedirect();
+
+        $saved = Employee::query()->where('last_name', 'Manager')->firstOrFail();
+        $this->assertSame($managerRole->id, $saved->role_id);
+        $this->assertSame($lead->id, $saved->reporting_manager_id);
+
+        $this->actingAsScoped($hr)
+            ->get(route('employees.create'))
+            ->assertSee('Lead Parent')
+            ->assertSee('HR Admin');
+    }
+
+    public function test_users_module_is_removed_and_employee_role_creates_staff_login(): void
+    {
+        $org = $this->makeCompany('RL4');
+        $hr = $this->makeUser('hr-admin', $org['company']);
+        $managerRole = Role::query()->where('slug', 'manager')->firstOrFail();
+        $lead = $this->makeEmployee($org, 'LEAD4');
+        $lead->update(['role_id' => Role::query()->where('slug', 'hr-admin')->value('id')]);
+
+        $this->actingAsScoped($hr)
+            ->get('/users')
+            ->assertRedirect('/employees');
+
+        $this->actingAsScoped($hr)
+            ->get(route('more'))
+            ->assertOk()
+            ->assertDontSee('User Management');
+
+        $this->actingAsScoped($hr)
+            ->post(route('employees.store'), [
+                'department_id' => $org['department']->id,
+                'designation_id' => $org['designation']->id,
+                'employee_type_id' => $org['type']->id,
+                'employment_status_id' => $org['status']->id,
+                'first_name' => 'Kajal',
+                'last_name' => 'Login',
+                'email' => 'kajal.login@autotechmotors.com',
+                'joining_date' => '2026-04-01',
+                'role_id' => $managerRole->id,
+                'reporting_manager_id' => $lead->id,
+            ])
+            ->assertRedirect();
+
+        $saved = Employee::query()->where('email', 'kajal.login@autotechmotors.com')->firstOrFail();
+        $this->assertSame($managerRole->id, $saved->role_id);
+        $this->assertNotNull($saved->user);
+        $this->assertTrue($saved->user->hasRole('manager'));
+        $this->assertSame('kajal.login@autotechmotors.com', $saved->user->email);
+    }
 }

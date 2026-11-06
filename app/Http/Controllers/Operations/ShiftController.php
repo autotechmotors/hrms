@@ -9,9 +9,9 @@ use App\Models\Shift;
 use App\Models\ShiftRoster;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
@@ -28,7 +28,7 @@ class ShiftController extends Controller
 
         $employeesQuery = $this->activeEmployees()->with(['department', 'designation']);
         $this->applyEmployeeFilters($employeesQuery, $request);
-        $employees = $employeesQuery->get();
+        $partial = $request->ajax() || $request->boolean('partial');
 
         $shifts = Shift::query()
             ->visibleTo($request->user())
@@ -36,15 +36,19 @@ class ShiftController extends Controller
             ->orderBy('name')
             ->get();
 
-        $rosters = ShiftRoster::query()
-            ->whereIn('employee_id', $employees->pluck('id'))
-            ->whereBetween('work_date', [$start->toDateString(), $end->toDateString()])
-            ->get()
-            ->groupBy(fn (ShiftRoster $roster) => $roster->employee_id.'|'.$roster->work_date->toDateString());
+        $stats = $this->rosterStats(clone $employeesQuery, $start, $end, $shifts->count());
+        $employees = $employeesQuery->paginate(24)->withQueryString();
+        $pageIds = $employees->getCollection()->pluck('id');
 
-        $stats = $this->weekStats($employees->count(), $dates->count(), $rosters, $shifts->count());
+        $rosters = $pageIds->isEmpty()
+            ? collect()
+            : ShiftRoster::query()
+                ->whereIn('employee_id', $pageIds)
+                ->whereBetween('work_date', [$start->toDateString(), $end->toDateString()])
+                ->get()
+                ->groupBy(fn (ShiftRoster $roster) => $roster->employee_id.'|'.$roster->work_date->toDateString());
 
-        return view('operations.shifts.index', [
+        return view($partial ? 'operations.shifts._board' : 'operations.shifts.index', [
             'start' => $start,
             'end' => $end,
             'dates' => $dates,
@@ -52,7 +56,7 @@ class ShiftController extends Controller
             'rosters' => $rosters,
             'shifts' => $shifts,
             'stats' => $stats,
-            'departments' => Department::query()->visibleTo($request->user())->orderBy('name')->get(),
+            'departments' => $partial ? collect() : Department::query()->visibleTo($request->user())->orderBy('name')->get(),
             'filters' => [
                 'q' => trim((string) $request->input('q', '')),
                 'department_id' => $request->input('department_id'),
@@ -98,7 +102,7 @@ class ShiftController extends Controller
         return redirect()->route('shifts.index', $this->weekQuery($request))->with('success', 'Shift removed.');
     }
 
-    public function roster(Request $request): RedirectResponse
+    public function roster(Request $request): RedirectResponse|JsonResponse
     {
         $this->authorizeAny('shifts.manage');
         $data = $request->validate([
@@ -123,10 +127,18 @@ class ShiftController extends Controller
             );
         }
 
+        if ($request->ajax()) {
+            return response()->json([
+                'message' => 'Roster updated.',
+                'cell' => ['off' => $off, 'shift_id' => $shiftId ? (int) $shiftId : null],
+                'stats' => $this->statsForRequest($request),
+            ]);
+        }
+
         return redirect()->route('shifts.index', $this->weekQuery($request))->with('success', 'Roster updated.');
     }
 
-    public function rosterBulk(Request $request): RedirectResponse
+    public function rosterBulk(Request $request): RedirectResponse|JsonResponse
     {
         $this->authorizeAny('shifts.manage');
         $data = $request->validate([
@@ -155,6 +167,10 @@ class ShiftController extends Controller
         if ($mode === 'shift') {
             $shiftId = $data['shift_id'] ?? null;
             if (! $shiftId) {
+                if ($request->ajax()) {
+                    return response()->json(['message' => 'Select a shift before applying to the week.'], 422);
+                }
+
                 return back()->with('error', 'Select a shift before applying to the week.');
             }
             Shift::query()->visibleTo($request->user())->where('company_id', $this->companyId())->findOrFail($shiftId);
@@ -186,8 +202,15 @@ class ShiftController extends Controller
             default => 'Applied shift',
         };
 
-        return redirect()->route('shifts.index', $this->weekQuery($request))
-            ->with('success', "{$label} for {$scope} across the week.");
+        $message = "{$label} for {$scope} across the week.";
+        if ($request->ajax()) {
+            return response()->json([
+                'message' => $message,
+                'stats' => $this->statsForRequest($request),
+            ]);
+        }
+
+        return redirect()->route('shifts.index', $this->weekQuery($request))->with('success', $message);
     }
 
     protected function applyEmployeeFilters(Builder $query, Request $request): void
@@ -210,34 +233,41 @@ class ShiftController extends Controller
     }
 
     /**
-     * @param  Collection<string, Collection<int, ShiftRoster>>  $rosters
      * @return array<string, int>
      */
-    protected function weekStats(int $employeeCount, int $dayCount, $rosters, int $shiftCount): array
+    protected function rosterStats(Builder $employees, Carbon $start, Carbon $end, int $shiftCount): array
     {
-        $assigned = 0;
-        $off = 0;
-        foreach ($rosters as $group) {
-            $roster = $group->first();
-            if (! $roster) {
-                continue;
-            }
-            if ($roster->is_off) {
-                $off++;
-            } elseif ($roster->shift_id) {
-                $assigned++;
-            }
-        }
-
-        $slots = $employeeCount * $dayCount;
+        $ids = (clone $employees)->pluck('id');
+        $people = $ids->count();
+        $base = ShiftRoster::query()
+            ->whereIn('employee_id', $ids->all() ?: [0])
+            ->whereBetween('work_date', [$start->toDateString(), $end->toDateString()]);
+        $off = (clone $base)->where('is_off', true)->count();
+        $assigned = (clone $base)->where('is_off', false)->whereNotNull('shift_id')->count();
 
         return [
             'shifts' => $shiftCount,
             'assigned' => $assigned,
             'off' => $off,
-            'open' => max(0, $slots - $assigned - $off),
-            'people' => $employeeCount,
+            'open' => max(0, ($people * 7) - $assigned - $off),
+            'people' => $people,
         ];
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    protected function statsForRequest(Request $request): array
+    {
+        $start = Carbon::parse($request->input('week', now()->startOfWeek()->toDateString()))->startOfWeek()->startOfDay();
+        $employees = $this->activeEmployees();
+        $this->applyEmployeeFilters($employees, $request);
+        $shiftCount = Shift::query()
+            ->visibleTo($request->user())
+            ->where('company_id', $this->companyId())
+            ->count();
+
+        return $this->rosterStats($employees, $start, $start->copy()->addDays(6), $shiftCount);
     }
 
     /**

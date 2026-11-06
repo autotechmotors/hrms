@@ -100,6 +100,10 @@ class AccessScope
         $user->loadMissing('scopes', 'employee', 'roles');
         $table = $query->getModel()->getTable();
 
+        if ($this->limitedToOwnRow($user)) {
+            return $query->where($table.'.id', $user->employee?->id ?? 0);
+        }
+
         return $query->where(function (Builder $outer) use ($user, $table): void {
             $applied = false;
 
@@ -115,7 +119,7 @@ class AccessScope
                 });
             }
 
-            if ($user->employee && ($user->hasRole('manager') || $user->hasRole('director'))) {
+            if ($user->employee && ($user->hasRole('manager') || $user->hasRole('head') || $user->hasRole('director'))) {
                 $applied = true;
                 $ids = $user->employee->familyMemberIds();
                 $outer->orWhereIn($table.'.id', $ids->all());
@@ -133,5 +137,23 @@ class AccessScope
     public function canAccessEmployee(User $user, Employee $employee): bool
     {
         return Employee::query()->visibleTo($user)->whereKey($employee->id)->exists();
+    }
+
+    /**
+     * The employee role is a self-service login. A company scope must not widen it.
+     */
+    private function limitedToOwnRow(User $user): bool
+    {
+        if (! $user->hasRole('employee')) {
+            return false;
+        }
+
+        foreach (['super-admin', 'hr-admin', 'payroll-admin', 'accounts', 'manager', 'head', 'director', 'device-administrator'] as $slug) {
+            if ($user->hasRole($slug)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 }

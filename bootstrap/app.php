@@ -19,12 +19,11 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->validateCsrfTokens(except: [
             'device-events',
             'hikvision-events/*',
-            'ezapi/*',
         ]);
         $middleware->alias([
             'mfa' => \App\Http\Middleware\EnsureMfaPassed::class,
             'permission' => \App\Http\Middleware\EnsurePermission::class,
-            'dahua.log' => \App\Http\Middleware\LogDahuaApi::class,
+            'device.log' => \App\Http\Middleware\LogDeviceApi::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

@@ -89,7 +89,9 @@ class GatePassController extends Controller
         );
 
         return redirect()->route('gate-passes.show', $pass)
-            ->with('success', $pass->isPending() ? 'Gate Pass requested. Waiting for approval.' : 'Gate Pass created and approved.');
+            ->with('success', $pass->isPending()
+                ? 'Gate Pass requested. Parent must approve before the OUT machine will allow exit.'
+                : 'Gate Pass approved. OUT machine access is available until '.$pass->expires_at?->format('h:i A').'.');
     }
 
     public function show(GatePass $gatePass): View
@@ -112,20 +114,20 @@ class GatePassController extends Controller
     {
         $this->authorizeAny('gate_passes.decide');
         $this->assertVisible($gatePass);
-        $this->gatePasses->approve($gatePass, $request->user());
+        $pass = $this->gatePasses->approve($gatePass, $request->user());
 
-        return back()->with('success', 'Gate Pass approved.');
+        return back()->with('success', 'Gate Pass approved. OUT machine access is available until '.$pass->expires_at?->format('h:i A').'. '.$pass->employee?->full_name.' has been notified.');
     }
 
     public function reject(Request $request, GatePass $gatePass): RedirectResponse
     {
         $this->authorizeAny('gate_passes.decide');
         $this->assertVisible($gatePass);
-        $this->gatePasses->reject($gatePass, $request->user(), $request->validate([
-            'decision_note' => ['nullable', 'string', 'max:500'],
-        ])['decision_note'] ?? null);
+        $pass = $this->gatePasses->reject($gatePass, $request->user(), $request->validate([
+            'decision_note' => ['required', 'string', 'min:3', 'max:500'],
+        ])['decision_note']);
 
-        return back()->with('success', 'Gate Pass rejected.');
+        return back()->with('success', 'Gate Pass rejected. OUT machine stays closed. '.$pass->employee?->full_name.' has been notified.');
     }
 
     public function settings(): View

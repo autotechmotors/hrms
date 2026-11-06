@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\CodedMasterRequest;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\QueryException;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -47,9 +48,12 @@ abstract class CodedMasterController extends Controller
             ->paginate(15)
             ->withQueryString();
 
-        return view('organization.coded.index', [
+        $partial = $request->ajax() || $request->boolean('partial');
+
+        return view($partial ? 'organization.coded._list' : 'organization.coded.index', [
             'records' => $records,
             'title' => $this->title(),
+            'summary' => $this->summary(),
             'route' => $this->routeName(),
             'permission' => $this->permission(),
             'showExit' => $this->hasExitFlag(),
@@ -111,7 +115,7 @@ abstract class CodedMasterController extends Controller
         return redirect()->route($this->routeName().'.index')->with('success', $this->title().' updated.');
     }
 
-    public function destroy(Request $request): RedirectResponse
+    public function destroy(Request $request): RedirectResponse|JsonResponse
     {
         $record = $this->find($this->routeId());
         $this->authorize('delete', $record);
@@ -119,10 +123,23 @@ abstract class CodedMasterController extends Controller
         try {
             $record->delete();
         } catch (QueryException) {
+            if ($request->ajax()) {
+                return response()->json(['message' => 'This record is in use and cannot be deleted.'], 422);
+            }
+
             return back()->with('error', 'This record is in use and cannot be deleted.');
         }
 
+        if ($request->ajax()) {
+            return response()->json(['message' => 'Deleted.']);
+        }
+
         return back()->with('success', 'Deleted.');
+    }
+
+    protected function summary(): string
+    {
+        return 'Name and code used across the company.';
     }
 
     protected function find(int $id): Model

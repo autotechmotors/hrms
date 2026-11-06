@@ -3,11 +3,8 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <meta name="theme-color" content="#E10613">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <link rel="manifest" href="{{ asset('manifest.webmanifest') }}">
-    <link rel="apple-touch-icon" href="{{ asset('icons/apple-touch-icon.png') }}">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    @include('partials.pwa-head')
     <title>@yield('title', 'Dashboard') — {{ config('app.name') }}</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -15,7 +12,7 @@
     <link rel="stylesheet" href="{{ asset('assets/vendor/bootstrap/bootstrap.min.css') }}">
     <link rel="stylesheet" href="{{ asset('assets/vendor/select2/select2.min.css') }}">
     <link rel="stylesheet" href="{{ asset('assets/vendor/flatpickr/flatpickr.min.css') }}">
-    <link rel="stylesheet" href="{{ asset('assets/css/app.css') }}?v=68">
+    <link rel="stylesheet" href="{{ asset('assets/css/app.css') }}?v=90">
     @stack('styles')
     <script>
         (function () {
@@ -54,6 +51,11 @@
                 <button type="button" data-theme-set="light">White</button>
                 <button type="button" data-theme-set="dark">Dark</button>
             </div>
+            @php $unreadNotifications = auth()->user()->unreadNotifications()->count(); @endphp
+            <a class="ib tb-bell" href="{{ route('notifications.index', [], false) }}" aria-label="Notifications">
+                <x-i name="bell" :size="18" />
+                <span class="tb-bell-count {{ $unreadNotifications ? 'show' : '' }}" data-notif-count>{{ $unreadNotifications > 99 ? '99+' : $unreadNotifications }}</span>
+            </a>
             <div class="sr dw" id="gs">
                 <span><x-i name="search" /></span>
                 <input id="q" placeholder="Search pages…" autocomplete="off">
@@ -89,9 +91,10 @@
         @foreach($phoneNav['primary'] as $link)
             <a class="{{ request()->routeIs(...$link['active']) ? 'on' : '' }}" href="{{ route($link['route']) }}"><x-i :name="$link['icon']" :size="18" /><span>{{ $link['label'] }}</span></a>
         @endforeach
-        <a class="{{ request()->routeIs('more', 'profile.edit') ? 'on' : '' }}" href="{{ route('more') }}"><x-i name="menu" :size="18" /><span>More</span></a>
+        <a class="{{ request()->routeIs('more', 'profile.edit', 'notifications.*') ? 'on' : '' }}" href="{{ route('more') }}"><x-i name="menu" :size="18" /><span>More</span></a>
     </nav>
 
+    @include('partials.pwa-install')
     <div class="toast-host" id="toastHost" aria-live="polite" aria-relevant="additions"></div>
     <script>window.__TOASTS__ = @json($flashToasts);</script>
 
@@ -114,7 +117,7 @@
     <script src="{{ asset('assets/vendor/select2/select2.min.js') }}"></script>
     <script src="{{ asset('assets/vendor/flatpickr/flatpickr.min.js') }}"></script>
     <script src="{{ asset('assets/vendor/bootstrap/bootstrap.bundle.min.js') }}"></script>
-    <script src="{{ asset('assets/js/app.js') }}?v=19"></script>
+    <script src="{{ asset('assets/js/app.js') }}?v=26"></script>
     @stack('scripts')
 </body>
 </html>

@@ -3,18 +3,12 @@
 @section('content')
     @php
         $statusClass = $device->status === 'online' ? 'ok' : ($device->status === 'offline' ? 'er' : '');
-        $registerId = $device->register_id ?: config('dahua.register_id');
-        $heard = (! empty($connection['register_id']) && strcasecmp((string) $connection['register_id'], (string) $registerId) === 0)
-            ? $connection
-            : null;
-        $reply = data_get($lastResult, 'Response.Body.Detail.DebugInfo')
-            ?: data_get($lastResult, 'Response.Body.ErrorMsg')
-            ?: data_get($lastResult, 'Response.StatusCode');
+        $registerId = $device->register_id ?: config('devices.register_id');
     @endphp
 
     <div class="ph">
         <div>
-            <x-back :href="route('devices.index')" label="Dahua Devices" />
+            <x-back :href="route('devices.index')" label="Devices" />
             <h1>{{ $device->name }}</h1>
             <p>{{ $device->place ?: 'No place' }} · {{ $device->model ?: 'No model' }}</p>
         </div>
@@ -29,13 +23,9 @@
             <div class="ed-hero-copy">
                 <div class="ed-hero-top">
                     <span class="b {{ $statusClass }}">{{ ucfirst($device->status) }}</span>
-                    <span class="b {{ $listenerOpen ? 'ok' : 'er' }}">Listener {{ $listenerOpen ? 'running' : 'stopped' }}</span>
-                    @if (! empty($heard['online']))
-                        <span class="b ok">Online</span>
-                    @endif
                 </div>
                 <h2>{{ $device->name }}</h2>
-                <p>Register ID {{ $registerId }}</p>
+                <p>{{ $device->brandLabel() }} · {{ $device->isGate() ? 'Gate OUT (pass only)' : 'Attendance IN / OUT' }} · Register ID {{ $registerId }}</p>
             </div>
         </div>
         <div class="ed-hero-meta">
@@ -135,42 +125,25 @@
                 <header>
                     <div>
                         <h3>Connection</h3>
-                        <p>What this PC last heard from the device</p>
+                        <p>Hikvision ISAPI on this terminal</p>
                     </div>
                 </header>
                 <div class="cb dv-conn">
                     <div class="ed-kv ed-kv-1">
                         <div>
-                            <span>Listener</span>
-                            <b>{{ $listenerOpen ? 'Running' : 'Stopped' }} on port {{ $pushPort }}</b>
+                            <span>Host</span>
+                            <b>{{ $device->terminalHost() !== '' ? $device->terminalHost() : 'No contact yet' }}</b>
                         </div>
                         <div>
-                            <span>Last contact</span>
-                            <b>
-                                @if ($heard)
-                                    {{ \App\Support\Clock::stamp($heard['last_seen_at']) }}
-                                    @if (! empty($heard['ip']))
-                                        · {{ $heard['ip'] }}
-                                    @endif
-                                @else
-                                    No contact yet
-                                @endif
-                            </b>
+                            <span>Username</span>
+                            <b>{{ $device->terminalUsername() }}</b>
                         </div>
                         <div>
-                            <span>Last reply</span>
-                            <b>{{ $reply ?: '—' }}</b>
+                            <span>Last check</span>
+                            <b>{{ \App\Support\Clock::dateTime($device->last_checked_at) }}</b>
                         </div>
                     </div>
-                    <p>Server {{ $pushHost }}, port {{ $pushPort }}.
-                        @if (config('dahua.auto_listen'))
-                            PC login = background auto start (no CMD windows). Install once: <code>scripts\install-hrms-autostart.bat</code>.
-                        @elseif ((int) config('dahua.port') === 443)
-                            Live website HTTPS :443 handles EZAPI — no separate listener.
-                        @else
-                            Keep the push port process running (Apache or <code>dahua:ensure-listen</code>).
-                        @endif
-                        Terminal AutoRegister ID must match this device register ID.</p>
+                    <p>Register ID must start with <code>HIK</code>. Scans post to <code>/hikvision-events</code>. Face and finger enroll go over ISAPI, not a local push listener.</p>
                 </div>
             </section>
 

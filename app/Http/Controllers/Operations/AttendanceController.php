@@ -31,7 +31,9 @@ class AttendanceController extends Controller
     public function index(Request $request): View
     {
         $this->authorizeAny('attendance.view');
-        $this->pull();
+        if (! $request->boolean('partial')) {
+            $this->pull();
+        }
         $date = Carbon::parse($request->input('date', now()->toDateString()))->startOfDay();
         $companyId = $this->companyId();
         $canEdit = $request->user()->hasPermission('attendance.edit');
@@ -57,21 +59,22 @@ class AttendanceController extends Controller
         $employees = $filtered->paginate(30)->withQueryString();
         $punches = $this->dayPunches($employees->pluck('id'), $date);
         $stats = $this->dayStats($scopedIds->count(), $allDays);
+        $partial = $request->ajax() || $request->boolean('partial');
 
-        return view('operations.attendance.index', [
+        return view($partial ? 'operations.attendance._list' : 'operations.attendance.index', [
             'date' => $date,
             'employees' => $employees,
-            'picker' => $this->activeEmployees()->get(['id', 'employee_code', 'first_name', 'middle_name', 'last_name']),
+            'picker' => $partial ? collect() : $this->activeEmployees()->get(['id', 'employee_code', 'first_name', 'middle_name', 'last_name']),
             'days' => $allDays,
             'punches' => $punches,
             'stats' => $stats,
-            'departments' => Department::query()->visibleTo($request->user())->orderBy('name')->get(),
+            'departments' => $partial ? collect() : Department::query()->visibleTo($request->user())->orderBy('name')->get(),
             'filters' => [
                 'q' => trim((string) $request->input('q', '')),
                 'department_id' => $request->input('department_id'),
                 'status' => $status,
             ],
-            'rule' => AttendanceRule::query()->firstOrCreate(
+            'rule' => $partial ? null : AttendanceRule::query()->firstOrCreate(
                 ['company_id' => $companyId],
                 ['grace_minutes' => 0, 'mark_absent_without_punch' => true, 'store_selfie' => true],
             ),

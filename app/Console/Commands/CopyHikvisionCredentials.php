@@ -17,7 +17,7 @@ class CopyHikvisionCredentials extends Command
     {
         $configured = \App\Models\Device::query()->get()->contains(fn ($device) => $device->isHikvision() && $device->terminalPassword() !== '');
         if (! $configured) {
-            $this->error('Set the face terminal password in Dahua Devices, then run hikvision:credentials again.');
+            $this->error('Set the face terminal password in Devices, then run hikvision:credentials again.');
 
             return self::FAILURE;
         }

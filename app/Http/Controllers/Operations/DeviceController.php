@@ -7,7 +7,6 @@ use App\Http\Controllers\Operations\Concerns\UsesWorkspace;
 use App\Models\Device;
 use App\Models\DeviceTerminalUser;
 use App\Models\DeviceUser;
-use App\Services\Devices\DahuaPush;
 use App\Services\Devices\EmployeePush;
 use App\Services\Devices\LocalPcServer;
 use Illuminate\Http\RedirectResponse;
@@ -31,7 +30,6 @@ class DeviceController extends Controller
         return view('operations.devices.index', [
             'devices' => $devices,
             'canEdit' => $request->user()->hasPermission('devices.manage'),
-            'listenerOpen' => app(DahuaPush::class)->listenerOpen(),
             'enrolledCount' => (int) $devices->sum('users_count'),
             'localPc' => $pc->status(),
         ]);
@@ -86,19 +84,10 @@ class DeviceController extends Controller
         $this->authorizeDevices();
         abort_unless((int) $device->company_id === $this->companyId(), 404);
 
-        $push = app(DahuaPush::class);
-        $imported = $push->importInbox($device);
-
         return view('operations.devices.show', [
             'device' => $device->load(['users.employee', 'terminalUsers.employee']),
-            'imported' => $imported,
             'employees' => $this->activeEmployees()->orderBy('employee_code')->get(),
             'canEdit' => $request->user()->hasPermission('devices.manage'),
-            'pushHost' => config('dahua.host'),
-            'pushPort' => config('dahua.port'),
-            'listenerOpen' => $push->listenerOpen(),
-            'connection' => $push->connection(),
-            'lastResult' => $push->lastResult(),
         ]);
     }
 
@@ -119,15 +108,15 @@ class DeviceController extends Controller
         $this->authorizeDevices();
         abort_unless((int) $device->company_id === $this->companyId(), 404);
         $device->load('users.employee');
-        $push = app(DahuaPush::class);
+        $people = app(EmployeePush::class);
         $queued = true;
         foreach ($device->users as $enrollment) {
             if (! $enrollment->employee) {
                 continue;
             }
             try {
-                $push->queueDeletePerson($device, $enrollment->employee);
-            } catch (RuntimeException) {
+                $people->drop(collect([$device]), (string) $enrollment->employee->employee_code);
+            } catch (\Throwable) {
                 $queued = false;
             }
         }
@@ -153,15 +142,18 @@ class DeviceController extends Controller
             ['device_id' => $device->id, 'employee_id' => $employee->id],
             ['expires_on' => $data['expires_on'] ?? null, 'is_blocked' => false],
         );
-        app(DahuaPush::class)->rememberPerson($device, $employee->employee_code, $employee->full_name, $employee->id);
+        DeviceTerminalUser::query()->updateOrCreate(
+            ['device_id' => $device->id, 'user_id' => (string) $employee->employee_code],
+            ['name' => $employee->full_name, 'employee_id' => $employee->id, 'dismissed_at' => null],
+        );
 
         try {
-            app(DahuaPush::class)->queueAddPerson($device, $employee, $data['expires_on'] ?? null);
+            app(EmployeePush::class)->rewrite($device, $employee);
         } catch (RuntimeException $exception) {
             return back()->with('success', 'Enrollment saved in HRMS, but the terminal command was not queued: '.$exception->getMessage());
         }
 
-        return back()->with('success', $employee->full_name.' is enrolled. The terminal will add user '.$employee->employee_code.' on its next poll.');
+        return back()->with('success', $employee->full_name.' is enrolled. The terminal will add user '.$employee->employee_code.'.');
     }
 
     public function block(DeviceUser $enrollment): RedirectResponse
@@ -189,8 +181,8 @@ class DeviceController extends Controller
                 ->where('user_id', $employee->employee_code)
                 ->delete();
             try {
-                app(DahuaPush::class)->queueDeletePerson($device, $employee);
-            } catch (RuntimeException $exception) {
+                app(EmployeePush::class)->drop(collect([$device]), (string) $employee->employee_code);
+            } catch (\Throwable $exception) {
                 return back()->with('success', 'Enrollment removed in HRMS, but the terminal delete was not queued: '.$exception->getMessage());
             }
         }
@@ -210,11 +202,10 @@ class DeviceController extends Controller
 
         try {
             $employee = $person->employee;
-            if ($employee) {
-                app(EmployeePush::class)->rewrite($person->device, $employee, (string) $person->user_id, $data['name']);
-            } else {
-                app(DahuaPush::class)->queueUpsertPerson($person->device, $person->user_id, $data['name']);
+            if (! $employee) {
+                throw new RuntimeException($person->device->name.' needs an HRMS employee linked before the name can sync.');
             }
+            app(EmployeePush::class)->rewrite($person->device, $employee, (string) $person->user_id, $data['name']);
         } catch (RuntimeException $exception) {
             return back()->with('error', 'Name saved here, but the terminal command was not queued: '.$exception->getMessage());
         }
@@ -238,7 +229,7 @@ class DeviceController extends Controller
         $person->delete();
 
         try {
-            app(DahuaPush::class)->queueDeleteUser($device, $userId);
+            app(EmployeePush::class)->drop(collect([$device]), (string) $userId);
         } catch (RuntimeException $exception) {
             return back()->with('success', 'Person removed here, but the terminal delete was not queued: '.$exception->getMessage());
         }
@@ -258,9 +249,11 @@ class DeviceController extends Controller
             'password' => ['nullable', 'string', 'max:64'],
             'port' => ['nullable', 'integer', 'min:1', 'max:65535'],
             'place' => ['nullable', 'string', 'max:120'],
+            'gate_kind' => ['nullable', Rule::in(['attendance', 'gate'])],
             'status' => [$creating ? 'nullable' : 'required', Rule::in(['unknown', 'online', 'offline'])],
         ]);
-        $data['register_id'] = trim((string) ($data['register_id'] ?? '')) ?: config('dahua.register_id');
+        $data['gate_kind'] = $data['gate_kind'] ?? Device::KIND_ATTENDANCE;
+        $data['register_id'] = trim((string) ($data['register_id'] ?? '')) ?: config('devices.register_id');
         $data['username'] = trim((string) ($data['username'] ?? '')) ?: null;
         $data['port'] = ($data['port'] ?? null) ?: null;
         if (trim((string) ($data['password'] ?? '')) === '') {

@@ -19,6 +19,7 @@ class AccountController extends Controller
         return view('account.more', [
             'groups' => Navigation::visible($user),
             'roleLabel' => $user->roles->pluck('name')->filter()->unique()->join(', ') ?: 'Staff',
+            'unreadNotifications' => $user->unreadNotifications()->count(),
         ]);
     }
 

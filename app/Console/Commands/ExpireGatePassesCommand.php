@@ -9,7 +9,7 @@ class ExpireGatePassesCommand extends Command
 {
     protected $signature = 'gatepass:expire';
 
-    protected $description = 'Expire approved Gate Passes the minute their validity ends';
+    protected $description = 'Expire approved Gate Passes, revoke OUT machine access, and notify still-out people';
 
     public function handle(): int
     {

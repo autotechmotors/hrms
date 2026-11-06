@@ -13,7 +13,7 @@ Do not add Vue, React, Inertia, or a second Alpine app. Do not add Vite or npm. 
 | List already built like Employees (`partial=1`) | jQuery `$.ajax`. Keep that pattern. |
 | Row action on that list (delete, block, page, filter) | jQuery `$.ajax` to the existing route, then refresh the partial. |
 | New screen, or a form with several fields and live validation | Laravel Livewire component. |
-| File download, login, logout, MFA, device push (`device-events`, Hikvision, `ezapi`) | Normal HTTP. Do not wrap these in ajax. |
+| File download, login, logout, MFA, device push (`device-events`, Hikvision) | Normal HTTP. Do not wrap these in ajax. |
 
 When the first Livewire screen is added: `composer require livewire/livewire` only. In `resources/views/layouts/app.blade.php`, `@livewireStyles` in `<head>` and `@livewireScripts` before `app.js`. No Vite build.
 

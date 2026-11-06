@@ -5,7 +5,7 @@
         $status = $employee->employmentStatus?->name ?? '—';
         $badge = $employee->employmentStatus?->is_exit ? 'er' : (str_contains(strtolower($status), 'probation') ? 'wn' : 'ok');
         $category = $employee->designation?->employeeType?->name ?? $employee->employeeType?->name;
-        $isSuper = auth()->user()->isSuperAdmin();
+        $canEdit = auth()->user()->hasPermission('employees.edit');
     @endphp
 
     <div class="ph">
@@ -15,7 +15,7 @@
             <p>{{ $employee->employee_code }} · {{ $employee->designation?->name ?? '—' }} · {{ $employee->department?->name ?? '—' }}</p>
         </div>
         <div class="ac">
-            @if($isSuper)
+            @if($canEdit)
                 <a class="btn" href="{{ route('employees.edit', $employee) }}"><x-i name="pen" :size="14" />Edit</a>
             @endif
         </div>
@@ -54,7 +54,7 @@
                     <b>{{ $employee->joining_date?->format('d M Y') ?? '—' }}</b>
                 </div>
                 <div>
-                    <small>Manager</small>
+                    <small>Parent</small>
                     <b>{{ $employee->manager?->full_name ?? '—' }}</b>
                 </div>
             </div>
@@ -126,7 +126,8 @@
                             <div><span>Designation</span><b>{{ $employee->designation?->name ?? '—' }}</b></div>
                             <div><span>Category</span><b>{{ $category ?: '—' }}</b></div>
                             <div><span>Status</span><b>{{ $status }}</b></div>
-                            <div><span>Reporting manager</span><b>{{ $employee->manager?->full_name ?? '—' }}@if($employee->manager) <small class="ed-muted">({{ $employee->manager->employee_code }})</small>@endif</b></div>
+                            <div><span>Role</span><b>{{ $employee->role?->name ?? '—' }}</b></div>
+                            <div><span>Parent</span><b>{{ $employee->manager?->full_name ?? 'No parent' }}@if($employee->manager) <small class="ed-muted">· {{ $employee->manager->employee_code }}@if($employee->manager->role) · {{ $employee->manager->role->name }}@elseif($employee->manager->designation) · {{ $employee->manager->designation->name }}@endif</small>@endif</b></div>
                         </div>
                     </div>
                 </section>

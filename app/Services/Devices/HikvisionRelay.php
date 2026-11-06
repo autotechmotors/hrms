@@ -16,7 +16,7 @@ class HikvisionRelay
             return null;
         }
         $origin = $this->origin();
-        $token = (string) config('dahua.forward_token');
+        $token = (string) config('devices.forward_token');
         if ($origin === '' || $token === '') {
             return null;
         }
@@ -112,7 +112,7 @@ class HikvisionRelay
 
     private function origin(): string
     {
-        $url = (string) config('dahua.forward_url');
+        $url = (string) config('devices.forward_url');
         $parts = parse_url($url);
         if (! is_array($parts) || empty($parts['scheme']) || empty($parts['host'])) {
             return '';

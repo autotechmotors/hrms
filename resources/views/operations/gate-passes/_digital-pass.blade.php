@@ -24,7 +24,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
-<link href="{{ asset('assets/css/pass.css') }}?v=8" rel="stylesheet">
+<link href="{{ asset('assets/css/pass.css') }}?v=9" rel="stylesheet">
 @endpush
 
 <div class="pass-screen">
@@ -110,12 +110,18 @@
                 @endif
             </div>
 
+            <p class="pass-note">{{ $gatePass->machine_label }}</p>
+            @if($gatePass->out_at)
+                <p class="pass-note">Gate OUT {{ $gatePass->out_at->format('h:i A') }}@if($gatePass->in_at) · Return {{ $gatePass->in_at->format('h:i A') }}@endif</p>
+            @endif
             @if($state === 'expired')
-                <p class="pass-warning">This Gate Pass has expired and is no longer valid.</p>
+                <p class="pass-warning">{{ $gatePass->isOpenOuting() ? 'Expired while still out. Clock-in starts from the next punch. No return today is half-day early leave.' : 'This Gate Pass has expired and is no longer valid.' }}</p>
             @elseif($isRejected)
-                <p class="pass-warning">{{ $gatePass->decision_note ? 'Reason: '.$gatePass->decision_note : 'This Gate Pass request was rejected.' }}</p>
+                <p class="pass-warning">{{ $gatePass->decision_note ? 'Reason: '.$gatePass->decision_note : 'This Gate Pass request was rejected. OUT machine was not opened.' }}</p>
+            @elseif($isPending)
+                <p class="pass-warning">Parent must approve before this person can punch OUT on the gate machine.</p>
             @elseif($usable)
-                <p class="pass-note">This digital Gate Pass is valid only for the approved date and duration.</p>
+                <p class="pass-note">{{ $gatePass->isOfficeWork() ? 'Office work hours stay in today’s working hours.' : 'Personal work time is cut from today’s working hours. Coming back early keeps the leftover minutes as work.' }}</p>
             @endif
         </div>
     </div>
@@ -130,8 +136,9 @@
                         Approve
                     </button>
                 </form>
-                <form method="post" action="{{ route('gate-passes.reject', $gatePass) }}" data-confirm="Reject this Gate Pass?">
+                <form method="post" action="{{ route('gate-passes.reject', $gatePass) }}" data-confirm="Reject this Gate Pass? The employee is notified and the OUT machine stays closed.">
                     @csrf
+                    <input type="text" name="decision_note" class="pass-reject-note" required minlength="3" maxlength="500" placeholder="Reject reason" value="{{ old('decision_note') }}">
                     <button class="act-btn act-btn-light act-btn-danger-text" type="submit">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
                         Reject

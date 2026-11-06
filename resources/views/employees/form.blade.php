@@ -13,7 +13,7 @@
         </div>
     </div>
 
-    <form id="employeeForm" class="ef" method="post" enctype="multipart/form-data" action="{{ $employee ? route('employees.update', $employee) : route('employees.store') }}">
+    <form id="employeeForm" class="ef" method="post" enctype="multipart/form-data" action="{{ $employee ? route('employees.update', $employee) : route('employees.store') }}" data-user-needs-parent="{{ ($employee && $employee->user?->roles->contains(fn ($role) => $role->requiresReportingManager())) ? '1' : '0' }}">
         @csrf
         @if($employee) @method('put') @endif
 
@@ -34,7 +34,7 @@
                                 <small>Assigned once and cannot be changed</small>
                             </div>
                         @else
-                            <p class="ef-hint">Employee code is assigned automatically from the company name (6 characters, e.g. AT0001 for Autotech).</p>
+                            <p class="ef-code-note">Employee code is assigned automatically from the company name (6 characters, e.g. AT0001 for Autotech).</p>
                         @endif
                         <div class="g c3">
                             <x-text-field name="first_name" label="First name" :value="$employee->first_name ?? ''" required />
@@ -116,21 +116,50 @@
                                     <option value="{{ $status->id }}" @selected(old('employment_status_id', $employee->employment_status_id ?? '') == $status->id)>{{ $status->name }}</option>
                                 @endforeach
                             </x-select-field>
-                            <div>
-                                <x-select-field name="reporting_manager_id" label="Reporting manager / Parent" :required="$needsReportingManager ?? false">
-                                    <option value="">{{ ($needsReportingManager ?? false) ? 'Select parent' : 'None' }}</option>
-                                    @foreach($managers as $manager)
-                                        <option value="{{ $manager->id }}" @selected(old('reporting_manager_id', $employee->reporting_manager_id ?? '') == $manager->id)>{{ $manager->full_name }} ({{ $manager->employee_code }})</option>
-                                    @endforeach
-                                </x-select-field>
-                                <div class="form-text">
-                                    @if($needsReportingManager ?? false)
-                                        This person’s role has a parent — reporting manager is required.
-                                    @else
-                                        Only people whose role has children appear in this list.
-                                    @endif
-                                </div>
-                            </div>
+                        </div>
+                        <div class="ef-role">
+                            <x-select-field name="role_id" label="Role" data-role-list>
+                                <option value="">No role</option>
+                                @foreach($roles as $role)
+                                    @php
+                                        $roleNote = match (true) {
+                                            $role->requiresReportingManager() && $role->appearsInManagerList() => ' · parent required · can be a parent',
+                                            $role->requiresReportingManager() => ' · parent required',
+                                            $role->appearsInManagerList() => ' · can be a parent',
+                                            default => '',
+                                        };
+                                    @endphp
+                                    <option
+                                        value="{{ $role->id }}"
+                                        data-has-parent="{{ $role->requiresReportingManager() ? '1' : '0' }}"
+                                        data-has-child="{{ $role->appearsInManagerList() ? '1' : '0' }}"
+                                        @selected(old('role_id', $employee->role_id ?? '') == $role->id)
+                                    >{{ $role->name }}{{ $roleNote }}</option>
+                                @endforeach
+                            </x-select-field>
+                            <p class="form-text">Role is assigned here on the employee. Staff sign in with this person’s email. A new login starts with password <code>password</code>.</p>
+                        </div>
+                        <div class="ef-parent">
+                            <x-select-field name="reporting_manager_id" label="Parent" :required="$needsReportingManager ?? false" data-parent-list>
+                                <option value="">{{ ($needsReportingManager ?? false) ? 'Select parent' : 'No parent' }}</option>
+                                @foreach($managers as $manager)
+                                    @php
+                                        $parentRole = ($manager->role && $manager->role->appearsInManagerList())
+                                            ? $manager->role
+                                            : $manager->user?->roles->first(fn ($role) => $role->appearsInManagerList());
+                                    @endphp
+                                    <option value="{{ $manager->id }}" @selected(old('reporting_manager_id', $employee->reporting_manager_id ?? '') == $manager->id)>{{ $manager->full_name }} · {{ $manager->employee_code }}@if($parentRole) · {{ $parentRole->name }}@endif</option>
+                                @endforeach
+                            </x-select-field>
+                            <p class="form-text" id="parentHint" data-empty="{{ $managers->isEmpty() ? '1' : '0' }}">
+                                @if($managers->isEmpty())
+                                    Nobody is listed yet. Save a person with a role that has “It has child” on, and they will show up here.
+                                @elseif($needsReportingManager ?? false)
+                                    This role has a parent. Choose someone whose role has “It has child” on.
+                                @else
+                                    Who this person works under. The list is only people whose role has “It has child” on.
+                                @endif
+                            </p>
                         </div>
                     </div>
                 </section>
@@ -231,6 +260,7 @@
                             <li>Employee code is auto-generated and locked after save.</li>
                             <li>Category comes from the designation you pick.</li>
                             <li>Required fields are marked with a red star.</li>
+                            <li>Role is set on the employee. There is no separate Users page.</li>
                         </ul>
                     </div>
                 </section>
@@ -265,6 +295,49 @@
             $('#attViewImg').attr('src', '');
         }
     });
+
+    function syncParentFromRole() {
+        const form = document.getElementById('employeeForm');
+        const role = document.getElementById('role_id');
+        const parent = document.getElementById('reporting_manager_id');
+        const hint = document.getElementById('parentHint');
+        const label = document.querySelector('label[for="reporting_manager_id"]');
+        if (!form || !role || !parent || !hint || !label) return;
+
+        const picked = role.options[role.selectedIndex];
+        const needs = (picked && picked.getAttribute('data-has-parent') === '1')
+            || form.getAttribute('data-user-needs-parent') === '1';
+        parent.required = needs;
+
+        let star = label.querySelector('.text-danger');
+        if (needs && !star) {
+            star = document.createElement('span');
+            star.className = 'text-danger';
+            star.textContent = '*';
+            label.append(' ', star);
+        } else if (!needs && star) {
+            star.remove();
+        }
+
+        const blank = parent.querySelector('option[value=""]');
+        if (blank && parent.value === '') {
+            blank.textContent = needs ? 'Select parent' : 'No parent';
+            if ($.fn.select2 && $(parent).data('select2')) {
+                $(parent).trigger('change.select2');
+            }
+        }
+
+        if (needs) {
+            hint.textContent = 'This role has a parent. Choose someone whose role has “It has child” on.';
+        } else if (hint.getAttribute('data-empty') === '1') {
+            hint.textContent = 'Nobody is listed yet. Save a person with a role that has “It has child” on, and they will show up here.';
+        } else {
+            hint.textContent = 'Who this person works under. The list is only people whose role has “It has child” on.';
+        }
+    }
+
+    $(syncParentFromRole);
+    $(document).on('change', '#role_id', syncParentFromRole);
 })(jQuery);
 </script>
 @endpush

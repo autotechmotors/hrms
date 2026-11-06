@@ -35,8 +35,8 @@ class HikvisionAttendanceTest extends TestCase
             'hikvision.register_id' => 'HIK1921681156',
             'hikvision.username' => 'admin',
             'hikvision.password' => 'secret',
-            'dahua.forward_url' => 'https://hrms.example/device-events',
-            'dahua.forward_token' => 'secret-token',
+            'devices.forward_url' => 'https://hrms.example/device-events',
+            'devices.forward_token' => 'secret-token',
         ]);
         $org = $this->makeCompany('HIK');
         $employee = $this->makeEmployee($org, '900001');
@@ -122,8 +122,8 @@ class HikvisionAttendanceTest extends TestCase
             'hikvision.register_id' => 'HIK1921681156',
             'hikvision.username' => 'admin',
             'hikvision.password' => 'secret',
-            'dahua.forward_url' => '',
-            'dahua.forward_token' => '',
+            'devices.forward_url' => '',
+            'devices.forward_token' => '',
         ]);
         Cache::flush();
         $org = $this->makeCompany('HIK');
@@ -170,8 +170,8 @@ class HikvisionAttendanceTest extends TestCase
             'hikvision.register_id' => 'HIK1921681156',
             'hikvision.username' => 'admin',
             'hikvision.password' => 'secret',
-            'dahua.forward_url' => '',
-            'dahua.forward_token' => '',
+            'devices.forward_url' => '',
+            'devices.forward_token' => '',
         ]);
         Cache::flush();
         $org = $this->makeCompany('HIK');
@@ -231,8 +231,8 @@ class HikvisionAttendanceTest extends TestCase
             'hikvision.register_id' => 'HIK1921681156',
             'hikvision.username' => 'admin',
             'hikvision.password' => 'secret',
-            'dahua.forward_url' => '',
-            'dahua.forward_token' => '',
+            'devices.forward_url' => '',
+            'devices.forward_token' => '',
         ]);
         Cache::flush();
         $org = $this->makeCompany('HIK');
@@ -283,9 +283,7 @@ class HikvisionAttendanceTest extends TestCase
         config([
             'hikvision.username' => 'admin',
             'hikvision.password' => 'secret',
-            'dahua.push_dir' => $dir = storage_path('framework/testing/hik-enroll'),
         ]);
-        \Illuminate\Support\Facades\File::deleteDirectory($dir);
         $org = $this->makeCompany('HIK');
         $employee = $this->makeEmployee($org, 'AT0007');
         Device::query()->create([
@@ -401,7 +399,7 @@ class HikvisionAttendanceTest extends TestCase
         ]);
     }
 
-    public function test_devices_sync_does_not_use_ezapi_for_a_hikvision_terminal(): void
+    public function test_devices_sync_keeps_hikvision_on_isapi(): void
     {
         $org = $this->makeCompany('HIK');
         $device = Device::query()->create([
@@ -413,7 +411,7 @@ class HikvisionAttendanceTest extends TestCase
         ]);
 
         $this->assertSame(
-            'Face: face scans come from the Hikvision pull, not EZAPI',
+            'Face: Hikvision people 0',
             app(DeviceSync::class)->run($device),
         );
     }
@@ -425,8 +423,8 @@ class HikvisionAttendanceTest extends TestCase
             'hikvision.register_id' => 'HIK1921681156',
             'hikvision.username' => 'admin',
             'hikvision.password' => 'wrong',
-            'dahua.forward_url' => '',
-            'dahua.forward_token' => '',
+            'devices.forward_url' => '',
+            'devices.forward_token' => '',
         ]);
         Cache::flush();
         $calls = 0;
@@ -449,7 +447,7 @@ class HikvisionAttendanceTest extends TestCase
 
     public function test_a_face_scan_posted_by_the_terminal_is_stored_on_this_server(): void
     {
-        config(['dahua.forward_token' => 'secrettoken', 'hikvision.register_id' => 'HIK1921681156']);
+        config(['devices.forward_token' => 'secrettoken', 'hikvision.register_id' => 'HIK1921681156']);
         $org = $this->makeCompany('HIK');
         $employee = $this->makeEmployee($org, '900001');
         Device::query()->create([
@@ -519,7 +517,7 @@ class HikvisionAttendanceTest extends TestCase
 
     public function test_a_face_scan_keeps_the_punch_and_drops_the_selfie_when_storage_is_off(): void
     {
-        config(['dahua.forward_token' => 'secrettoken', 'hikvision.register_id' => 'HIK1921681156']);
+        config(['devices.forward_token' => 'secrettoken', 'hikvision.register_id' => 'HIK1921681156']);
         $org = $this->makeCompany('HIK');
         $employee = $this->makeEmployee($org, '900001');
         \App\Models\AttendanceRule::query()->create([
@@ -566,7 +564,7 @@ class HikvisionAttendanceTest extends TestCase
 
     public function test_a_terminal_directory_is_added_on_this_server_without_passwords(): void
     {
-        config(['dahua.forward_token' => 'secrettoken', 'hikvision.register_id' => 'HIK1921681156']);
+        config(['devices.forward_token' => 'secrettoken', 'hikvision.register_id' => 'HIK1921681156']);
         $org = $this->makeCompany('HIK');
         $this->makeEmployee($org, '900001');
         Device::query()->create([

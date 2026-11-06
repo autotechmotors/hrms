@@ -29,6 +29,7 @@ Start at `docs/prompts/HRMS-SYSTEM.md`. Then open only the module file for the s
 | `auth` | `SIGN-IN.md` | Login, logout, authenticator |
 | `roles` | `NAV-PERMISSIONS.md` | Which role sees which module |
 | `employees` | `PROFILE.md` | Profile fields still missing on the form |
+| `employees` | `PARENT-ROLE.md` | Role on the employee form, and who appears as Parent |
 | `attendance` | `REGISTER.md` | Past and current day, phone, worked hours |
 | `shifts` | `ROSTERS.md` | Shifts and rosters |
 | `leave` | `REQUESTS.md` | Leave types and decisions |
@@ -37,7 +38,7 @@ Start at `docs/prompts/HRMS-SYSTEM.md`. Then open only the module file for the s
 | `salary` | `STRUCTURES.md` | Salary heads and structures |
 | `salary` | `HOURS-AND-PAY.md` | Department hours, a person’s own hours, and monthly salary |
 | `advances` | `DEDUCTIONS.md` | Advances and deductions |
-| `devices` | `TERMINALS.md` | Dahua and Hikvision terminals |
+| `devices` | `TERMINALS.md` | Device hub (Hikvision) |
 | `reports` | `ANALYTICS.md` | Reports |
 | `bank` | `TRANSFERS.md` | Bank accounts and transfer batches |
 | `users` | `ACCOUNTS.md` | User accounts |

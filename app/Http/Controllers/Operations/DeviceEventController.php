@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Operations;
 
 use App\Http\Controllers\Controller;
 use App\Models\Device;
-use App\Services\Devices\DahuaLog;
+use App\Services\Devices\DeviceLog;
 use App\Services\Devices\DeviceSync;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -21,7 +21,7 @@ class DeviceEventController extends Controller
 
     public function store(Request $request, DeviceSync $sync): JsonResponse
     {
-        $token = (string) config('dahua.forward_token');
+        $token = (string) config('devices.forward_token');
         $given = (string) $request->header('X-Device-Token', '');
         if ($token === '' || ! hash_equals($token, $given)) {
             abort(401);
@@ -44,7 +44,7 @@ class DeviceEventController extends Controller
             'NotifyInfo' => ['Events' => [$data['event']]],
         ], $data['seq'], $data['image'] ?? null);
 
-        DahuaLog::debug('forward POST /device-events', [
+        DeviceLog::debug('forward POST /device-events', [
             'register_id' => $data['register_id'],
             'device_id' => $device->id,
             'seq' => $data['seq'],

@@ -1,20 +1,16 @@
 @extends('layouts.app')
-@section('title', 'Dahua Devices')
+@section('title', 'Devices')
 @section('content')
     @php
         $pc = $localPc ?? ['available' => false];
         $showPc = $canEdit && ($pc['available'] ?? false);
-        $listenerLabel = $listenerOpen ? 'Running' : 'Stopped';
-        $listenerMode = config('dahua.auto_listen')
-            ? 'PC auto-start'
-            : ((int) config('dahua.port') === 443 ? 'Live web :443' : 'Push service');
         $autoOn = (bool) ($pc['autostart'] ?? false);
     @endphp
 
     <div class="ph">
         <div>
-            <h1>Dahua Devices</h1>
-            <p>Register terminals, enroll people, and keep the local push server healthy.</p>
+            <h1>Devices</h1>
+            <p>Register Hikvision terminals, enroll people, and keep attendance punches in HRMS.</p>
         </div>
         @if ($canEdit)
             <div class="ac">
@@ -34,11 +30,10 @@
                     <span class="dv-mark"><x-i name="cpu" :size="22" /></span>
                     <div>
                         <div class="dv-overview-badges">
-                            <span class="b {{ $listenerOpen ? 'ok' : 'er' }}">Listener {{ $listenerLabel }}</span>
-                            <span class="b ac">{{ $listenerMode }}</span>
+                            <span class="b ac">Hikvision</span>
                         </div>
                         <h2>Attendance device hub</h2>
-                        <p>Port {{ config('dahua.port') }} · Register ID {{ config('dahua.register_id') }}</p>
+                        <p>{{ $devices->count() }} {{ \Illuminate\Support\Str::plural('terminal', $devices->count()) }} · Register ID {{ config('devices.register_id') }}</p>
                     </div>
                 </div>
             </div>
@@ -51,14 +46,6 @@
                     <small>Enrolled people</small>
                     <b>{{ $enrolledCount }}</b>
                 </div>
-                <div class="dv-kpi">
-                    <small>Listener</small>
-                    <b class="{{ $listenerOpen ? 'up' : 'dn' }}">{{ $listenerLabel }}</b>
-                </div>
-                <div class="dv-kpi">
-                    <small>Push host</small>
-                    <b class="dv-kpi-host">{{ config('dahua.host') }}:{{ config('dahua.port') }}</b>
-                </div>
             </div>
         </section>
 
@@ -70,7 +57,7 @@
                             <h3>Local PC server</h3>
                             <span class="b {{ $autoOn ? 'ok' : 'er' }}">{{ $autoOn ? 'Auto-start ON' : 'Auto-start OFF' }}</span>
                         </div>
-                        <p>Background MySQL check, HRMS web, and Dahua listener — no daily CMD.</p>
+                        <p>Background MySQL check and HRMS web — no daily CMD.</p>
                     </div>
                     <div class="dv-pc-actions">
                         @if (! $autoOn)
@@ -88,7 +75,7 @@
                             @csrf
                             <button class="btn" type="submit"><x-i name="play" :size="14" />Start now</button>
                         </form>
-                        <form method="post" action="{{ route('devices.local-pc.stop') }}" data-confirm="Stop Dahua listener and scheduler now?">
+                        <form method="post" action="{{ route('devices.local-pc.stop') }}" data-confirm="Stop the scheduler now?">
                             @csrf
                             <button class="btn dv-danger" type="submit"><x-i name="stop" :size="14" />Stop now</button>
                         </form>
@@ -110,18 +97,10 @@
                             <span>{{ ($pc['web'] ?? false) ? 'Up' : 'Down' }}</span>
                         </div>
                     </div>
-                    <div class="dv-health-item {{ ($pc['listener'] ?? false) ? 'is-up' : 'is-down' }}">
-                        <small>Dahua</small>
-                        <div class="dv-health-row">
-                            <b>:{{ $pc['push_port'] ?? config('dahua.port') }}</b>
-                            <span>{{ ($pc['listener'] ?? false) ? 'Up' : 'Down' }}</span>
-                        </div>
-                    </div>
                     <div class="dv-health-item dv-endpoints">
                         <small>Endpoints</small>
                         <div class="dv-endpoint-lines">
                             <span><em>UI</em> http://{{ $pc['host'] }}:{{ $pc['web_port'] }}</span>
-                            <span><em>Push</em> {{ $pc['host'] }}:{{ $pc['push_port'] }}</span>
                         </div>
                     </div>
                 </div>
@@ -142,7 +121,7 @@
                 <div class="dv-empty">
                     <span class="dv-mark lg"><x-i name="cpu" :size="26" /></span>
                     <h4>No devices yet</h4>
-                    <p>Add your first Dahua terminal, then enroll employees from the device page.</p>
+                    <p>Add your first Hikvision terminal, then enroll employees from the device page.</p>
                     @if ($canEdit)
                         <button class="btn pr" type="button" data-bs-toggle="modal" data-bs-target="#addDeviceModal">
                             <x-i name="plus" :size="14" />Add device
@@ -163,15 +142,16 @@
                                         <h4>{{ $device->name }}</h4>
                                         <span class="b {{ $statusClass }}">{{ ucfirst($device->status) }}</span>
                                     </div>
-                                    <p>{{ $device->place ?: 'No place' }} · {{ trim($device->model.' '.$device->serial) ?: 'No model' }}</p>
+                                    <p>{{ $device->place ?: 'No place' }} · {{ $device->brandLabel() }} · {{ $device->isGate() ? 'Gate OUT (pass only)' : 'Attendance IN / OUT' }} · {{ trim($device->model.' '.$device->serial) ?: 'No model' }}</p>
                                     <div class="dv-tile-meta">
                                         <span>{{ $device->users_count }} enrolled</span>
-                                        <span>ID {{ $device->register_id ?: config('dahua.register_id') }}</span>
+                                        <span>ID {{ $device->register_id ?: config('devices.register_id') }}</span>
                                         <span>{{ \App\Support\Clock::dateTime($device->last_checked_at) }}</span>
                                     </div>
                                 </div>
                             </a>
                             <div class="dv-tile-ops">
+                                <span class="visually-hidden">Actions</span>
                                 <a class="ib" href="{{ route('devices.show', $device) }}" title="Open"><x-i name="eye" :size="15" /></a>
                                 @if ($canEdit)
                                     <button class="ib" type="button" title="Edit" data-bs-toggle="modal" data-bs-target="#editDevice{{ $device->id }}">

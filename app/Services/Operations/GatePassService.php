@@ -12,6 +12,8 @@ use Illuminate\Validation\ValidationException;
 
 class GatePassService
 {
+    public function __construct(protected GatePassAccess $access) {}
+
     public function create(User $actor, array $data, Employee $forEmployee): GatePass
     {
         $settings = GatePassSetting::forCompany((int) $forEmployee->company_id);
@@ -24,7 +26,7 @@ class GatePassService
             throw ValidationException::withMessages(['duration_minutes' => 'Duration exceeds the maximum allowed limit.']);
         }
 
-        GatePass::expireStale();
+        $this->expireDue();
         $this->assertNoDuplicate($forEmployee, $settings);
 
         $auto = $this->shouldAutoApprove($actor, $self, $forEmployee, $isSelf, $settings);
@@ -45,9 +47,16 @@ class GatePassService
                 'decided_by' => $auto ? $actor->id : null,
                 'decided_at' => $auto ? now() : null,
                 'expires_at' => GatePass::calculateExpiresAt($data['date'], $data['out_time'], (int) $data['duration_minutes']),
+                'machine_status' => 'none',
+                'machine_note' => $auto ? null : 'Waiting for parent approval. OUT machine stays closed.',
             ]);
 
-            $this->notify($pass, $auto ? 'approved' : 'requested');
+            if ($auto) {
+                $this->access->grant($pass);
+                $this->notify($pass->fresh(), 'approved');
+            } else {
+                $this->notify($pass, 'requested');
+            }
 
             return $pass->fresh(['employee.department', 'decider', 'creator']);
         });
@@ -64,7 +73,7 @@ class GatePassService
             'expires_at' => $pass->expiresAtFromOut(),
         ]);
 
-        $pass = $pass->fresh(['employee.department', 'decider']);
+        $pass = $this->access->grant($pass->fresh(['employee.department', 'decider']));
         $this->notify($pass, 'approved');
 
         return $pass;
@@ -73,17 +82,55 @@ class GatePassService
     public function reject(GatePass $pass, User $actor, ?string $note = null): GatePass
     {
         $this->assertCanDecide($pass, $actor);
+        $note = trim((string) $note);
+        if ($note === '') {
+            throw ValidationException::withMessages(['decision_note' => 'Add a reject reason. The employee is notified and the OUT machine stays closed.']);
+        }
+
         $pass->update([
             'status' => GatePass::STATUS_REJECTED,
             'decided_by' => $actor->id,
             'decided_at' => now(),
             'decision_note' => $note,
+            'machine_status' => 'revoked',
+            'machine_note' => 'Rejected. OUT machine was not opened. '.$note,
         ]);
 
-        $pass = $pass->fresh(['employee.department', 'decider']);
+        $pass = $this->access->revoke($pass->fresh(['employee.department', 'decider']), 'Rejected. OUT machine was not opened. '.$note);
         $this->notify($pass, 'rejected');
 
         return $pass;
+    }
+
+    public function expireDue(): int
+    {
+        $due = GatePass::query()
+            ->with(['employee.department', 'employee.manager', 'decider'])
+            ->where('status', GatePass::STATUS_APPROVED)
+            ->whereNotNull('expires_at')
+            ->where('expires_at', '<=', now())
+            ->get();
+
+        foreach ($due as $pass) {
+            $stillOut = $pass->isOpenOuting();
+            $pass->update(['status' => GatePass::STATUS_EXPIRED]);
+            $this->access->revoke(
+                $pass->fresh(),
+                $stillOut
+                    ? 'Expired while still out. Clock-in starts when they return. No return today counts as half-day early leave.'
+                    : 'Expired. OUT machine access removed.'
+            );
+            $fresh = $pass->fresh(['employee.department', 'employee.manager', 'decider']);
+            $this->notify($fresh, 'expired');
+            if ($stillOut) {
+                $this->notify($fresh, 'still_out');
+            }
+            if ($fresh->employee) {
+                app(AttendanceCalculator::class)->recalculate($fresh->employee, $fresh->date->copy()->timezone('Asia/Kolkata'));
+            }
+        }
+
+        return $due->count();
     }
 
     protected function shouldAutoApprove(User $actor, ?Employee $self, Employee $for, bool $isSelf, GatePassSetting $settings): bool
@@ -133,9 +180,11 @@ class GatePassService
 
     protected function notify(GatePass $pass, string $event): void
     {
-        $recipients = $event === 'requested'
-            ? $this->requestRecipients($pass)
-            : collect([$pass->employee?->user])->filter();
+        $recipients = match ($event) {
+            'requested' => $this->requestRecipients($pass),
+            'still_out' => $this->requestRecipients($pass)->push($pass->employee?->user)->filter(),
+            default => collect([$pass->employee?->user])->filter(),
+        };
 
         $recipients->unique('id')->each(fn (User $user) => $user->notify(new GatePassNotice($pass, $event)));
     }

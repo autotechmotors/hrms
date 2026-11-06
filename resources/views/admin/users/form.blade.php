@@ -16,7 +16,7 @@
         <x-check-field name="is_active" label="Active" :checked="$account->is_active ?? true" />
         <div class="mb-3">
             <div class="form-label">Roles</div>
-            <p class="small text-secondary">Only people with a staff role can sign in. Employees do not get a login unless an admin assigns a role such as Manager or HR. Authenticator stays on for roles that require it.</p>
+            <p class="small text-secondary">A person can sign in only after a role is assigned. The Employee role sees only that person's own records. Authenticator stays on for roles that require it.</p>
             @foreach($roles as $role)
                 <div class="form-check">
                     <input class="form-check-input" type="checkbox" name="roles[]" value="{{ $role->id }}" id="role{{ $role->id }}" @checked(in_array($role->id, old('roles', $account ? $account->roles->pluck('id')->all() : [])))>

@@ -357,7 +357,7 @@ class HikvisionEnroll
     {
         $password = $device->terminalPassword();
         if ($password === '') {
-            throw new RuntimeException('Set the face terminal password in Dahua Devices before enrolling.');
+            throw new RuntimeException('Set the face terminal password in Devices before enrolling.');
         }
 
         return [$device->terminalUsername(), $password];

@@ -14,6 +14,7 @@ use App\Models\Employee;
 use App\Models\EmployeeCustomField;
 use App\Models\EmployeeType;
 use App\Models\EmploymentStatus;
+use App\Models\Role;
 use App\Services\AccessScope;
 use App\Services\Employees\EmployeeExporter;
 use App\Services\Employees\EmployeeImporter;
@@ -45,15 +46,17 @@ class EmployeeController extends Controller
         $this->authorize('viewAny', Employee::class);
 
         $employees = $this->filteredEmployees($request);
-        $canManage = $request->user()->isSuperAdmin();
-        $canBlock = $request->user()->hasPermission('employees.edit');
+        $canEdit = $request->user()->hasPermission('employees.edit');
+        $canDelete = $request->user()->hasPermission('employees.delete');
+        $canBlock = $canEdit;
         $credentialCounts = $this->credentialCounts($employees->getCollection());
         $credentialSlots = $this->credentialSlots($employees->getCollection());
 
         if ($request->ajax() || $request->boolean('partial')) {
             return view('employees._list', [
                 'employees' => $employees,
-                'canManage' => $canManage,
+                'canEdit' => $canEdit,
+                'canDelete' => $canDelete,
                 'canBlock' => $canBlock,
                 'credentialCounts' => $credentialCounts,
                 'credentialSlots' => $credentialSlots,
@@ -62,7 +65,8 @@ class EmployeeController extends Controller
 
         return view('employees.index', [
             'employees' => $employees,
-            'canManage' => $canManage,
+            'canEdit' => $canEdit,
+            'canDelete' => $canDelete,
             'canBlock' => $canBlock,
             'perPage' => $this->pageSize($request),
             'departments' => Department::query()->visibleTo($request->user())->orderBy('name')->get(),
@@ -98,8 +102,8 @@ class EmployeeController extends Controller
     {
         $this->authorize('view', $employee);
         $employee->load([
-            'department', 'designation.employeeType', 'employeeType',
-            'employmentStatus', 'manager', 'documents', 'events', 'exits.employmentStatus',
+            'department', 'designation.employeeType', 'employeeType', 'role',
+            'employmentStatus', 'manager.designation', 'manager.role', 'documents', 'events', 'exits.employmentStatus',
             'bankAccounts', 'activeBankAccount', 'latestExit.employmentStatus', 'customValues.field',
         ]);
 
@@ -201,15 +205,6 @@ class EmployeeController extends Controller
     public function credentialState(Employee $employee): JsonResponse
     {
         $this->authorize('view', $employee);
-        \App\Models\Device::query()->where('company_id', $employee->company_id)->orderBy('id')->each(function ($device): void {
-            try {
-                $push = app(\App\Services\Devices\DahuaPush::class);
-                $push->importInbox($device);
-                $push->continueCollect($device);
-            } catch (\Throwable) {
-            }
-        });
-
         return response()->json([
             'counts' => $this->countsFor($employee),
             'slots' => $this->slotsFor($employee),
@@ -260,10 +255,6 @@ class EmployeeController extends Controller
     public function destroy(Request $request, Employee $employee): RedirectResponse|JsonResponse
     {
         $this->authorize('delete', $employee);
-
-        if (! $request->user()->isSuperAdmin()) {
-            abort(403);
-        }
 
         $push = app(\App\Services\Devices\EmployeePush::class);
         $linked = $push->linked($employee);
@@ -475,27 +466,24 @@ class EmployeeController extends Controller
     private function formData(?Employee $employee): array
     {
         $user = request()->user();
-        $employee?->load(['customValues', 'user.roles']);
+        $employee?->load(['customValues', 'role', 'user.roles']);
         $companyId = $employee?->company_id ?? app(Workspace::class)->company($user)?->id;
 
         $catalog = Employee::query()
             ->visibleTo($user)
             ->when($companyId, fn ($query) => $query->where('company_id', $companyId))
             ->when($employee, fn ($query) => $query->whereKeyNot($employee->id))
+            ->with(['designation', 'role', 'user.roles'])
             ->orderBy('first_name');
 
         $managers = (clone $catalog)
             ->where(function ($query) use ($employee): void {
                 $query->canManagePeople();
                 if ($employee?->reporting_manager_id) {
-                    $query->orWhereKey($employee->reporting_manager_id);
+                    $query->orWhere($query->getModel()->getQualifiedKeyName(), $employee->reporting_manager_id);
                 }
             })
             ->get();
-
-        if ($managers->isEmpty()) {
-            $managers = $catalog->get();
-        }
 
         return [
             'employee' => $employee,
@@ -504,6 +492,16 @@ class EmployeeController extends Controller
             'designations' => Designation::query()->with('employeeType')->visibleTo($user)->when($companyId, fn ($query) => $query->where('company_id', $companyId))->orderBy('name')->get(),
             'types' => EmployeeType::query()->visibleTo($user)->when($companyId, fn ($query) => $query->where('company_id', $companyId))->orderBy('name')->get(),
             'statuses' => EmploymentStatus::query()->visibleTo($user)->when($companyId, fn ($query) => $query->where('company_id', $companyId))->orderBy('name')->get(),
+            'roles' => Role::query()
+                ->where(function ($query) use ($employee): void {
+                    $query->where('is_active', true);
+                    if ($employee?->role_id) {
+                        $query->orWhere($query->getModel()->getQualifiedKeyName(), $employee->role_id);
+                    }
+                })
+                ->when(! $user->isSuperAdmin(), fn ($query) => $query->where('slug', '!=', 'super-admin'))
+                ->orderBy('name')
+                ->get(),
             'managers' => $managers,
             'customFields' => EmployeeCustomField::query()
                 ->visibleTo($user)

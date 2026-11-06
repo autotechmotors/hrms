@@ -23,7 +23,7 @@ class HikvisionCredentials
         $device = $this->device();
         $password = $device->terminalPassword();
         if ($password === '') {
-            throw new RuntimeException('Set the face terminal password in Dahua Devices before copying credentials.');
+            throw new RuntimeException('Set the face terminal password in Devices before copying credentials.');
         }
 
         $host = $device->terminalHost();

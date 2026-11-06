@@ -77,8 +77,9 @@
                                         @csrf
                                         <button class="btn sm pr" type="submit">Approve</button>
                                     </form>
-                                    <form method="post" action="{{ route('gate-passes.reject', $row) }}" data-confirm="Reject Gate Pass for {{ $row->employee?->full_name }}?">
+                                    <form method="post" action="{{ route('gate-passes.reject', $row) }}" data-confirm="Reject Gate Pass for {{ $row->employee?->full_name }}? They will be notified and the OUT machine stays closed.">
                                         @csrf
+                                        <input type="hidden" name="decision_note" value="Rejected by parent. OUT machine stays closed.">
                                         <button class="btn sm" type="submit">Reject</button>
                                     </form>
                                 </div>
@@ -185,8 +186,9 @@
                                                 @csrf
                                                 <button class="btn sm pr" type="submit">Approve</button>
                                             </form>
-                                            <form method="post" action="{{ route('gate-passes.reject', $row) }}" data-confirm="Reject Gate Pass for {{ $row->employee?->full_name }}?">
+                                            <form method="post" action="{{ route('gate-passes.reject', $row) }}" data-confirm="Reject Gate Pass for {{ $row->employee?->full_name }}? They will be notified and the OUT machine stays closed.">
                                                 @csrf
+                                                <input type="hidden" name="decision_note" value="Rejected by parent. OUT machine stays closed.">
                                                 <button class="btn sm" type="submit">Reject</button>
                                             </form>
                                         </div>
@@ -228,8 +230,9 @@
                                         @csrf
                                         <button class="btn sm pr" type="submit">Approve</button>
                                     </form>
-                                    <form method="post" action="{{ route('gate-passes.reject', $row) }}" data-confirm="Reject Gate Pass for {{ $row->employee?->full_name }}?">
+                                    <form method="post" action="{{ route('gate-passes.reject', $row) }}" data-confirm="Reject Gate Pass for {{ $row->employee?->full_name }}? They will be notified and the OUT machine stays closed.">
                                         @csrf
+                                        <input type="hidden" name="decision_note" value="Rejected by parent. OUT machine stays closed.">
                                         <button class="btn sm" type="submit">Reject</button>
                                     </form>
                                 @else

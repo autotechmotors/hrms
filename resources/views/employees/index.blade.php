@@ -68,7 +68,7 @@
         </form>
 
         <div class="el-wrap" id="employeeResults" data-view="list">
-            @include('employees._list', ['employees' => $employees, 'canManage' => $canManage, 'canBlock' => $canBlock])
+            @include('employees._list', ['employees' => $employees, 'canEdit' => $canEdit, 'canDelete' => $canDelete, 'canBlock' => $canBlock])
         </div>
     </section>
 @endsection

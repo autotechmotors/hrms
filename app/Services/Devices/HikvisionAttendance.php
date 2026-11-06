@@ -70,7 +70,7 @@ class HikvisionAttendance
      */
     private function importHeld(): array
     {
-        $dir = (string) config('dahua.forward_dir');
+        $dir = (string) config('devices.forward_dir');
         if (! is_dir($dir)) {
             return ['stored' => 0, 'added' => 0];
         }
@@ -255,7 +255,7 @@ class HikvisionAttendance
         try {
             $people = $this->events->enrolledOn($host, $username, $password, now());
         } catch (RuntimeException $exception) {
-            DahuaLog::debug('hikvision enrolled people', ['error' => $exception->getMessage()]);
+            DeviceLog::debug('hikvision enrolled people', ['error' => $exception->getMessage()]);
 
             return 0;
         }

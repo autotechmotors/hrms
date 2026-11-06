@@ -11,7 +11,11 @@ class Device extends Model
 {
     use AuditsChanges, BelongsToCompany;
 
-    protected $fillable = ['company_id', 'name', 'model', 'serial', 'register_id', 'ip_address', 'username', 'password', 'port', 'place', 'status', 'last_checked_at'];
+    public const KIND_ATTENDANCE = 'attendance';
+
+    public const KIND_GATE = 'gate';
+
+    protected $fillable = ['company_id', 'name', 'model', 'serial', 'register_id', 'ip_address', 'username', 'password', 'port', 'place', 'gate_kind', 'status', 'last_checked_at'];
 
     protected $hidden = ['password'];
 
@@ -66,8 +70,24 @@ class Device extends Model
         return $this->hasMany(DeviceTerminalUser::class);
     }
 
+    /** Register ID starting HIK → Hikvision ISAPI. */
     public function isHikvision(): bool
     {
         return str_starts_with(strtoupper(trim((string) $this->register_id)), 'HIK');
+    }
+
+    public function brandLabel(): string
+    {
+        return $this->isHikvision() ? 'Hikvision' : 'Terminal';
+    }
+
+    public function isGate(): bool
+    {
+        return $this->gate_kind === self::KIND_GATE;
+    }
+
+    public function isAttendance(): bool
+    {
+        return ! $this->isGate();
     }
 }

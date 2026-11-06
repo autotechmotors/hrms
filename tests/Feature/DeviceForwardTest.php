@@ -25,46 +25,28 @@ class DeviceForwardTest extends TestCase
     {
         Http::fake(['https://hrms.example/device-events' => Http::response(['saved' => 1, 'pending' => false])]);
         config([
-            'dahua.forward_url' => 'https://hrms.example/device-events',
-            'dahua.forward_token' => 'secret-token',
-            'dahua.push_dir' => $dir = storage_path('framework/testing/dahua-forward'),
-            'dahua.register_id' => 'GATE01',
+            'devices.forward_url' => 'https://hrms.example/device-events',
+            'devices.forward_token' => 'secret-token',
         ]);
-        File::deleteDirectory($dir);
         $org = $this->makeCompany('FWD');
-        $employee = $this->makeEmployee($org, '900001');
         $device = Device::query()->create([
             'company_id' => $org['company']->id,
             'name' => 'Gate',
             'register_id' => 'GATE01',
             'status' => 'online',
         ]);
-        $saved = $dir.DIRECTORY_SEPARATOR.'saved_files';
-        File::ensureDirectoryExists($saved);
-        $at = Carbon::parse('2026-10-21 10:00:00', 'Asia/Kolkata');
-        File::put($saved.DIRECTORY_SEPARATOR.'21.json', json_encode([
-            'RegisterID' => 'GATE01',
-            'NotifyInfo' => ['Events' => [[
-                'Code' => 'AccessControl',
-                'Data' => [
-                    'ErrorCode' => 0,
-                    'Type' => 'Entry',
-                    'RealUTC' => $at->utc()->timestamp,
-                    'UserID' => '900001',
-                    'UserName' => 'Test Person',
-                    'SN' => 'GATE01',
-                ],
-            ]]],
-        ]));
-
-        \App\Models\DeviceTerminalUser::query()->create([
-            'device_id' => $device->id,
-            'user_id' => '900001',
-            'name' => 'Test Person',
-            'employee_id' => $employee->id,
-        ]);
-        \Illuminate\Support\Facades\Cache::flush();
-        $this->assertSame(1, app(\App\Services\Devices\DeviceSync::class)->pullPunches());
+        $event = [
+            'Code' => 'AccessControl',
+            'Data' => [
+                'ErrorCode' => 0,
+                'Type' => 'Entry',
+                'RealUTC' => Carbon::parse('2026-10-21 10:00:00', 'Asia/Kolkata')->utc()->timestamp,
+                'UserID' => '900001',
+                'UserName' => 'Test Person',
+                'SN' => 'GATE01',
+            ],
+        ];
+        app(\App\Services\Devices\PunchForward::class)->send($device, $event, '21', null);
 
         Http::assertSent(function ($request) {
             return $request->url() === 'https://hrms.example/device-events'
@@ -76,7 +58,7 @@ class DeviceForwardTest extends TestCase
 
     public function test_production_stores_a_forwarded_scan_for_an_existing_employee(): void
     {
-        config(['dahua.forward_token' => 'secret-token']);
+        config(['devices.forward_token' => 'secret-token']);
         $org = $this->makeCompany('FWD');
         $employee = $this->makeEmployee($org, '900001');
         Device::query()->create([
@@ -112,7 +94,7 @@ class DeviceForwardTest extends TestCase
 
     public function test_a_forwarded_scan_for_an_unknown_person_is_not_stored(): void
     {
-        config(['dahua.forward_token' => 'secret-token']);
+        config(['devices.forward_token' => 'secret-token']);
         $org = $this->makeCompany('FWD');
         Device::query()->create([
             'company_id' => $org['company']->id,
@@ -147,11 +129,11 @@ class DeviceForwardTest extends TestCase
     {
         Http::fake(['https://hrms.example/device-events' => Http::response(['saved' => 0, 'pending' => true])]);
         config([
-            'dahua.forward_url' => 'https://hrms.example/device-events',
-            'dahua.forward_token' => 'secret-token',
+            'devices.forward_url' => 'https://hrms.example/device-events',
+            'devices.forward_token' => 'secret-token',
         ]);
         Cache::flush();
-        $dir = (string) config('dahua.forward_dir');
+        $dir = (string) config('devices.forward_dir');
         File::deleteDirectory($dir);
         File::ensureDirectoryExists($dir);
         File::put($dir.DIRECTORY_SEPARATOR.'one.json', json_encode([
@@ -178,7 +160,7 @@ class DeviceForwardTest extends TestCase
 
     public function test_a_forwarded_scan_without_the_token_is_refused(): void
     {
-        config(['dahua.forward_token' => 'secret-token']);
+        config(['devices.forward_token' => 'secret-token']);
         $this->postJson(route('device-events.store'), [
             'register_id' => 'GATE01',
             'seq' => '32',

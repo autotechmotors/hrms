@@ -40,11 +40,13 @@ Add these only where `app/Support/PermissionCatalog.php` does not already have t
 | Role | Keeps | Does not gain |
 |---|---|---|
 | Super Admin | Full bypass | |
-| HR Admin | People, payroll view, shifts, leave, holidays, salary, advances, reports | `payments.release`, `payroll.lock`, `payroll.reopen`, `settings.manage`, role create/edit/delete |
+| HR Admin | Every permission: create, edit, delete, and manage on every module | Assigning or removing the Super Admin role |
 | Payroll Admin | Payroll actions they have now | Device admin, employee create |
 | Accounts | Bank and payments | Attendance edit |
 | Manager | Dashboard, employees in department and direct reports, attendance view, and view-only shifts, leave, and holidays | Payroll, salary, advances, devices, reports, user admin, and any manage or edit action |
 | Director | Current read scope, plus attendance and reports inside that scope | Payroll process, devices |
 | Device Administrator | Devices and employee view | Payroll, user admin |
+| Head | Same modules as Manager, for their reporting tree | Payroll, devices, user admin |
+| Employee | Dashboard, their own employee row, their attendance, leave view, holidays, and Gate Pass apply | Anyone else's records, payroll, devices, administration, and Gate Pass decide |
 
 Phone bottom bar uses this same filter. See `docs/prompts/HRMS-LIQUID-GLASS.md`.

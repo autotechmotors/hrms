@@ -21,10 +21,8 @@ class LocalPcServer
      *     keep_alive_task: bool,
      *     mysql: bool,
      *     web: bool,
-     *     listener: bool,
      *     host: string,
-     *     web_port: int,
-     *     push_port: int
+     *     web_port: int
      * }
      */
     public function status(): array
@@ -35,10 +33,8 @@ class LocalPcServer
             'keep_alive_task' => $this->taskExists(),
             'mysql' => $this->portListening(3306),
             'web' => $this->portListening((int) $this->webPort()),
-            'listener' => app(DahuaPush::class)->listenerOpen(),
-            'host' => (string) config('dahua.host', '127.0.0.1'),
+            'host' => (string) parse_url((string) config('app.url', 'http://127.0.0.1:8000'), PHP_URL_HOST) ?: '127.0.0.1',
             'web_port' => $this->webPort(),
-            'push_port' => (int) config('dahua.port', 60002),
         ];
     }
 
@@ -66,7 +62,7 @@ class LocalPcServer
         $this->createKeepAliveTask();
         $this->startNow();
 
-        return ['ok' => true, 'message' => 'Auto-start ON. PC login will start MySQL check + HRMS + Dahua in background.'];
+        return ['ok' => true, 'message' => 'Auto-start ON. PC login will start MySQL check and HRMS in the background.'];
     }
 
     /**
@@ -125,14 +121,13 @@ class LocalPcServer
             return ['ok' => false, 'message' => 'Windows only.'];
         }
 
-        // Stop Dahua listener + schedule workers; do not kill this web PHP blindly via taskkill /IM php.exe.
-        $this->killByCommandLine('dahua:listen');
+        // Stop schedule workers; do not kill this web PHP blindly via taskkill /IM php.exe.
         $this->killByCommandLine('schedule:work');
         $this->killByCommandLine('hrms-watchdog.bat');
 
         usleep(400000);
 
-        return ['ok' => true, 'message' => 'Listener and scheduler stopped. Web UI may still run until the page finishes.'];
+        return ['ok' => true, 'message' => 'Scheduler stopped. Web UI may still run until the page finishes.'];
     }
 
     private function scriptsDir(): string
@@ -182,7 +177,7 @@ class LocalPcServer
 \$s.WindowStyle = 7;
 \$s.Save();
 PS;
-        $tmp = storage_path('app/dahua/runtime/ui-startup.ps1');
+        $tmp = storage_path('app/device-runtime/ui-startup.ps1');
         File::ensureDirectoryExists(dirname($tmp));
         File::put($tmp, $ps);
         if (! $this->command('powershell -NoProfile -ExecutionPolicy Bypass -File '.escapeshellarg($tmp).' 2>&1', $out, $code)) {
@@ -219,7 +214,7 @@ PS;
     {
         $needle = str_replace("'", "''", $needle);
         $ps = "Get-CimInstance Win32_Process | Where-Object { \$_.CommandLine -and \$_.CommandLine -like '*{$needle}*' } | ForEach-Object { Stop-Process -Id \$_.ProcessId -Force -ErrorAction SilentlyContinue }";
-        $tmp = storage_path('app/dahua/runtime/ui-stop.ps1');
+        $tmp = storage_path('app/device-runtime/ui-stop.ps1');
         File::ensureDirectoryExists(dirname($tmp));
         File::put($tmp, $ps);
         $this->command('powershell -NoProfile -ExecutionPolicy Bypass -File '.escapeshellarg($tmp).' 2>&1');

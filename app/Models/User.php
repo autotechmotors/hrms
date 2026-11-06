@@ -113,7 +113,17 @@ class User extends Authenticatable
     {
         $this->loadMissing('roles');
 
-        return $this->roles->contains(fn (Role $role) => $role->slug !== 'employee');
+        return $this->roles->contains(fn (Role $role) => $role->is_active);
+    }
+
+    public function notificationActionUrl(array $data): string
+    {
+        $gatePassId = $data['gate_pass_id'] ?? null;
+        if ($gatePassId) {
+            return route('gate-passes.show', $gatePassId, false);
+        }
+
+        return $data['action_url'] ?? route('notifications.index');
     }
 
     public function scopeVisibleTo(Builder $query, User $actor): Builder

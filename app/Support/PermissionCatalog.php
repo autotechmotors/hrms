@@ -7,6 +7,7 @@ class PermissionCatalog
     /**
      * Permissions are stored in the database so administrators can assign them.
      * Super Admin bypasses this list in code and always has every permission.
+     * HR Admin is granted every slug by RoleAndPermissionSeeder.
      *
      * @return list<array{group: string, name: string, slug: string}>
      */

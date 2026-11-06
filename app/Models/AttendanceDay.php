@@ -9,7 +9,8 @@ class AttendanceDay extends Model
 {
     protected $fillable = [
         'employee_id', 'work_date', 'shift_id', 'punch_in', 'punch_out',
-        'status', 'minutes_worked', 'source', 'remarks',
+        'status', 'minutes_worked', 'minutes_away', 'minutes_personal', 'minutes_office',
+        'source', 'remarks',
     ];
 
     protected function casts(): array

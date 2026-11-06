@@ -11,7 +11,7 @@ User create, edit, and delete stay on the current policies. A user's department 
 
 ## Menu
 
-`users.view`, `users.create`, `users.edit`, `users.delete` stay. HR Admin still must not gain `users.delete`. Map: `docs/roles/NAV-PERMISSIONS.md`.
+`users.view`, `users.create`, `users.edit`, `users.delete` stay. Super Admin and HR Admin both have `users.delete`. Only a Super Admin can assign or remove the Super Admin role. Map: `docs/roles/NAV-PERMISSIONS.md`.
 
 ## Visual
 

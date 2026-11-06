@@ -10,12 +10,9 @@ Artisan::command('inspire', function () {
 
 Schedule::command('gatepass:expire')->everyMinute()->withoutOverlapping();
 
-Schedule::command('devices:sync')->everyMinute()->withoutOverlapping(5);
+Schedule::command('employees:block-inactive')->dailyAt('00:10')->withoutOverlapping();
 
-Schedule::command('dahua:ensure-listen')
-    ->everyMinute()
-    ->when(fn () => (bool) config('dahua.auto_listen'))
-    ->withoutOverlapping();
+Schedule::command('devices:sync')->everyMinute()->withoutOverlapping(5);
 
 Schedule::command('hikvision:pull')
     ->everyMinute()

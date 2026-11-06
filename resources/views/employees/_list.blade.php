@@ -1,5 +1,6 @@
 @php
-    $canManage = $canManage ?? false;
+    $canEdit = $canEdit ?? false;
+    $canDelete = $canDelete ?? false;
     $canBlock = $canBlock ?? false;
     $credentialCounts = $credentialCounts ?? [];
 @endphp
@@ -68,8 +69,10 @@
                     <td class="el-act">
                         <div class="el-ops">
                             <a class="ib" href="{{ route('employees.show', $employee) }}" title="View" aria-label="View"><x-i name="eye" :size="15" /></a>
-                            @if($canManage)
+                            @if($canEdit)
                                 <a class="ib" href="{{ route('employees.edit', $employee) }}" title="Edit" aria-label="Edit"><x-i name="pen" :size="15" /></a>
+                            @endif
+                            @if($canDelete)
                                 <form class="el-del" method="post" action="{{ route('employees.destroy', $employee) }}" data-confirm="Delete {{ $employee->full_name }}? This cannot be undone.">
                                     @csrf @method('delete')
                                     <button class="ib er" type="submit" title="Delete" aria-label="Delete"><x-i name="trash" :size="15" /></button>
@@ -135,8 +138,10 @@
                     @endif
                     <div class="el-ops">
                         <a class="ib" href="{{ route('employees.show', $employee) }}" title="View" aria-label="View"><x-i name="eye" :size="15" /></a>
-                        @if($canManage)
+                        @if($canEdit)
                             <a class="ib" href="{{ route('employees.edit', $employee) }}" title="Edit" aria-label="Edit"><x-i name="pen" :size="15" /></a>
+                        @endif
+                        @if($canDelete)
                             <form class="el-del" method="post" action="{{ route('employees.destroy', $employee) }}" data-confirm="Delete {{ $employee->full_name }}? This cannot be undone.">
                                 @csrf @method('delete')
                                 <button class="ib er" type="submit" title="Delete" aria-label="Delete"><x-i name="trash" :size="15" /></button>

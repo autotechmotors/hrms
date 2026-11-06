@@ -1,9 +1,10 @@
 <?php
 
 use App\Http\Controllers\AccountController;
+use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\Admin\AuditLogController;
 use App\Http\Controllers\Admin\RoleController;
-use App\Http\Controllers\Admin\UserController;
+use App\Http\Controllers\Admin\SettingController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\TwoFactorController;
 use App\Http\Controllers\DashboardController;
@@ -16,7 +17,6 @@ use App\Http\Controllers\Operations\AttendanceController;
 use App\Http\Controllers\Operations\BankController;
 use App\Http\Controllers\Operations\DeviceController;
 use App\Http\Controllers\Operations\DeviceEventController;
-use App\Http\Controllers\Operations\EzapiController;
 use App\Http\Controllers\Operations\HikvisionEventController;
 use App\Http\Controllers\Operations\HolidayController;
 use App\Http\Controllers\Operations\HoursPayController;
@@ -47,8 +47,8 @@ Route::middleware('guest')->group(function (): void {
 });
 
 Route::post('logout', [LoginController::class, 'destroy'])->middleware('auth')->name('logout');
-Route::get('device-events', [DeviceEventController::class, 'show'])->middleware('dahua.log')->name('device-events.show');
-Route::post('device-events', [DeviceEventController::class, 'store'])->middleware(['dahua.log', 'throttle:120,1'])->name('device-events.store');
+Route::get('device-events', [DeviceEventController::class, 'show'])->middleware('device.log')->name('device-events.show');
+Route::post('device-events', [DeviceEventController::class, 'store'])->middleware(['device.log', 'throttle:120,1'])->name('device-events.store');
 Route::get('hikvision-events/{token}/jobs/next', [HikvisionEventController::class, 'nextJob'])
     ->where('token', '[A-Za-z0-9]+')
     ->middleware('throttle:120,1')
@@ -65,18 +65,6 @@ Route::match(['get', 'post'], 'hikvision-events/{token}', HikvisionEventControll
     ->where('token', '[A-Za-z0-9]+')
     ->middleware('throttle:120,1')
     ->name('hikvision-events.store');
-Route::withoutMiddleware([
-    \Illuminate\Cookie\Middleware\EncryptCookies::class,
-    \Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse::class,
-    \Illuminate\Session\Middleware\StartSession::class,
-    \Illuminate\View\Middleware\ShareErrorsFromSession::class,
-    \Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class,
-])->group(function (): void {
-    Route::match(['get', 'post'], 'ezapi/push/{action}', [EzapiController::class, 'push'])
-        ->where('action', 'init|request|result|event|general|status')
-        ->middleware('dahua.log')
-        ->name('ezapi.push');
-});
 Route::get('two-factor/recovery', [TwoFactorController::class, 'recovery'])->middleware('auth')->name('two-factor.recovery');
 
 Route::middleware(['auth', 'mfa'])->group(function (): void {
@@ -84,6 +72,10 @@ Route::middleware(['auth', 'mfa'])->group(function (): void {
     Route::get('more', [AccountController::class, 'more'])->name('more');
     Route::get('profile', [AccountController::class, 'edit'])->name('profile.edit');
     Route::put('profile', [AccountController::class, 'update'])->name('profile.update');
+    Route::get('notifications', [NotificationController::class, 'index'])->name('notifications.index');
+    Route::get('notifications/unread-count', [NotificationController::class, 'unreadCount'])->name('notifications.unread');
+    Route::post('notifications/read-all', [NotificationController::class, 'markAllRead'])->name('notifications.read-all');
+    Route::post('notifications/{id}/read', [NotificationController::class, 'markRead'])->name('notifications.read');
 
     Route::get('attendance', [AttendanceController::class, 'index'])->name('attendance.index');
     Route::get('attendance/feed', [AttendanceController::class, 'feed'])->name('attendance.feed');
@@ -197,7 +189,11 @@ Route::middleware(['auth', 'mfa'])->group(function (): void {
     Route::patch('employees/{employee}/blocked', [EmployeeController::class, 'toggleBlocked'])->name('employees.blocked');
     Route::resource('employees', EmployeeController::class);
 
-    Route::resource('users', UserController::class)->except(['show']);
+    Route::get('settings', [SettingController::class, 'edit'])->name('settings.edit');
+    Route::put('settings', [SettingController::class, 'update'])->name('settings.update');
+
+    Route::redirect('users', '/employees', 301);
+    Route::redirect('users/{any}', '/employees', 301)->where('any', '.*');
     Route::resource('roles', RoleController::class)->except(['show']);
     Route::get('audit-logs', [AuditLogController::class, 'index'])->name('audit-logs.index');
 });

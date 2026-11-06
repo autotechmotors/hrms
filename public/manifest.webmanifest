@@ -1,6 +1,8 @@
 {
+    "id": "/",
     "name": "HRMS",
     "short_name": "HRMS",
+    "description": "HRMS",
     "start_url": "/",
     "scope": "/",
     "display": "standalone",

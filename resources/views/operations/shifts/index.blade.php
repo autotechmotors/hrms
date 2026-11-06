@@ -19,14 +19,12 @@
             <p>Define shift templates, then assign them across the week.</p>
         </div>
         <div class="ac">
-            <a class="btn" href="{{ route('shifts.index', $queryBase + ['week' => $prevWeek]) }}" title="Previous week">
+            <a class="btn sh-jump" data-week="{{ $prevWeek }}" href="{{ route('shifts.index', $queryBase + ['week' => $prevWeek]) }}" title="Previous week">
                 <x-i name="back" :size="14" />
             </a>
-            <span class="sh-week-label">{{ $start->format('d M') }} – {{ $end->format('d M Y') }}</span>
-            <a class="btn" href="{{ route('shifts.index', $queryBase + ['week' => $nextWeek]) }}" title="Next week">→</a>
-            @unless($isThisWeek)
-                <a class="btn" href="{{ route('shifts.index', $queryBase + ['week' => $thisWeek]) }}">This week</a>
-            @endunless
+            <span class="sh-week-label" id="shWeekLabel">{{ $start->format('d M') }} – {{ $end->format('d M Y') }}</span>
+            <a class="btn sh-jump" data-week="{{ $nextWeek }}" href="{{ route('shifts.index', $queryBase + ['week' => $nextWeek]) }}" title="Next week">→</a>
+            <a class="btn sh-jump" id="shThisWeek" data-week="{{ $thisWeek }}" href="{{ route('shifts.index', $queryBase + ['week' => $thisWeek]) }}" @if($isThisWeek) hidden @endif>This week</a>
             @if($canEdit)
                 <button class="btn pr" type="button" data-bs-toggle="modal" data-bs-target="#shiftModal">
                     <x-i name="plus" :size="14" />Add shift
@@ -40,23 +38,23 @@
     <div class="sh-stats g c4">
         <div class="card kp">
             <small><span class="sh-dot shifts"></span>Shift templates</small>
-            <b>{{ $stats['shifts'] }}</b>
+            <b id="shStatShifts">{{ $stats['shifts'] }}</b>
             <span>Reusable codes for the roster</span>
         </div>
         <div class="card kp">
             <small><span class="sh-dot assigned"></span>Assigned</small>
-            <b>{{ $stats['assigned'] }}</b>
+            <b id="shStatAssigned">{{ $stats['assigned'] }}</b>
             <span>Shift slots this week</span>
         </div>
         <div class="card kp">
             <small><span class="sh-dot off"></span>Weekly off</small>
-            <b>{{ $stats['off'] }}</b>
+            <b id="shStatOff">{{ $stats['off'] }}</b>
             <span>Marked as off day</span>
         </div>
         <div class="card kp">
             <small><span class="sh-dot open"></span>Open</small>
-            <b>{{ $stats['open'] }}</b>
-            <span>{{ $stats['people'] }} people × 7 days</span>
+            <b id="shStatOpen">{{ $stats['open'] }}</b>
+            <span id="shStatPeople">{{ $stats['people'] }} people × 7 days</span>
         </div>
     </div>
 
@@ -126,7 +124,7 @@
                 <x-i name="reset" :size="14" />Reset
             </a>
             <div class="sp"></div>
-            <span class="sh-meta">{{ $employees->count() }} {{ \Illuminate\Support\Str::plural('person', $employees->count()) }}</span>
+            <span class="sh-meta" id="shCount">{{ $employees->total() }} {{ \Illuminate\Support\Str::plural('person', $employees->total()) }}</span>
         </form>
 
         @if($canEdit && $shifts->isNotEmpty())
@@ -156,97 +154,7 @@
             </form>
         @endif
 
-        <div class="tw sh-board">
-            <table>
-                <thead>
-                    <tr>
-                        <th class="sh-emp-col">Employee</th>
-                        @foreach($dates as $day)
-                            <th class="sh-day-col {{ $day->toDateString() === $today ? 'is-today' : '' }} {{ $day->isWeekend() ? 'is-weekend' : '' }}">
-                                <span>{{ $day->format('D') }}</span>
-                                <b>{{ $day->format('d') }}</b>
-                            </th>
-                        @endforeach
-                    </tr>
-                </thead>
-                <tbody>
-                @forelse($employees as $employee)
-                    <tr>
-                        <td class="sh-emp-col">
-                            <div class="who">
-                                <x-employee-avatar :employee="$employee" :size="32" />
-                                <div class="sh-emp-meta">
-                                    <b>{{ $employee->full_name }}</b>
-                                    <small>{{ $employee->employee_code }}@if($employee->department) · {{ $employee->department->name }}@endif</small>
-                                    @if($canEdit && $shifts->isNotEmpty())
-                                        <form class="sh-row-fill" method="post" action="{{ route('shifts.roster.bulk') }}">
-                                            @csrf
-                                            <input type="hidden" name="week" value="{{ $start->toDateString() }}">
-                                            <input type="hidden" name="employee_id" value="{{ $employee->id }}">
-                                            <input type="hidden" name="mode" value="shift">
-                                            @if($filters['q'])<input type="hidden" name="q" value="{{ $filters['q'] }}">@endif
-                                            @if($filters['department_id'])<input type="hidden" name="department_id" value="{{ $filters['department_id'] }}">@endif
-                                            <select class="in sh-row-pick" name="shift_id" data-native="1" title="Fill this person’s whole week">
-                                                <option value="">Fill week…</option>
-                                                @foreach($shifts as $option)
-                                                    <option value="{{ $option->id }}">{{ $option->code }} all days</option>
-                                                @endforeach
-                                            </select>
-                                        </form>
-                                    @endif
-                                </div>
-                            </div>
-                        </td>
-                        @foreach($dates as $day)
-                            @php
-                                $roster = $rosters->get($employee->id.'|'.$day->toDateString())?->first();
-                                $isOff = (bool) $roster?->is_off;
-                                $shiftId = $isOff ? null : $roster?->shift_id;
-                                $shift = $shiftId ? $shifts->firstWhere('id', $shiftId) : null;
-                            @endphp
-                            <td class="sh-day-col {{ $day->toDateString() === $today ? 'is-today' : '' }} {{ $isOff ? 'is-off' : ($shift ? 'is-set' : '') }}">
-                                @if($canEdit)
-                                    <form method="post" action="{{ route('shifts.roster') }}" class="sh-cell">
-                                        @csrf
-                                        <input type="hidden" name="employee_id" value="{{ $employee->id }}">
-                                        <input type="hidden" name="work_date" value="{{ $day->toDateString() }}">
-                                        <input type="hidden" name="week" value="{{ $start->toDateString() }}">
-                                        @if($filters['q'])<input type="hidden" name="q" value="{{ $filters['q'] }}">@endif
-                                        @if($filters['department_id'])<input type="hidden" name="department_id" value="{{ $filters['department_id'] }}">@endif
-                                        <select class="in sh-pick {{ $isOff ? 'is-muted' : '' }}" name="shift_id" data-native="1" onchange="this.form.querySelector('[name=is_off]').checked=false; this.form.submit()">
-                                            <option value="">—</option>
-                                            @foreach($shifts as $option)
-                                                <option value="{{ $option->id }}" @selected((int) $shiftId === (int) $option->id)>{{ $option->code }}</option>
-                                            @endforeach
-                                        </select>
-                                        <label class="sh-off {{ $isOff ? 'on' : '' }}" title="Mark weekly off">
-                                            <input type="checkbox" name="is_off" value="1" @checked($isOff) onchange="if (this.checked) this.form.querySelector('[name=shift_id]').value=''; this.form.submit()">
-                                            <span>Off</span>
-                                        </label>
-                                    </form>
-                                @else
-                                    <div class="sh-cell-view {{ $isOff ? 'off' : '' }}">
-                                        @if($isOff)
-                                            Off
-                                        @elseif($shift)
-                                            <b>{{ $shift->code }}</b>
-                                            <small>{{ $fmt($shift->starts_at) }}</small>
-                                        @else
-                                            —
-                                        @endif
-                                    </div>
-                                @endif
-                            </td>
-                        @endforeach
-                    </tr>
-                @empty
-                    <tr>
-                        <td colspan="8" class="sh-empty-row">No employees match these filters.</td>
-                    </tr>
-                @endforelse
-                </tbody>
-            </table>
-        </div>
+        @include('operations.shifts._board')
     </section>
 
     @if($canEdit)
@@ -309,16 +217,189 @@
 <script>
 (function ($) {
     const form = $('#shiftFilters');
-    if (form.length) {
-        let timer = null;
-        form.on('change', '[data-filter]', function () {
-            form.trigger('submit');
+    const token = $('meta[name="csrf-token"]').attr('content');
+    let timer = null;
+    let req = null;
+
+    function board() {
+        return document.getElementById('shiftBoard');
+    }
+
+    function query(extra) {
+        const params = new URLSearchParams();
+        form.serializeArray().forEach(function (item) {
+            if (String(item.value || '').trim() !== '') params.set(item.name, item.value);
         });
-        form.on('input', 'input[name="q"]', function () {
-            clearTimeout(timer);
-            timer = setTimeout(function () { form.trigger('submit'); }, 350);
+        if (extra) {
+            Object.keys(extra).forEach(function (key) {
+                if (extra[key] === null || extra[key] === '') params.delete(key);
+                else params.set(key, extra[key]);
+            });
+        }
+        params.delete('partial');
+        return params;
+    }
+
+    function paintStats(stats) {
+        if (!stats) return;
+        const assigned = document.getElementById('shStatAssigned');
+        const off = document.getElementById('shStatOff');
+        const open = document.getElementById('shStatOpen');
+        const people = document.getElementById('shStatPeople');
+        const count = document.getElementById('shCount');
+        if (assigned) assigned.textContent = stats.assigned;
+        if (off) off.textContent = stats.off;
+        if (open) open.textContent = stats.open;
+        if (people) people.textContent = stats.people + ' people × 7 days';
+        if (count) count.textContent = stats.people + (Number(stats.people) === 1 ? ' person' : ' people');
+    }
+
+    function paintChrome(node) {
+        const read = function (name) { return node.getAttribute(name) || ''; };
+        paintStats({
+            assigned: read('data-assigned'),
+            off: read('data-off'),
+            open: read('data-open'),
+            people: read('data-people')
+        });
+        const shifts = document.getElementById('shStatShifts');
+        if (shifts) shifts.textContent = read('data-shifts');
+        const label = document.getElementById('shWeekLabel');
+        if (label) label.textContent = read('data-label');
+        document.querySelectorAll('input[name="week"]').forEach(function (input) {
+            input.value = read('data-week');
+        });
+        document.querySelectorAll('.sh-jump').forEach(function (link) {
+            let week = '';
+            if (link.id === 'shThisWeek') week = read('data-this');
+            else if (link.title === 'Previous week') week = read('data-prev');
+            else if (link.title === 'Next week') week = read('data-next');
+            if (!week) return;
+            link.dataset.week = week;
+            const href = new URL(link.getAttribute('href'), window.location.origin);
+            href.searchParams.set('week', week);
+            link.setAttribute('href', href.pathname + href.search);
+        });
+        const todayBtn = document.getElementById('shThisWeek');
+        if (todayBtn) todayBtn.hidden = read('data-current') === '1';
+    }
+
+    function load(extra) {
+        if (!form.length) return;
+        if (req) req.abort();
+        const params = query(extra);
+        const url = form.attr('action') + '?' + params.toString();
+        const host = board();
+        if (host) host.classList.add('is-loading');
+        const current = req = $.ajax({
+            url: url,
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            data: { partial: 1 }
+        }).done(function (html) {
+            const incoming = document.createElement('div');
+            incoming.innerHTML = html;
+            const next = incoming.querySelector('#shiftBoard');
+            const live = board();
+            if (!next || !live) return;
+            live.replaceWith(next);
+            paintChrome(next);
+            if (window.history.replaceState) window.history.replaceState({}, '', url);
+        }).always(function () {
+            if (req !== current) return;
+            req = null;
+            const live = board();
+            if (live) live.classList.remove('is-loading');
         });
     }
+
+    function postForm(formEl) {
+        return $.ajax({
+            url: formEl.action,
+            method: 'POST',
+            data: $(formEl).serialize(),
+            headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': token }
+        }).done(function (payload) {
+            if (window.toast) window.toast((payload && payload.message) || 'Saved.');
+            paintStats(payload && payload.stats);
+        }).fail(function (xhr) {
+            const message = xhr.responseJSON && xhr.responseJSON.message
+                ? xhr.responseJSON.message
+                : 'Could not update the roster.';
+            if (window.toast) window.toast(message, 'er');
+        });
+    }
+
+    form.on('submit', function (event) {
+        event.preventDefault();
+        load({ page: 1 });
+    });
+    form.on('change', '[data-filter]', function () {
+        load({ page: 1 });
+    });
+    form.on('input', 'input[name="q"]', function () {
+        clearTimeout(timer);
+        timer = setTimeout(function () { load({ page: 1 }); }, 280);
+    });
+    $(document).on('click', '.sh-reset', function (event) {
+        event.preventDefault();
+        form.find('[name="q"]').val('');
+        form.find('[name="department_id"]').val('');
+        load({ page: 1, q: null, department_id: null });
+    });
+    $(document).on('click', '.sh-jump', function (event) {
+        event.preventDefault();
+        load({ week: this.dataset.week, page: 1 });
+    });
+    $(document).on('click', '#shiftBoard .pgn a', function (event) {
+        event.preventDefault();
+        const url = new URL(this.href, window.location.origin);
+        load({ page: url.searchParams.get('page') || 1 });
+    });
+    $(document).on('change', '.sh-pick', function () {
+        const formEl = this.form;
+        if (!formEl) return;
+        const off = formEl.querySelector('[name="is_off"]');
+        if (off) off.checked = false;
+        const cell = this.closest('td');
+        if (cell) cell.classList.add('is-saving');
+        postForm(formEl).done(function (payload) {
+            const markedOff = !!(payload.cell && payload.cell.off);
+            const markedSet = !!(payload.cell && payload.cell.shift_id);
+            if (cell) {
+                cell.classList.toggle('is-off', markedOff);
+                cell.classList.toggle('is-set', markedSet);
+            }
+            const label = formEl.querySelector('.sh-off');
+            if (label) label.classList.toggle('on', markedOff);
+            this.classList.toggle('is-muted', markedOff);
+        }.bind(this)).fail(function () {
+            load();
+        }).always(function () {
+            if (cell) cell.classList.remove('is-saving');
+        });
+    });
+    $(document).on('change', '.sh-off input', function () {
+        const formEl = this.form;
+        if (!formEl) return;
+        const select = formEl.querySelector('[name="shift_id"]');
+        if (this.checked && select) select.value = '';
+        const cell = this.closest('td');
+        if (cell) cell.classList.add('is-saving');
+        postForm(formEl).done(function (payload) {
+            const markedOff = !!(payload.cell && payload.cell.off);
+            if (cell) {
+                cell.classList.toggle('is-off', markedOff);
+                cell.classList.toggle('is-set', !markedOff && !!(payload.cell && payload.cell.shift_id));
+            }
+            const label = formEl.querySelector('.sh-off');
+            if (label) label.classList.toggle('on', markedOff);
+            if (select) select.classList.toggle('is-muted', markedOff);
+        }).fail(function () {
+            load();
+        }).always(function () {
+            if (cell) cell.classList.remove('is-saving');
+        });
+    });
 
     const bulk = $('#shiftBulkForm');
     if (bulk.length) {
@@ -326,65 +407,52 @@
             $('#bulkMode').val($(this).data('bulk-mode'));
         });
         bulk.on('submit', function (event) {
-            const formEl = this;
-            if (formEl.dataset.confirmed === '1') {
-                return;
-            }
             event.preventDefault();
+            const formEl = this;
             const mode = $('#bulkMode').val();
             if (mode === 'shift' && ! $('#bulkShiftId').val()) {
-                if (window.toast) toast('Select a shift before applying to the week.', 'wn');
+                if (window.toast) window.toast('Select a shift before applying to the week.', 'wn');
                 return;
             }
-            const count = {{ (int) $employees->count() }};
+            const count = Number((board() && board().dataset.people) || 0);
             const days = bulk.find('[name="weekdays_only"]').is(':checked') ? 'weekdays' : 'all 7 days';
-            let message = '';
-            if (mode === 'shift') {
-                message = 'Apply this shift to ' + count + ' people for ' + days + '?';
-            } else if (mode === 'off') {
-                message = 'Mark ' + days + ' as Off for ' + count + ' people?';
-            } else {
-                message = 'Clear roster for ' + count + ' people (' + days + ')?';
-            }
+            let message = 'Clear roster for ' + count + ' people (' + days + ')?';
+            if (mode === 'shift') message = 'Apply this shift to ' + count + ' people for ' + days + '?';
+            if (mode === 'off') message = 'Mark ' + days + ' as Off for ' + count + ' people?';
             const go = function () {
-                formEl.dataset.confirmed = '1';
-                formEl.submit();
+                postForm(formEl).done(function () { load(); });
             };
             if (window.askConfirm) {
-                window.askConfirm(message).then(function (ok) {
+                window.askConfirm(message, { label: mode === 'clear' ? 'Clear' : 'Apply', danger: mode === 'clear' }).then(function (ok) {
                     if (ok) go();
                 });
-            } else {
-                go();
+                return;
             }
+            go();
         });
     }
 
     $(document).on('change', '.sh-row-pick', function () {
         const select = this;
         const formEl = select.form;
-        if (! formEl || ! select.value || formEl.dataset.confirmed === '1') {
-            return;
-        }
+        if (!formEl || !select.value) return;
         select.blur();
-        const code = select.options[select.selectedIndex].text;
-        const message = 'Apply ' + code.replace(' all days', '') + ' to this person’s whole week?';
-        const reset = function () { select.value = ''; };
-        if (! window.askConfirm) {
-            formEl.dataset.confirmed = '1';
-            formEl.submit();
+        const code = select.options[select.selectedIndex].text.replace(' all days', '');
+        const go = function () {
+            postForm(formEl).done(function () { load(); });
+        };
+        if (!window.askConfirm) {
+            go();
             return;
         }
-        window.askConfirm(message).then(function (ok) {
-            if (! ok) {
-                reset();
+        window.askConfirm('Apply ' + code + ' to this person’s whole week?').then(function (ok) {
+            if (!ok) {
+                select.value = '';
                 return;
             }
-            formEl.dataset.confirmed = '1';
-            formEl.submit();
+            go();
         });
     });
-    $('.sh-row-pick').removeAttr('onchange');
 })(jQuery);
 </script>
 @endpush

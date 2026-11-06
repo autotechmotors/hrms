@@ -15,7 +15,7 @@ Login, logout, throttles, and authenticator setup stay as they are.
 - Privileged roles that require MFA still require it (`requires_mfa` on the role).
 - Throttle names `login` and `two-factor` stay.
 - Do not add a public registration screen.
-- Do not remove the removed `employee` role.
+- A user with the `employee` role can sign in. That login sees only their own employee row. A user with no role still cannot sign in.
 
 ## Visual only
 

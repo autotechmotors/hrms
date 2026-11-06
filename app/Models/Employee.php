@@ -22,6 +22,7 @@ class Employee extends Model
         'designation_id',
         'employee_type_id',
         'employment_status_id',
+        'role_id',
         'reporting_manager_id',
         'user_id',
         'employee_code',
@@ -104,6 +105,11 @@ class Employee extends Model
         return $this->belongsTo(EmploymentStatus::class);
     }
 
+    public function role(): BelongsTo
+    {
+        return $this->belongsTo(Role::class);
+    }
+
     public function manager(): BelongsTo
     {
         return $this->belongsTo(self::class, 'reporting_manager_id');
@@ -121,7 +127,11 @@ class Employee extends Model
 
     public function needsReportingManager(): bool
     {
-        $this->loadMissing('user.roles');
+        $this->loadMissing(['role', 'user.roles']);
+
+        if ($this->role?->requiresReportingManager()) {
+            return true;
+        }
 
         return (bool) $this->user?->roles->contains(
             fn (Role $role) => $role->requiresReportingManager()
@@ -130,7 +140,11 @@ class Employee extends Model
 
     public function canBeReportingManager(): bool
     {
-        $this->loadMissing('user.roles');
+        $this->loadMissing(['role', 'user.roles']);
+
+        if ($this->role?->appearsInManagerList()) {
+            return true;
+        }
 
         return (bool) $this->user?->roles->contains(
             fn (Role $role) => $role->appearsInManagerList()
@@ -139,10 +153,15 @@ class Employee extends Model
 
     public function scopeCanManagePeople(Builder $query): Builder
     {
-        return $query->whereHas(
-            'user.roles',
-            fn (Builder $roles) => $roles->where('has_child', true)->where('is_active', true)
-        );
+        return $query->where(function (Builder $inner): void {
+            $inner->whereHas(
+                'role',
+                fn (Builder $roles) => $roles->where('has_child', true)->where('is_active', true)
+            )->orWhereHas(
+                'user.roles',
+                fn (Builder $roles) => $roles->where('has_child', true)->where('is_active', true)
+            );
+        });
     }
 
     public function documents(): HasMany

@@ -53,14 +53,16 @@
             <p>Daily punches and calculated status from shift, leave, holidays, and rules.</p>
         </div>
         <div class="ac">
-            <a class="btn" href="{{ route('attendance.index', $queryBase + ['date' => $prev]) }}" title="Previous day">
-                <x-i name="back" :size="14" />
-            </a>
-            <span class="att-date-label">{{ $date->format('D, d M Y') }}</span>
-            <a class="btn" href="{{ route('attendance.index', $queryBase + ['date' => $next]) }}" title="Next day">→</a>
-            @unless($isToday)
-                <a class="btn" href="{{ route('attendance.index', $queryBase + ['date' => $today]) }}">Today</a>
-            @endunless
+            <div class="att-nav">
+                <a class="btn" href="{{ route('attendance.index', $queryBase + ['date' => $prev]) }}" title="Previous day">
+                    <x-i name="back" :size="14" />
+                </a>
+                <span class="att-date-label">{{ $date->format('D, d M Y') }}</span>
+                <a class="btn" href="{{ route('attendance.index', $queryBase + ['date' => $next]) }}" title="Next day">→</a>
+                @unless($isToday)
+                    <a class="btn" href="{{ route('attendance.index', $queryBase + ['date' => $today]) }}">Today</a>
+                @endunless
+            </div>
             @if($canEdit)
                 <form method="post" action="{{ route('attendance.recalculate') }}" class="att-inline">
                     @csrf
@@ -84,236 +86,70 @@
     <div class="att-stats g c4">
         <div class="card kp">
             <small><span class="att-dot present"></span>Present</small>
-            <b>{{ $stats['working'] }}</b>
-            <span>{{ $stats['late'] }} late · {{ $stats['half_day'] }} half day</span>
+            <b id="attStatWorking">{{ $stats['working'] }}</b>
+            <span id="attStatWorkingNote">{{ $stats['late'] }} late · {{ $stats['half_day'] }} half day</span>
         </div>
         <div class="card kp">
             <small><span class="att-dot absent"></span>Absent</small>
-            <b>{{ $stats['absent'] }}</b>
+            <b id="attStatAbsent">{{ $stats['absent'] }}</b>
             <span>Marked absent for the day</span>
         </div>
         <div class="card kp">
             <small><span class="att-dot leave"></span>Leave / off</small>
-            <b>{{ $stats['on_leave'] + $stats['holiday'] + $stats['weekly_off'] }}</b>
-            <span>{{ $stats['on_leave'] }} leave · {{ $stats['holiday'] }} holiday · {{ $stats['weekly_off'] }} off</span>
+            <b id="attStatOff">{{ $stats['on_leave'] + $stats['holiday'] + $stats['weekly_off'] }}</b>
+            <span id="attStatOffNote">{{ $stats['on_leave'] }} leave · {{ $stats['holiday'] }} holiday · {{ $stats['weekly_off'] }} off</span>
         </div>
         <div class="card kp">
             <small><span class="att-dot pending"></span>Pending</small>
-            <b>{{ $stats['pending'] + $stats['unmarked'] }}</b>
-            <span>{{ $stats['pending'] }} not calculated · {{ $stats['unmarked'] }} unmarked</span>
+            <b id="attStatPending">{{ $stats['pending'] + $stats['unmarked'] }}</b>
+            <span id="attStatPendingNote">{{ $stats['pending'] }} not calculated · {{ $stats['unmarked'] }} unmarked</span>
         </div>
     </div>
 
     <section class="card att" id="attendanceList" data-since="{{ $stamp }}">
         <form class="tbar att-bar" method="get" action="{{ route('attendance.index') }}" id="attendanceFilters">
             <input type="hidden" name="date" value="{{ $date->toDateString() }}">
-            <div class="sr att-search">
-                <span><x-i name="search" /></span>
-                <input type="search" name="q" value="{{ $filters['q'] }}" placeholder="Search name, code…" autocomplete="off">
+            <div class="att-find">
+                <div class="sr att-search">
+                    <span><x-i name="search" /></span>
+                    <input type="search" name="q" value="{{ $filters['q'] }}" placeholder="Search name, code…" autocomplete="off">
+                </div>
+                <button class="btn att-filter-open" id="attFilterOpen" type="button" aria-controls="attFilterSheet" aria-expanded="false" aria-label="Filter">
+                    <x-i name="set" :size="18" />
+                </button>
             </div>
-            <select class="in" name="department_id" data-filter>
-                <option value="">All departments</option>
-                @foreach($departments as $department)
-                    <option value="{{ $department->id }}" @selected((string) $filters['department_id'] === (string) $department->id)>{{ $department->name }}</option>
-                @endforeach
-            </select>
-            <select class="in" name="status" data-filter>
-                <option value="">All statuses</option>
-                @foreach($statusLabels as $value => $label)
-                    <option value="{{ $value }}" @selected($filters['status'] === $value)>{{ $label }}</option>
-                @endforeach
-            </select>
-            <a class="btn att-reset" href="{{ route('attendance.index', ['date' => $date->toDateString()]) }}" title="Reset filters">
-                <x-i name="reset" :size="14" />Reset
-            </a>
+            <div class="att-sheet" id="attFilterSheet">
+                <div class="att-sheet-bar">
+                    <b>Filters</b>
+                    <button class="ib" id="attFilterClose" type="button" aria-label="Close filters">×</button>
+                </div>
+                <select class="in" name="department_id" data-filter form="attendanceFilters">
+                    <option value="">All departments</option>
+                    @foreach($departments as $department)
+                        <option value="{{ $department->id }}" @selected((string) $filters['department_id'] === (string) $department->id)>{{ $department->name }}</option>
+                    @endforeach
+                </select>
+                <select class="in" name="status" data-filter form="attendanceFilters">
+                    <option value="">All statuses</option>
+                    @foreach($statusLabels as $value => $label)
+                        <option value="{{ $value }}" @selected($filters['status'] === $value)>{{ $label }}</option>
+                    @endforeach
+                </select>
+                <div class="att-sheet-actions">
+                    <a class="btn att-reset" href="{{ route('attendance.index', ['date' => $date->toDateString()]) }}" title="Reset filters">
+                        <x-i name="reset" :size="14" />Reset
+                    </a>
+                    <button class="btn pr" id="attFilterApply" type="button">Apply</button>
+                </div>
+            </div>
+            <div class="att-sheet-bg" id="attFilterBg"></div>
             <div class="sp"></div>
-            <span class="att-meta">{{ $employees->total() }} {{ \Illuminate\Support\Str::plural('person', $employees->total()) }}</span>
+            <span class="att-meta" id="attMeta">{{ $employees->total() }} {{ \Illuminate\Support\Str::plural('person', $employees->total()) }}</span>
             <span class="att-fresh" id="attFresh"></span>
         </form>
 
-        <div class="att-cards">
-            @forelse($employees as $employee)
-                @php
-                    $day = $days->get($employee->id);
-                    $statusKey = $day?->status ?? 'pending';
-                    if ($day?->punch_in && $statusKey === 'absent') {
-                        $statusKey = 'present';
-                    }
-                    $badge = $statusClass[$statusKey] ?? '';
-                    $label = $statusLabels[$statusKey] ?? str_replace('_', ' ', $statusKey);
-                    $rows = $punches->get($employee->id, collect());
-                    $inPunch = $rows->firstWhere('direction', 'in') ?? $rows->first();
-                    $outPunch = $rows->where('direction', 'out')->last();
-                    $portrait = $portraits->get($employee->id);
-                @endphp
-                <article class="att-card {{ $statusKey === 'absent' ? 'att-row-absent' : ($statusKey === 'pending' ? 'att-row-pending' : '') }}" data-employee="{{ $employee->id }}">
-                    <div class="who">
-                        @if($portrait)
-                            <button type="button" class="att-zoom" data-photo="{{ $portrait }}" title="View photo">
-                                <img class="att-list-photo js-portrait" src="{{ $portrait }}" alt="{{ $employee->full_name }}">
-                            </button>
-                        @else
-                            <x-employee-avatar :employee="$employee" :size="40" />
-                        @endif
-                        <div>
-                            <a class="el-link" href="{{ route('attendance.show', ['employee' => $employee, 'date' => $date->toDateString()]) }}"><b>{{ $employee->full_name }}</b></a>
-                            <small>{{ $employee->employee_code }}@if($employee->designation) · {{ $employee->designation->name }}@endif · {{ $employee->department?->name ?? '—' }}</small>
-                        </div>
-                    </div>
-                    @if($employee->phone)
-                        <a class="att-phone" href="tel:{{ preg_replace('/[^\d+]/', '', $employee->phone) }}">{{ $employee->phone }}</a>
-                    @else
-                        <span class="att-phone">—</span>
-                    @endif
-                    <div class="att-card-times">
-                        <div class="att-time js-in">
-                            <small>In</small>
-                            <span class="js-clock">{{ $formatTime($day?->punch_in) }}</span>
-                            @if($inPunch && (int) $inPunch->has_image === 1)
-                                <button type="button" class="att-zoom" data-photo="{{ route('attendance.punch.photo', $inPunch) }}" title="View in photo"><img class="att-shot" src="{{ route('attendance.punch.photo', $inPunch) }}" alt="In photo"></button>
-                            @endif
-                        </div>
-                        <div class="att-time js-out">
-                            <small>Out</small>
-                            <span class="js-clock">{{ $formatTime($day?->punch_out) }}</span>
-                            @if($outPunch && (int) $outPunch->has_image === 1)
-                                <button type="button" class="att-zoom" data-photo="{{ route('attendance.punch.photo', $outPunch) }}" title="View out photo"><img class="att-shot" src="{{ route('attendance.punch.photo', $outPunch) }}" alt="Out photo"></button>
-                            @endif
-                        </div>
-                        <div>
-                            <small>Worked</small>
-                            <b class="js-worked">{{ $formatMinutes($day?->minutes_worked) }}</b>
-                        </div>
-                        <div>
-                            <span class="b {{ $badge }} js-status">{{ $label }}</span>
-                        </div>
-                    </div>
-                    @if($canEdit)
-                        <button
-                            class="btn sm"
-                            type="button"
-                            data-bs-toggle="modal"
-                            data-bs-target="#attPunchModal"
-                            data-mode="edit"
-                            data-employee-id="{{ $employee->id }}"
-                            data-punch-in="{{ $formatInput($day?->punch_in) }}"
-                            data-punch-out="{{ $formatInput($day?->punch_out) }}"
-                            data-remarks="{{ $day?->remarks }}"
-                        >Edit</button>
-                    @endif
-                </article>
-            @empty
-                <p class="att-empty">No employees match this day and filters.</p>
-            @endforelse
-        </div>
+        @include('operations.attendance._list')
 
-        <div class="tw att-table">
-            <table>
-                <thead>
-                    <tr>
-                        <th>Employee</th>
-                        <th>Department</th>
-                        <th>Phone</th>
-                        <th>In</th>
-                        <th>Out</th>
-                        <th>Worked</th>
-                        <th>Status</th>
-                        @if($canEdit)<th></th>@endif
-                    </tr>
-                </thead>
-                <tbody>
-                @forelse($employees as $employee)
-                    @php
-                        $day = $days->get($employee->id);
-                        $statusKey = $day?->status ?? 'pending';
-                        if ($day?->punch_in && $statusKey === 'absent') {
-                            $statusKey = 'present';
-                        }
-                        $badge = $statusClass[$statusKey] ?? '';
-                        $label = $statusLabels[$statusKey] ?? str_replace('_', ' ', $statusKey);
-                    @endphp
-                    <tr class="{{ $statusKey === 'absent' ? 'att-row-absent' : ($statusKey === 'pending' ? 'att-row-pending' : '') }}" data-employee="{{ $employee->id }}" data-record="{{ route('attendance.show', ['employee' => $employee, 'date' => $date->toDateString()]) }}">
-                        <td>
-                            <div class="who">
-                                @php $portrait = $portraits->get($employee->id); @endphp
-                                @if($portrait)
-                                    <button type="button" class="att-zoom" data-photo="{{ $portrait }}" title="View photo">
-                                        <img class="att-list-photo js-portrait" src="{{ $portrait }}" alt="{{ $employee->full_name }}">
-                                    </button>
-                                @else
-                                    <x-employee-avatar :employee="$employee" :size="40" />
-                                @endif
-                                <div>
-                                    <a class="el-link" href="{{ route('attendance.show', ['employee' => $employee, 'date' => $date->toDateString()]) }}"><b>{{ $employee->full_name }}</b></a>
-                                    <small>{{ $employee->employee_code }}@if($employee->designation) · {{ $employee->designation->name }}@endif</small>
-                                </div>
-                            </div>
-                        </td>
-                        <td>{{ $employee->department?->name ?? '—' }}</td>
-                        <td>
-                            @if($employee->phone)
-                                <a href="tel:{{ preg_replace('/[^\d+]/', '', $employee->phone) }}">{{ $employee->phone }}</a>
-                            @else
-                                —
-                            @endif
-                        </td>
-                        @php
-                            $rows = $punches->get($employee->id, collect());
-                            $inPunch = $rows->firstWhere('direction', 'in') ?? $rows->first();
-                            $outPunch = $rows->where('direction', 'out')->last();
-                        @endphp
-                        <td class="att-time js-in">
-                            <span class="js-clock">{{ $formatTime($day?->punch_in) }}</span>
-                            @if($inPunch && (int) $inPunch->has_image === 1)
-                                <button type="button" class="att-zoom" data-photo="{{ route('attendance.punch.photo', $inPunch) }}" title="View in photo"><img class="att-shot" src="{{ route('attendance.punch.photo', $inPunch) }}" alt="In photo"></button>
-                            @endif
-                        </td>
-                        <td class="att-time js-out">
-                            <span class="js-clock">{{ $formatTime($day?->punch_out) }}</span>
-                            @if($outPunch && (int) $outPunch->has_image === 1)
-                                <button type="button" class="att-zoom" data-photo="{{ route('attendance.punch.photo', $outPunch) }}" title="View out photo"><img class="att-shot" src="{{ route('attendance.punch.photo', $outPunch) }}" alt="Out photo"></button>
-                            @endif
-                        </td>
-                        <td class="att-mins js-worked">{{ $formatMinutes($day?->minutes_worked) }}</td>
-                        <td>
-                            <span class="b {{ $badge }} js-status">{{ $label }}</span>
-                            @if($day?->remarks)
-                                <small class="att-note" title="{{ $day->remarks }}">{{ \Illuminate\Support\Str::limit($day->remarks, 28) }}</small>
-                            @endif
-                        </td>
-                        @if($canEdit)
-                            <td class="att-act">
-                                <button
-                                    class="ib"
-                                    type="button"
-                                    title="{{ $day ? 'Edit punch' : 'Add punch' }}"
-                                    data-bs-toggle="modal"
-                                    data-bs-target="#attPunchModal"
-                                    data-mode="edit"
-                                    data-employee-id="{{ $employee->id }}"
-                                    data-punch-in="{{ $formatInput($day?->punch_in) }}"
-                                    data-punch-out="{{ $formatInput($day?->punch_out) }}"
-                                    data-remarks="{{ $day?->remarks }}"
-                                >
-                                    <x-i name="pen" :size="14" />
-                                </button>
-                            </td>
-                        @endif
-                    </tr>
-                @empty
-                    <tr>
-                        <td colspan="{{ $canEdit ? 8 : 7 }}" class="att-empty">
-                            No employees match this day and filters.
-                        </td>
-                    </tr>
-                @endforelse
-                </tbody>
-            </table>
-        </div>
-        <div class="pgn">
-            <span>{{ $employees->firstItem() ?? 0 }}–{{ $employees->lastItem() ?? 0 }} of {{ $employees->total() }}</span>
-            <div>{{ $employees->links() }}</div>
-        </div>
     </section>
 
     @if($canEdit)
@@ -505,14 +341,182 @@
     }
     if (!form.length) return;
 
+    const phone = () => window.matchMedia('(max-width: 700px)').matches;
+    const sheet = document.getElementById('attFilterSheet');
+    const sheetBg = document.getElementById('attFilterBg');
+    const filterOpen = document.getElementById('attFilterOpen');
     let timer = null;
+    let req = null;
+    let loadingMore = false;
+    let snapshot = null;
+
+    function field(name) {
+        return form.get(0).elements.namedItem(name);
+    }
+
+    function query(extra) {
+        const params = new URLSearchParams();
+        form.serializeArray().forEach(function (item) {
+            if (String(item.value || '').trim() !== '') params.set(item.name, item.value);
+        });
+        if (extra) {
+            Object.keys(extra).forEach(function (key) { params.set(key, extra[key]); });
+        }
+        params.delete('partial');
+        return params;
+    }
+
+    function paintStats(node) {
+        const read = function (name) { return node.getAttribute(name) || '0'; };
+        const working = document.getElementById('attStatWorking');
+        const workingNote = document.getElementById('attStatWorkingNote');
+        const absent = document.getElementById('attStatAbsent');
+        const off = document.getElementById('attStatOff');
+        const offNote = document.getElementById('attStatOffNote');
+        const pending = document.getElementById('attStatPending');
+        const pendingNote = document.getElementById('attStatPendingNote');
+        const meta = document.getElementById('attMeta');
+        if (working) working.textContent = read('data-working');
+        if (workingNote) workingNote.textContent = read('data-late') + ' late · ' + read('data-half') + ' half day';
+        if (absent) absent.textContent = read('data-absent');
+        if (off) off.textContent = String(Number(read('data-leave')) + Number(read('data-holiday')) + Number(read('data-off')));
+        if (offNote) offNote.textContent = read('data-leave') + ' leave · ' + read('data-holiday') + ' holiday · ' + read('data-off') + ' off';
+        if (pending) pending.textContent = String(Number(read('data-pending')) + Number(read('data-unmarked')));
+        if (pendingNote) pendingNote.textContent = read('data-pending') + ' not calculated · ' + read('data-unmarked') + ' unmarked';
+        if (meta) {
+            const total = Number(read('data-total'));
+            meta.textContent = total + (total === 1 ? ' person' : ' people');
+        }
+        if (filterOpen) {
+            const active = (field('department_id') && field('department_id').value) || (field('status') && field('status').value);
+            filterOpen.classList.toggle('on', !!active);
+        }
+    }
+
+    function load(extra, append) {
+        if (!phone()) return;
+        if (req) req.abort();
+        const params = query(extra);
+        const url = form.attr('action') + '?' + params.toString();
+        const current = req = $.ajax({
+            url: url,
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            data: { partial: 1 }
+        }).done(function (html) {
+            const incoming = document.createElement('div');
+            incoming.innerHTML = html;
+            const next = incoming.querySelector('#attendanceResults');
+            const host = document.getElementById('attendanceResults');
+            if (!next || !host) return;
+            if (append) {
+                const cards = host.querySelector('.att-cards');
+                next.querySelectorAll('.att-card').forEach(function (card) {
+                    if (cards) cards.appendChild(card);
+                });
+                const body = host.querySelector('tbody');
+                next.querySelectorAll('tbody tr[data-employee]').forEach(function (row) {
+                    if (body) body.appendChild(row);
+                });
+                host.dataset.page = next.dataset.page;
+                host.dataset.last = next.dataset.last;
+                const pager = host.querySelector('.pgn');
+                const nextPager = next.querySelector('.pgn');
+                if (pager && nextPager) pager.replaceWith(nextPager);
+            } else {
+                host.replaceWith(next);
+                paintStats(next);
+                if (window.history.replaceState) window.history.replaceState({}, '', url);
+            }
+        }).always(function () {
+            if (req !== current) return;
+            loadingMore = false;
+            req = null;
+            if (phone()) requestAnimationFrame(maybeMore);
+        });
+    }
+
+    function maybeMore() {
+        if (!phone() || loadingMore || req) return;
+        const host = document.getElementById('attendanceResults');
+        if (!host) return;
+        const page = Number(host.dataset.page || 1);
+        const last = Number(host.dataset.last || 1);
+        if (page >= last) return;
+        const cards = host.querySelector('.att-cards');
+        if (!cards) return;
+        if (cards.getBoundingClientRect().bottom > window.innerHeight + 420) return;
+        loadingMore = true;
+        load({ page: page + 1 }, true);
+    }
+
+    function placeSheet() {
+        if (!sheet || !sheetBg) return;
+        if (phone()) {
+            document.body.appendChild(sheetBg);
+            document.body.appendChild(sheet);
+            return;
+        }
+        const spacer = form.get(0).querySelector('.sp');
+        if (sheet.parentElement !== form.get(0)) {
+            form.get(0).insertBefore(sheet, spacer);
+            form.get(0).insertBefore(sheetBg, spacer);
+        }
+    }
+
+    function closeSheet(restore) {
+        if (restore && snapshot) {
+            ['department_id', 'status'].forEach(function (name) {
+                const input = field(name);
+                if (!input) return;
+                input.value = snapshot[name];
+                $(input).trigger('change.select2');
+            });
+        }
+        if (sheet) sheet.classList.remove('open');
+        if (sheetBg) sheetBg.classList.remove('open');
+        if (filterOpen) filterOpen.setAttribute('aria-expanded', 'false');
+    }
+
+    function openSheet() {
+        snapshot = {
+            department_id: field('department_id') ? field('department_id').value : '',
+            status: field('status') ? field('status').value : ''
+        };
+        placeSheet();
+        if (sheet) sheet.classList.add('open');
+        if (sheetBg) sheetBg.classList.add('open');
+        if (filterOpen) filterOpen.setAttribute('aria-expanded', 'true');
+    }
+
+    form.on('submit', function (event) {
+        if (!phone()) return;
+        event.preventDefault();
+        closeSheet(false);
+        load();
+    });
     form.on('change', '[data-filter]', function () {
+        if (phone()) return;
         form.trigger('submit');
     });
     form.on('input', 'input[name="q"]', function () {
         clearTimeout(timer);
         timer = setTimeout(function () { form.trigger('submit'); }, 350);
     });
+    if (filterOpen) filterOpen.addEventListener('click', openSheet);
+    $('#attFilterClose, #attFilterBg').on('click', function () { closeSheet(true); });
+    $('#attFilterApply').on('click', function () {
+        closeSheet(false);
+        load();
+    });
+    window.addEventListener('scroll', maybeMore, { passive: true });
+    window.addEventListener('resize', function () {
+        placeSheet();
+        maybeMore();
+    });
+    placeSheet();
+    const firstResults = document.getElementById('attendanceResults');
+    if (firstResults) paintStats(firstResults);
+    requestAnimationFrame(maybeMore);
 
     const punchModal = document.getElementById('attPunchModal');
     if (punchModal) {

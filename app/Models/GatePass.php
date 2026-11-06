@@ -28,6 +28,7 @@ class GatePass extends Model
         'company_id', 'number', 'employee_id', 'created_by', 'date', 'out_time',
         'duration_minutes', 'is_early_leave', 'work_type', 'reason', 'status',
         'decided_by', 'decided_at', 'decision_note', 'expires_at',
+        'out_at', 'in_at', 'machine_status', 'machine_note',
     ];
 
     protected function casts(): array
@@ -36,6 +37,8 @@ class GatePass extends Model
             'date' => 'date',
             'decided_at' => 'datetime',
             'expires_at' => 'datetime',
+            'out_at' => 'datetime',
+            'in_at' => 'datetime',
             'duration_minutes' => 'integer',
             'is_early_leave' => 'boolean',
         ];
@@ -89,6 +92,83 @@ class GatePass extends Model
     public function isOfficeWork(): bool
     {
         return $this->work_type === self::WORK_OFFICE;
+    }
+
+    public function hasLeft(): bool
+    {
+        return $this->out_at !== null;
+    }
+
+    public function hasReturned(): bool
+    {
+        return $this->in_at !== null;
+    }
+
+    public function isOpenOuting(): bool
+    {
+        return $this->hasLeft() && ! $this->hasReturned();
+    }
+
+    public function machineReady(): bool
+    {
+        return in_array($this->machine_status, ['ready', 'queued'], true) && $this->isUsable();
+    }
+
+    public function outingMinutes(?Carbon $until = null): int
+    {
+        if (! $this->out_at || ! $this->in_at) {
+            return 0;
+        }
+
+        $end = $this->in_at;
+        if ($until && $until->lessThan($end)) {
+            $end = $until;
+        }
+
+        return max(0, (int) round($this->out_at->diffInMinutes($end, true)));
+    }
+
+    public function officeCreditMinutes(): int
+    {
+        if (! $this->isOfficeWork()) {
+            return 0;
+        }
+
+        $away = $this->outingMinutes();
+
+        return $this->isEarlyLeave() ? $away : min($away, max(0, (int) $this->duration_minutes));
+    }
+
+    public function personalCutMinutes(): int
+    {
+        return $this->isOfficeWork() ? 0 : $this->outingMinutes();
+    }
+
+    public function getMachineLabelAttribute(): string
+    {
+        if ($this->isRejected()) {
+            return 'OUT machine blocked';
+        }
+        if ($this->isPending()) {
+            return 'OUT machine waits for parent approval';
+        }
+        if ($this->isOpenOuting()) {
+            return $this->in_at ? 'Returned' : 'Out — waiting for return punch';
+        }
+        if ($this->machineReady()) {
+            return 'OUT machine available until '.$this->expires_at?->format('h:i A');
+        }
+        if ($this->status === self::STATUS_EXPIRED) {
+            return $this->isOpenOuting()
+                ? 'Expired — clock in starts when they return'
+                : 'OUT machine access removed';
+        }
+
+        return match ($this->machine_status) {
+            'queued', 'ready' => 'OUT machine available',
+            'revoked' => 'OUT machine access removed',
+            default => 'OUT machine not granted',
+        };
     }
 
     public function getWorkTypeLabelAttribute(): string
@@ -205,10 +285,6 @@ class GatePass extends Model
 
     public static function expireStale(): int
     {
-        return static::query()
-            ->where('status', self::STATUS_APPROVED)
-            ->whereNotNull('expires_at')
-            ->where('expires_at', '<=', now())
-            ->update(['status' => self::STATUS_EXPIRED]);
+        return app(\App\Services\Operations\GatePassService::class)->expireDue();
     }
 }

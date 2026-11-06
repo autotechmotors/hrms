@@ -123,9 +123,9 @@ return [
             'handler' => NullHandler::class,
         ],
 
-        'dahua' => [
+        'devices' => [
             'driver' => 'daily',
-            'path' => storage_path('logs/dahua.log'),
+            'path' => storage_path('logs/device.log'),
             'level' => 'debug',
             'days' => 14,
             'replace_placeholders' => true,

@@ -1,15 +1,16 @@
 # Terminals
 
-Dahua devices, local PC bridge, enroll, block, and terminal users stay. Hikvision and ezapi ingest stay. Do not change tokens, throttles, CSRF exceptions, or payload handling.
+Devices is the hub for Hikvision terminals. Enroll, block, and terminal users stay. Do not change tokens, throttles, CSRF exceptions, or payload handling.
 
 ## Code
 
 - `app/Http/Controllers/Operations/DeviceController.php`
 - `app/Http/Controllers/Operations/DeviceEventController.php`
 - `app/Http/Controllers/Operations/HikvisionEventController.php`
-- `app/Http/Controllers/Operations/EzapiController.php`
 - `app/Services/Devices/DeviceSync.php`
-- Public routes: `device-events`, `hikvision-events/{token}`, `ezapi/push/{action}`
+- `app/Services/Devices/EmployeePush.php` (Hikvision ISAPI)
+- Public routes: `device-events`, `hikvision-events/{token}`
+- Brand: Register ID starting `HIK` = Hikvision ISAPI
 
 ## Menu
 
@@ -17,7 +18,7 @@ The authenticated device screens stay behind `devices.manage`. Device Administra
 
 ## PWA
 
-The service worker must not intercept `device-events`, `hikvision-events`, or `ezapi`. See `docs/prompts/HRMS-PWA.md`.
+The service worker must not intercept `device-events` or `hikvision-events`. See `docs/prompts/HRMS-PWA.md`.
 
 ## Visual
 

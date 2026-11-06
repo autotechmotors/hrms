@@ -30,12 +30,12 @@ class Navigation
                 self::link('Advances & Deductions', 'advances.index', ['advances.*'], 'minus', ['advances.view', 'advances.manage', 'payroll.process'], 'advances & deductions'),
             ],
             'Operations' => [
-                self::link('Dahua Devices', 'devices.index', ['devices.*'], 'cpu', ['devices.manage'], 'dahua devices'),
+                self::link('Devices', 'devices.index', ['devices.*'], 'cpu', ['devices.manage'], 'devices'),
                 self::link('Reports & Analytics', 'reports.index', ['reports.*'], 'chart', ['reports.view'], 'reports & analytics'),
                 self::link('Bank Transfers', 'bank.index', ['bank.*'], 'bank', ['bank.view', 'bank_accounts.view', 'bank_accounts.manage', 'payments.release'], 'bank transfers'),
             ],
             'Administration' => [
-                self::link('User Management', 'users.index', ['users.*'], 'users', ['users.view'], 'user management'),
+                self::link('Settings', 'settings.edit', ['settings.*'], 'set', ['settings.manage'], 'settings'),
                 self::link('Roles & Permissions', 'roles.index', ['roles.*'], 'shield', ['roles.view'], 'roles & permissions'),
                 self::link('Departments', 'departments.index', ['departments.*'], 'building', ['departments.view'], 'departments'),
                 self::link('Designations', 'designations.index', ['designations.*', 'employee-types.*'], 'users', ['designations.view'], 'designations'),

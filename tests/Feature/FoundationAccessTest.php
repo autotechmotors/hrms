@@ -35,7 +35,7 @@ class FoundationAccessTest extends TestCase
             ->assertSee('Attendance')
             ->assertSee('Phone')
             ->assertDontSee('Payroll')
-            ->assertDontSee('Dahua Devices');
+            ->assertDontSee('Devices');
     }
 
     public function test_manager_cannot_open_company_master(): void

@@ -30,4 +30,9 @@ class DepartmentController extends CodedMasterController
     {
         return 'department';
     }
+
+    protected function summary(): string
+    {
+        return 'Departments used when placing employees.';
+    }
 }

@@ -31,7 +31,7 @@ class HrmsShare extends Command
         $target = sprintf('http://%s:%d', $host, $port);
         $this->info('Local HRMS stays on this PC. Tunnel only publishes HTTPS access.');
         $this->line('Forwarding: '.$target);
-        $this->line('Device EZAPI stays on LAN '.$this->dahuaHint().' (not through this web tunnel).');
+        $this->line('Hikvision terminals stay on the LAN (not through this web tunnel).');
         $this->newLine();
         $this->comment('Wait for a line like: https://….trycloudflare.com');
         $this->comment('Ctrl+C to stop sharing.');
@@ -54,11 +54,6 @@ class HrmsShare extends Command
         }
 
         return $process->getExitCode() === 0 ? self::SUCCESS : self::FAILURE;
-    }
-
-    private function dahuaHint(): string
-    {
-        return (string) config('dahua.host', '192.168.1.68').':'.(int) config('dahua.port', 60002);
     }
 
     private function binaryPath(): string

@@ -55,6 +55,115 @@
     };
 })();
 
+(function () {
+    const standalone = () => window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+    const ios = () => {
+        const ua = navigator.userAgent || '';
+        return /iPhone|iPod|iPad/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    };
+    const iosSafari = () => ios() && /Safari/i.test(navigator.userAgent || '') && !/CriOS|FxiOS|EdgiOS|OPiOS/i.test(navigator.userAgent || '');
+    let deferredPrompt = null;
+
+    const buttons = () => document.querySelectorAll('[data-pwa-install]');
+    const reveal = () => {
+        if (standalone()) {
+            return;
+        }
+        buttons().forEach((button) => {
+            button.hidden = false;
+        });
+    };
+    const hide = () => {
+        buttons().forEach((button) => {
+            button.hidden = true;
+        });
+        const sheet = document.getElementById('pwaSheet');
+        if (sheet) {
+            sheet.hidden = true;
+        }
+    };
+    const closeSheet = () => {
+        const sheet = document.getElementById('pwaSheet');
+        if (sheet) {
+            sheet.hidden = true;
+        }
+    };
+    const openIosSheet = () => {
+        const sheet = document.getElementById('pwaSheet');
+        const steps = document.getElementById('pwaSteps');
+        if (!sheet || !steps) {
+            return;
+        }
+        const lines = iosSafari()
+            ? ['Tap the Share button in Safari.', 'Tap Add to Home Screen.', 'Tap Add.']
+            : ['Open this page in Safari.', 'Tap the Share button.', 'Tap Add to Home Screen, then Add.'];
+        steps.replaceChildren(...lines.map((text) => {
+            const item = document.createElement('li');
+            item.textContent = text;
+            return item;
+        }));
+        sheet.hidden = false;
+    };
+
+    window.addEventListener('beforeinstallprompt', (event) => {
+        event.preventDefault();
+        deferredPrompt = event;
+        reveal();
+    });
+    window.addEventListener('appinstalled', () => {
+        deferredPrompt = null;
+        hide();
+    });
+    document.addEventListener('click', (event) => {
+        if (event.target.closest('[data-pwa-close]') || event.target.id === 'pwaSheet') {
+            closeSheet();
+            return;
+        }
+        const opener = event.target.closest('[data-pwa-install]');
+        if (!opener) {
+            return;
+        }
+        event.preventDefault();
+        if (deferredPrompt) {
+            const prompt = deferredPrompt;
+            deferredPrompt = null;
+            prompt.prompt();
+            prompt.userChoice.then((choice) => {
+                if (choice.outcome === 'accepted') {
+                    hide();
+                }
+            });
+            return;
+        }
+        if (ios()) {
+            openIosSheet();
+            return;
+        }
+        if (window.toast) {
+            window.toast('Use the browser menu to install HRMS.', 'info');
+        }
+    });
+    document.addEventListener('DOMContentLoaded', () => {
+        if (standalone()) {
+            hide();
+            return;
+        }
+        if (ios()) {
+            reveal();
+        }
+    });
+})();
+
+document.addEventListener('show.bs.modal', (event) => {
+    const modal = event.target;
+    if (!modal || !modal.classList || !modal.classList.contains('modal')) {
+        return;
+    }
+    if (modal.parentElement !== document.body) {
+        document.body.appendChild(modal);
+    }
+});
+
 document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('a[data-back]').forEach((link) => {
         link.addEventListener('click', (event) => {
@@ -84,8 +193,8 @@ document.addEventListener('DOMContentLoaded', () => {
             moreBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
         });
     }
-    if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/sw.js').catch(() => {});
+    if ('serviceWorker' in navigator && window.isSecureContext) {
+        navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {});
     }
 
     (window.__TOASTS__ || []).forEach((item) => {
@@ -343,8 +452,25 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             select.on('select2:open', () => {
                 window.requestAnimationFrame(() => {
-                    const field = document.querySelector('.select2-container--open .select2-search__field');
-                    field?.focus({ preventScroll: true });
+                    if (select.is('[data-parent-list], [data-role-list]')) {
+                        const menu = document.querySelector('.select2-container--open .select2-dropdown');
+                        const holder = document.querySelector('body > .select2-container--open');
+                        const field = select.next('.select2-container')[0];
+                        menu?.classList.add('parent-menu');
+                        menu?.classList.remove('select2-dropdown--above');
+                        menu?.classList.add('select2-dropdown--below');
+                        if (holder && field) {
+                            const rect = field.getBoundingClientRect();
+                            holder.style.top = `${rect.bottom + window.scrollY}px`;
+                            holder.style.left = `${rect.left + window.scrollX}px`;
+                            holder.style.width = `${rect.width}px`;
+                            if (menu) {
+                                menu.style.width = `${rect.width}px`;
+                            }
+                        }
+                    }
+                    const search = document.querySelector('.select2-container--open .select2-search__field');
+                    search?.focus({ preventScroll: true });
                 });
             });
             if (select.is('[data-submit]') && ! select.closest('[data-ajax-filter]').length) {
@@ -387,4 +513,30 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         });
     });
+
+    const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+    const badges = document.querySelectorAll('[data-notif-count]');
+    const paintBadges = (count) => {
+        badges.forEach((el) => {
+            el.textContent = count > 99 ? '99+' : String(count);
+            el.classList.toggle('show', count > 0);
+        });
+    };
+    const refreshNotifications = async () => {
+        if (!badges.length) {
+            return;
+        }
+        try {
+            const res = await fetch('/notifications/unread-count', { headers: { Accept: 'application/json' } });
+            if (!res.ok) {
+                return;
+            }
+            const data = await res.json();
+            paintBadges(Number(data.count || 0));
+        } catch (_) {}
+    };
+    if (badges.length) {
+        refreshNotifications();
+        window.setInterval(refreshNotifications, 45000);
+    }
 });

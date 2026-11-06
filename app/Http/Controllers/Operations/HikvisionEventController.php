@@ -18,7 +18,7 @@ class HikvisionEventController extends Controller
 {
     public function __invoke(Request $request, string $token, HikvisionEvents $events, DeviceSync $sync): JsonResponse|Response
     {
-        $expected = (string) config('dahua.forward_token');
+        $expected = (string) config('devices.forward_token');
         if ($expected === '' || ! hash_equals($expected, $token)) {
             abort(401);
         }
@@ -63,7 +63,7 @@ class HikvisionEventController extends Controller
 
     public function people(Request $request, string $token, DevicePeople $people): JsonResponse
     {
-        $expected = (string) config('dahua.forward_token');
+        $expected = (string) config('devices.forward_token');
         if ($expected === '' || ! hash_equals($expected, $token)) {
             abort(401);
         }
@@ -128,7 +128,7 @@ class HikvisionEventController extends Controller
 
     private function token(string $token): void
     {
-        $expected = (string) config('dahua.forward_token');
+        $expected = (string) config('devices.forward_token');
         if ($expected === '' || ! hash_equals($expected, $token)) {
             abort(401);
         }

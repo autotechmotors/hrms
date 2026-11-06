@@ -17,8 +17,17 @@ class RoleController extends Controller
     {
         $this->authorize('viewAny', Role::class);
 
+        $roles = Role::query()->withCount('employees', 'permissions')->orderBy('name')->paginate(20);
+
         return view('admin.roles.index', [
-            'roles' => Role::query()->withCount('users', 'permissions')->orderBy('name')->paginate(20),
+            'roles' => $roles,
+            'canEdit' => request()->user()?->hasPermission('roles.edit') ?? false,
+            'stats' => [
+                'total' => Role::query()->count(),
+                'active' => Role::query()->where('is_active', true)->count(),
+                'parent' => Role::query()->where('has_parent', true)->where('is_active', true)->count(),
+                'child' => Role::query()->where('has_child', true)->where('is_active', true)->count(),
+            ],
         ]);
     }
 

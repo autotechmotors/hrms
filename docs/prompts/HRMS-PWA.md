@@ -25,12 +25,22 @@ Generate from the brand PNG only:
 
 ## Head
 
-In `resources/views/layouts/app.blade.php`: manifest link, `theme-color`, `apple-mobile-web-app-capable`, apple touch icon.
+Both layouts include `resources/views/partials/pwa-head.blade.php`: manifest link, `theme-color`, `apple-mobile-web-app-capable`, apple title, and the 180px touch icon.
+
+## Install
+
+`resources/views/partials/pwa-install.blade.php` is the iPhone sheet. Buttons use `data-pwa-install` and stay hidden until install is possible.
+
+- Already installed (`display-mode: standalone` or `navigator.standalone`): no button.
+- Chrome and Edge: `beforeinstallprompt` opens the browser install prompt.
+- iPhone and iPad: the button opens the sheet. Safari steps are Share, Add to Home Screen, Add. Any other iPhone browser is told to open Safari first.
+
+The button sits on More and on the sign-in card. Android install still needs a secure address. iPhone Add to Home Screen uses the apple touch icon.
 
 ## Service worker
 
 Cache the app shell only: CSS, JS, icons, manifest. HTML and authenticated JSON stay network-first.
 
-Do not cache employee, payroll, bank, or attendance payloads. Do not intercept `device-events`, `hikvision-events`, or `ezapi`.
+Do not cache employee, payroll, bank, or attendance payloads. Do not intercept `device-events` or `hikvision-events`.
 
 Offline is a short shell message, then the network page when the connection returns. No offline punch entry.

@@ -23,7 +23,7 @@ self.addEventListener('fetch', (event) => {
     if (url.origin !== self.location.origin || event.request.method !== 'GET') {
         return;
     }
-    if (/^\/(device-events|hikvision-events|ezapi)(\/|$)/.test(url.pathname)) {
+    if (/^\/(device-events|hikvision-events)(\/|$)/.test(url.pathname)) {
         return;
     }
 

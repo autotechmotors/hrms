@@ -8,4 +8,8 @@
         <x-text-field name="password" label="Password" type="password" required />
         <button class="btn pr w-100" type="submit">Sign in</button>
     </form>
+    <button class="btn pwa-guest" type="button" data-pwa-install hidden>
+        <img src="{{ asset('icons/icon-192.png') }}" alt="" width="18" height="18">
+        <span>Install app</span>
+    </button>
 @endsection

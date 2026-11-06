@@ -10,13 +10,10 @@ use App\Models\Device;
 use App\Models\DeviceTerminalUser;
 use App\Models\DeviceUser;
 use App\Models\Employee;
-use App\Models\EmployeeCredential;
 use Illuminate\Support\Collection;
 use App\Services\Operations\AttendanceCalculator;
-use App\Support\StoredImage;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\File;
 
 class DeviceSync
 {
@@ -24,7 +21,6 @@ class DeviceSync
     public const SAME_VISIT_SECONDS = 120;
 
     public function __construct(
-        private readonly DahuaPush $push,
         private readonly DevicePeople $people,
         private readonly AttendanceCalculator $calculator,
     ) {}
@@ -32,25 +28,14 @@ class DeviceSync
     public function run(Device $device): string
     {
         app(PunchForward::class)->flush();
-        if ($device->isHikvision()) {
-            return $device->name.': face scans come from the Hikvision pull, not EZAPI';
-        }
-        $this->people->promoteMissingProfiles();
-        $imported = $this->push->importInbox($device);
-        $this->push->continueCollect($device);
-        $created = $this->linkPeople($device);
-        $punches = $this->importPunches($device, true);
-        $queued = false;
-        if (! $this->push->collecting($device)) {
-            $this->pushUnlinked($device);
-            $this->queueMissingBiometrics($device);
-            if (! $this->push->listRequestWaiting($device)) {
-                $this->push->queueUserList($device);
-                $queued = true;
-            }
+        if (! $device->isHikvision()) {
+            return $device->name.': skipped (Hikvision terminals only)';
         }
 
-        return $device->name.': imported '.$imported.', added '.$created.', punches '.$punches.($queued ? ', list requested' : ', list already waiting');
+        $this->people->promoteMissingProfiles();
+        $created = $this->linkPeople($device);
+
+        return $device->name.': Hikvision people '.$created;
     }
 
     public function pullPunches(): int
@@ -64,15 +49,9 @@ class DeviceSync
             // A cache miss must not block a punch import.
         }
 
-        $count = 0;
-        foreach (Device::query()->orderBy('id')->get() as $device) {
-            $count += $this->importPunches($device, false);
-        }
-        if ($count > 0) {
-            $this->reapplyRecent();
-        }
+        $this->reapplyRecent();
 
-        return $count;
+        return 0;
     }
 
     private function linkPeople(Device $device): int
@@ -94,63 +73,6 @@ class DeviceSync
         }
 
         return $created;
-    }
-
-    private function queueMissingBiometrics(Device $device): void
-    {
-        $people = $device->terminalUsers()->whereNotNull('employee_id')->get();
-        $this->queueKind($device, $people, 'face', 'query-faces');
-        $this->queueKind($device, $people, 'finger', 'query-fingers');
-        $this->queueKind($device, $people, 'card', 'query-cards');
-    }
-
-    private function queueKind(Device $device, $people, string $kind, string $action): void
-    {
-        if ($this->push->actionWaiting($device, $action)) {
-            return;
-        }
-
-        $ids = [];
-        foreach ($people as $person) {
-            $has = EmployeeCredential::query()
-                ->where('employee_id', $person->employee_id)
-                ->where('kind', $kind)
-                ->exists();
-            if (! $has) {
-                $ids[] = $person->user_id;
-            }
-            if (count($ids) >= 10) {
-                break;
-            }
-        }
-        if ($ids === []) {
-            return;
-        }
-
-        $this->push->queueBiometricQuery($device, $action, $ids);
-    }
-
-    private function importPunches(Device $device, bool $recover): int
-    {
-        $dir = $this->push->directory().DIRECTORY_SEPARATOR.'saved_files';
-        if (! is_dir($dir)) {
-            return 0;
-        }
-
-        $count = 0;
-        foreach (File::files($dir) as $file) {
-            if (! str_ends_with(strtolower($file->getFilename()), '.json')) {
-                continue;
-            }
-            $data = json_decode(File::get($file->getPathname()), true);
-            if (! is_array($data) || ! isset($data['NotifyInfo']['Events'])) {
-                continue;
-            }
-            $count += $this->importEventFile($device, $data, $file->getFilenameWithoutExtension(), $dir);
-            $this->archiveEvent($dir, $file->getFilename());
-        }
-
-        return $recover ? $count + $this->recoverImported($device, $dir) : $count;
     }
 
     /**
@@ -177,7 +99,7 @@ class DeviceSync
             }
         }
 
-        $saved = $this->importEventFile($device, $data, $seq, '', true, $image, true);
+        $saved = $this->importEventFile($device, $data, $seq, true, $image);
 
         return ['saved' => $saved, 'pending' => $pending && $saved === 0];
     }
@@ -226,47 +148,12 @@ class DeviceSync
         return true;
     }
 
-    private function recoverImported(Device $device, string $dir): int
-    {
-        $imported = $dir.DIRECTORY_SEPARATOR.'imported';
-        if (! is_dir($imported)) {
-            return 0;
-        }
-
-        $count = 0;
-        foreach (File::files($imported) as $file) {
-            if (! str_ends_with(strtolower($file->getFilename()), '.json')) {
-                continue;
-            }
-            $data = json_decode(File::get($file->getPathname()), true);
-            if (! is_array($data) || ! isset($data['NotifyInfo']['Events'])) {
-                continue;
-            }
-            $count += $this->importEventFile($device, $data, $file->getFilenameWithoutExtension(), $dir, true);
-        }
-
-        return $count;
-    }
-
-    private function archiveEvent(string $dir, string $filename): void
-    {
-        $from = $dir.DIRECTORY_SEPARATOR.$filename;
-        if (! is_file($from)) {
-            return;
-        }
-        $folder = $dir.DIRECTORY_SEPARATOR.'imported';
-        File::ensureDirectoryExists($folder);
-        $to = $folder.DIRECTORY_SEPARATOR.$filename;
-        if (is_file($to)) {
-            File::delete($to);
-        }
-        File::move($from, $to);
-    }
-
-    private function importEventFile(Device $device, array $data, string $seq, string $dir, bool $knownOnly = false, ?string $storedImage = null, bool $useStoredImage = false): int
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function importEventFile(Device $device, array $data, string $seq, bool $knownOnly = false, ?string $image = null): int
     {
         $saved = 0;
-        $image = $useStoredImage ? $storedImage : $this->imageFor($dir, $seq);
         foreach ($data['NotifyInfo']['Events'] as $event) {
             if (! is_array($event) || ($event['Code'] ?? '') !== 'AccessControl') {
                 continue;
@@ -328,8 +215,18 @@ class DeviceSync
                 ],
             );
             if ($punch->wasRecentlyCreated) {
+                $allowed = app(\App\Services\Operations\GatePassAccess::class)->attachPunch($employee, $punch, $device);
+                if (! $allowed) {
+                    $punch->delete();
+                    DeviceLog::moment('gate denied '.$employee->employee_code, [
+                        'device' => $device->register_id,
+                        'employee_id' => $employee->id,
+                        'at' => $at->toDateTimeString(),
+                    ]);
+                    continue;
+                }
                 $saved++;
-                DahuaLog::moment($direction.' '.$employee->employee_code, [
+                DeviceLog::moment($direction.' '.$employee->employee_code, [
                     'device' => $device->register_id,
                     'employee_id' => $employee->id,
                     'at' => $at->toDateTimeString(),
@@ -377,18 +274,6 @@ class DeviceSync
         return collect($clusters);
     }
 
-    private function pushUnlinked(Device $device): void
-    {
-        $linked = DeviceTerminalUser::query()->where('device_id', $device->id)->pluck('employee_id')->filter();
-        Employee::query()
-            ->where('company_id', $device->company_id)
-            ->when($linked->isNotEmpty(), fn ($query) => $query->whereNotIn('id', $linked))
-            ->orderBy('id')
-            ->each(function (Employee $employee): void {
-                app(EmployeePush::class)->sync($employee);
-            });
-    }
-
     private function reapplyRecent(): void
     {
         $groups = AttendancePunch::query()
@@ -411,8 +296,9 @@ class DeviceSync
     {
         $start = $date->copy()->timezone('Asia/Kolkata')->startOfDay();
         $punches = AttendancePunch::query()
-            ->select(['id', 'employee_id', 'punched_at', 'direction'])
+            ->select(['id', 'employee_id', 'punched_at', 'direction', 'gate_pass_id'])
             ->where('employee_id', $employee->id)
+            ->whereNull('gate_pass_id')
             ->whereBetween('punched_at', [$start, $start->copy()->endOfDay()])
             ->orderBy('punched_at')
             ->orderBy('id')
@@ -461,16 +347,6 @@ class DeviceSync
         $rule = AttendanceRule::query()->where('company_id', $device->company_id)->first();
 
         return $rule === null || $rule->store_selfie;
-    }
-
-    private function imageFor(string $dir, string $seq): ?string
-    {
-        $path = $dir.DIRECTORY_SEPARATOR.$seq.'_Pic.jpg';
-        if (! is_file($path)) {
-            return null;
-        }
-
-        return StoredImage::normalize(base64_encode((string) file_get_contents($path)));
     }
 
     private function direction(string $type): string

@@ -2,19 +2,19 @@
 
 namespace App\Http\Middleware;
 
-use App\Services\Devices\DahuaLog;
+use App\Services\Devices\DeviceLog;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
-class LogDahuaApi
+class LogDeviceApi
 {
     public function handle(Request $request, Closure $next): Response
     {
         $started = microtime(true);
         $call = $request->method().' /'.$request->path();
 
-        DahuaLog::debug('api request '.$call, [
+        DeviceLog::debug('api request '.$call, [
             'ip' => (string) $request->ip(),
             'query' => $request->query(),
             'headers' => $this->headers($request),
@@ -24,7 +24,7 @@ class LogDahuaApi
         try {
             $response = $next($request);
         } catch (\Throwable $exception) {
-            DahuaLog::debug('api error '.$call, [
+            DeviceLog::debug('api error '.$call, [
                 'error' => $exception->getMessage(),
                 'ms' => $this->elapsed($started),
             ]);
@@ -32,7 +32,7 @@ class LogDahuaApi
             throw $exception;
         }
 
-        DahuaLog::debug('api response '.$call, [
+        DeviceLog::debug('api response '.$call, [
             'http' => $response->getStatusCode(),
             'ms' => $this->elapsed($started),
             'body' => $this->responseBody($response),

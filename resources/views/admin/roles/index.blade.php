@@ -1,80 +1,92 @@
 @extends('layouts.app')
 @section('title', 'Roles')
 @section('content')
-    <div class="ph">
-        <div>
-            <h1>Roles</h1>
-            <p>Parent / child flags decide Gate Pass and employee reporting rules.</p>
+    <div class="rl-board">
+        <div class="ph">
+            <div>
+                <h1>Roles</h1>
+                <p>{{ $stats['total'] }} roles · parent / child flags drive employee reporting and Gate Pass</p>
+            </div>
+            <div class="ac">
+                @permission('roles.create')
+                    <a class="btn pr" href="{{ route('roles.create') }}"><x-i name="plus" :size="14" />Add role</a>
+                @endpermission
+            </div>
         </div>
-        <div class="ac">
-            @permission('roles.create')
-                <a class="btn pr" href="{{ route('roles.create') }}">Add role</a>
-            @endpermission
-        </div>
-    </div>
 
-    <div class="card rl-list">
-        <div class="table-responsive">
-            <table class="table mb-0">
-                <thead>
-                    <tr>
-                        <th>Role</th>
-                        <th>Has parent</th>
-                        <th>Has child</th>
-                        <th>Status</th>
-                        <th>Users</th>
-                        <th>Permissions</th>
-                        <th></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @forelse($roles as $role)
-                        <tr>
-                            <td>
+        <div class="lv-stats g c4">
+            <div class="card kp">
+                <small>Roles</small>
+                <b>{{ $stats['total'] }}</b>
+                <span>In this company</span>
+            </div>
+            <div class="card kp">
+                <small>Active</small>
+                <b>{{ $stats['active'] }}</b>
+                <span>Shown on employee form</span>
+            </div>
+            <div class="card kp">
+                <small>Has parent</small>
+                <b>{{ $stats['parent'] }}</b>
+                <span>Parent select required</span>
+            </div>
+            <div class="card kp">
+                <small>Has child</small>
+                <b>{{ $stats['child'] }}</b>
+                <span>Appear in parent list</span>
+            </div>
+        </div>
+
+        <div class="rl-grid">
+            @if($roles->isEmpty())
+                <div class="card cb empty-state rl-empty">
+                    <h3>No roles yet</h3>
+                    <p>Add a role to set parent / child rules and permissions.</p>
+                </div>
+            @endif
+            @foreach ($roles as $role)
+                <article class="rl-card {{ $role->is_active ? '' : 'is-off' }}">
+                    <a class="rl-card-main" href="{{ $canEdit ? route('roles.edit', $role) : route('roles.index') }}">
+                        <span class="rl-ico"><x-i name="shield" :size="18" /></span>
+                        <span class="rl-copy">
+                            <span class="rl-title">
                                 <b>{{ $role->name }}</b>
-                                <small class="d-block text-secondary">{{ $role->slug }}</small>
-                            </td>
-                            <td><span class="rl-pill {{ $role->has_parent ? 'is-on' : '' }}">{{ $role->has_parent ? 'On' : 'Off' }}</span></td>
-                            <td><span class="rl-pill {{ $role->has_child ? 'is-on' : '' }}">{{ $role->has_child ? 'On' : 'Off' }}</span></td>
-                            <td><span class="rl-pill {{ $role->is_active ? 'is-live' : '' }}">{{ $role->is_active ? 'Active' : 'Inactive' }}</span></td>
-                            <td>{{ $role->users_count }}</td>
-                            <td>{{ $role->permissions_count }}</td>
-                            <td class="text-end">
-                                @permission('roles.edit')
-                                    <a href="{{ route('roles.edit', $role) }}">Edit</a>
-                                @endpermission
-                            </td>
-                        </tr>
-                    @empty
-                        <tr><td colspan="7" class="empty-state">No roles yet.</td></tr>
-                    @endforelse
-                </tbody>
-            </table>
-        </div>
-
-        <div class="rl-cards">
-            @forelse($roles as $role)
-                <article class="rl-block">
-                    <header>
+                                <span class="b {{ $role->is_active ? 'ok' : '' }}">{{ $role->is_active ? 'Active' : 'Inactive' }}</span>
+                            </span>
+                            <small>{{ $role->slug }}{{ $role->is_system ? ' · System' : '' }}</small>
+                            @if($role->description)
+                                <span>{{ $role->description }}</span>
+                            @endif
+                        </span>
+                    </a>
+                    <div class="rl-facts">
                         <div>
-                            <b>{{ $role->name }}</b>
-                            <small>{{ $role->slug }} · {{ $role->users_count }} users</small>
+                            <dt>Parent</dt>
+                            <dd class="{{ $role->has_parent ? 'is-on' : '' }}">{{ $role->has_parent ? 'On' : 'Off' }}</dd>
                         </div>
-                        @permission('roles.edit')
-                            <a class="btn sm" href="{{ route('roles.edit', $role) }}">Edit</a>
-                        @endpermission
-                    </header>
-                    <div class="rl-meta">
-                        <span>Parent <b class="{{ $role->has_parent ? 'on' : '' }}">{{ $role->has_parent ? 'On' : 'Off' }}</b></span>
-                        <span>Child <b class="{{ $role->has_child ? 'on' : '' }}">{{ $role->has_child ? 'On' : 'Off' }}</b></span>
-                        <span>Status <b class="{{ $role->is_active ? 'live' : '' }}">{{ $role->is_active ? 'Active' : 'Inactive' }}</b></span>
+                        <div>
+                            <dt>Child</dt>
+                            <dd class="{{ $role->has_child ? 'is-on' : '' }}">{{ $role->has_child ? 'On' : 'Off' }}</dd>
+                        </div>
+                        <div>
+                            <dt>MFA</dt>
+                            <dd class="{{ $role->requires_mfa ? 'is-on' : '' }}">{{ $role->requires_mfa ? 'On' : 'Off' }}</dd>
+                        </div>
+                        <div>
+                            <dt>People</dt>
+                            <dd>{{ $role->employees_count }}</dd>
+                        </div>
                     </div>
+                    <footer class="rl-foot">
+                        <span>{{ $role->permissions_count }} permissions</span>
+                        @if($canEdit)
+                            <a class="btn sm" href="{{ route('roles.edit', $role) }}">Edit</a>
+                        @endif
+                    </footer>
                 </article>
-            @empty
-                <p class="empty-state">No roles yet.</p>
-            @endforelse
+            @endforeach
         </div>
-    </div>
 
-    <div class="mt-3">{{ $roles->links() }}</div>
+        <div class="pgn rl-pgn">{{ $roles->links() }}</div>
+    </div>
 @endsection

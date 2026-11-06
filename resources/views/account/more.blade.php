@@ -26,6 +26,27 @@
             </a>
         </section>
 
+        <button class="more-card more-install" type="button" data-pwa-install hidden>
+            <img src="{{ asset('icons/icon-192.png') }}" alt="" width="40" height="40">
+            <span class="more-label">
+                <b>Install app</b>
+                <small>Add the HRMS icon to your home screen</small>
+            </span>
+            <x-i class="more-go" name="right" :size="16" />
+        </button>
+
+        <section class="more-card">
+            <h2>Inbox</h2>
+            <a class="more-row {{ request()->routeIs('notifications.*') ? 'on' : '' }}" href="{{ route('notifications.index', [], false) }}">
+                <span class="more-ico"><x-i name="bell" :size="18" /></span>
+                <span class="more-label">Notifications</span>
+                @if(($unreadNotifications ?? 0) > 0)
+                    <span class="more-count">{{ $unreadNotifications > 99 ? '99+' : $unreadNotifications }}</span>
+                @endif
+                <x-i class="more-go" name="right" :size="16" />
+            </a>
+        </section>
+
         @foreach($groups as $label => $links)
             <section class="more-card">
                 <h2>{{ $label }}</h2>

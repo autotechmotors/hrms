@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Models\Employee;
+use App\Models\Role;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -20,6 +21,7 @@ class EmployeeRequest extends FormRequest
             'designation_id' => ['required', 'integer', 'exists:designations,id'],
             'employee_type_id' => ['nullable', 'integer', 'exists:employee_types,id'],
             'employment_status_id' => ['required', 'integer', 'exists:employment_statuses,id'],
+            'role_id' => ['nullable', 'integer', 'exists:roles,id'],
             'reporting_manager_id' => [
                 $this->employeeNeedsParent() ? 'required' : 'nullable',
                 'integer',
@@ -52,8 +54,20 @@ class EmployeeRequest extends FormRequest
 
     private function employeeNeedsParent(): bool
     {
-        $employee = $this->route('employee');
+        $roleId = (int) $this->input('role_id');
+        if ($roleId > 0 && Role::query()->find($roleId)?->requiresReportingManager()) {
+            return true;
+        }
 
-        return $employee instanceof Employee && $employee->needsReportingManager();
+        $employee = $this->route('employee');
+        if (! $employee instanceof Employee) {
+            return false;
+        }
+
+        $employee->loadMissing('user.roles');
+
+        return (bool) $employee->user?->roles->contains(
+            fn (Role $role) => $role->requiresReportingManager()
+        );
     }
 }

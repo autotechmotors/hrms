@@ -25,8 +25,5 @@ if errorlevel 1 (
   wscript.exe //B "%VBS%" "%ROOT%" "%PHP%" artisan serve --host=%HOST% --port=%WEB_PORT%
 )
 
-REM 4) Dahua listener
-wscript.exe //B "%VBS%" "%ROOT%" "%PHP%" artisan dahua:ensure-listen
-
 endlocal
 exit /b 0

@@ -45,7 +45,7 @@ class PunchForward
 
     public function flush(): void
     {
-        if (! app()->runningInConsole() || Cache::get('dahua.forward.hold')) {
+        if (! app()->runningInConsole() || Cache::get('devices.forward.hold')) {
             return;
         }
 
@@ -90,8 +90,8 @@ class PunchForward
      */
     private function post(array $payload): string
     {
-        $url = (string) config('dahua.forward_url');
-        $token = (string) config('dahua.forward_token');
+        $url = (string) config('devices.forward_url');
+        $token = (string) config('devices.forward_token');
         if ($url === '' || $token === '') {
             return 'skipped';
         }
@@ -105,7 +105,7 @@ class PunchForward
                 ->post($url, $payload);
         } catch (\Throwable) {
             $this->keep($payload);
-            Cache::put('dahua.forward.hold', 1, now()->addMinutes(5));
+            Cache::put('devices.forward.hold', 1, now()->addMinutes(5));
 
             return 'failed';
         }
@@ -120,7 +120,7 @@ class PunchForward
 
         $this->keep($payload);
         $wait = $response->successful() && $response->json('pending') ? 60 : 5;
-        Cache::put('dahua.forward.hold', 1, now()->addMinutes($wait));
+        Cache::put('devices.forward.hold', 1, now()->addMinutes($wait));
 
         return 'queued';
     }
@@ -138,6 +138,6 @@ class PunchForward
 
     private function dir(): string
     {
-        return (string) config('dahua.forward_dir');
+        return (string) config('devices.forward_dir');
     }
 }

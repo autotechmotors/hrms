@@ -11,7 +11,9 @@ use App\Models\EmployeeCustomFieldValue;
 use App\Models\EmployeeType;
 use App\Models\EmploymentEvent;
 use App\Models\EmploymentStatus;
+use App\Models\Role;
 use App\Models\User;
+use App\Models\UserScope;
 use App\Services\AccessScope;
 use App\Services\NumberSequenceService;
 use App\Services\Workspace;
@@ -55,7 +57,9 @@ class EmployeeService
                 $this->storePhoto($employee, $photo);
             }
 
-            return $employee->refresh();
+            $this->syncStaffFromRole($employee->fresh(), $actor);
+
+            return $employee->fresh(['role', 'user.roles']);
         });
     }
 
@@ -107,7 +111,9 @@ class EmployeeService
                 $employee->update(['photograph_path' => null]);
             }
 
-            return $employee->refresh();
+            $this->syncStaffFromRole($employee->fresh(), $actor);
+
+            return $employee->fresh(['role', 'user.roles']);
         });
     }
 
@@ -163,7 +169,21 @@ class EmployeeService
             }
         }
 
-        if ($employee?->needsReportingManager() && empty($data['reporting_manager_id'])) {
+        $roleId = (int) ($data['role_id'] ?? 0);
+        $role = $roleId > 0 ? Role::query()->find($roleId) : null;
+        $keepingRole = $employee && $roleId > 0 && (int) $employee->role_id === $roleId;
+        if ($roleId > 0 && (! $role || (! $role->is_active && ! $keepingRole))) {
+            throw ValidationException::withMessages(['role_id' => 'Select an active role.']);
+        }
+        if ($role?->slug === 'super-admin' && ! $actor->isSuperAdmin()) {
+            throw ValidationException::withMessages(['role_id' => 'Only a Super Admin can assign the Super Admin role.']);
+        }
+
+        $employee?->loadMissing('user.roles');
+        $userNeedsParent = (bool) $employee?->user?->roles->contains(
+            fn (Role $linked) => $linked->requiresReportingManager()
+        );
+        if (($role?->requiresReportingManager() || $userNeedsParent) && empty($data['reporting_manager_id'])) {
             throw ValidationException::withMessages(['reporting_manager_id' => 'This employee’s role requires a parent / reporting manager.']);
         }
 
@@ -285,12 +305,57 @@ class EmployeeService
      */
     private function nullBlanks(array $data): array
     {
-        foreach (['email', 'phone', 'alternate_phone', 'address', 'city', 'state', 'postal_code', 'middle_name', 'reporting_manager_id', 'confirmation_date', 'date_of_birth', 'probation_days', 'notice_period_days'] as $key) {
+        foreach (['email', 'phone', 'alternate_phone', 'address', 'city', 'state', 'postal_code', 'middle_name', 'role_id', 'reporting_manager_id', 'confirmation_date', 'date_of_birth', 'probation_days', 'notice_period_days'] as $key) {
             if (array_key_exists($key, $data) && $data[$key] === '') {
                 $data[$key] = null;
             }
         }
 
         return $data;
+    }
+
+    private function syncStaffFromRole(Employee $employee, User $actor): void
+    {
+        $employee->loadMissing(['role', 'user']);
+        $role = $employee->role;
+        $user = $employee->user;
+
+        if (! $role) {
+            if ($user && ! $user->isSuperAdmin()) {
+                $user->roles()->detach();
+            }
+
+            return;
+        }
+
+        if (! $user && filled($employee->email)) {
+            $user = User::query()->firstOrCreate(
+                ['email' => strtolower((string) $employee->email)],
+                [
+                    'name' => $employee->full_name,
+                    'password' => 'password',
+                    'is_active' => true,
+                ]
+            );
+            $employee->update(['user_id' => $user->id]);
+        }
+
+        if (! $user) {
+            return;
+        }
+
+        if ($user->isSuperAdmin() && $role->slug !== 'super-admin' && ! $actor->isSuperAdmin()) {
+            return;
+        }
+
+        $user->forceFill(['name' => $employee->full_name, 'is_active' => true])->save();
+        $user->roles()->sync([$role->id]);
+        $user->unsetRelation('roles');
+
+        UserScope::query()->updateOrCreate([
+            'user_id' => $user->id,
+            'scope_type' => 'company',
+            'scope_id' => $employee->company_id,
+        ]);
     }
 }
