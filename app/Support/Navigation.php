@@ -18,7 +18,6 @@ class Navigation
             'People' => [
                 self::link('Employees', 'employees.index', ['employees.*'], 'users', ['employees.view'], 'employees'),
                 self::link('Attendance', 'attendance.index', ['attendance.*'], 'clock', ['attendance.view'], 'attendance'),
-                self::link('Shifts & Rosters', 'shifts.index', ['shifts.*'], 'cal', ['shifts.view'], 'shifts & rosters'),
                 self::link('Leave Management', 'leave.index', ['leave.*'], 'minus', ['leave.view'], 'leave management'),
                 self::link('Gate Pass', 'gate-passes.index', ['gate-passes.*'], 'clock', ['gate_passes.view'], 'gate pass'),
                 self::link('Holidays', 'holidays.index', ['holidays.*'], 'sun', ['holidays.view'], 'holidays'),
@@ -27,6 +26,7 @@ class Navigation
                 self::link('Payroll', 'payroll.index', ['payroll.*'], 'wallet', ['payroll.view', 'payroll.process', 'payroll.approve', 'payroll.lock', 'payroll.reopen'], 'payroll'),
                 self::link('Salary Structures', 'salary.index', ['salary.*'], 'layers', ['salary.view'], 'salary structures'),
                 self::link('Hours & pay', 'hours-pay.index', ['hours-pay.*'], 'clock', ['salary.view'], 'hours & pay'),
+                self::link('Salary sheets', 'salary-sheets.index', ['salary-sheets.*'], 'wallet', ['salary.view', 'salary.decide', 'payroll.process'], 'salary sheets'),
                 self::link('Advances & Deductions', 'advances.index', ['advances.*'], 'minus', ['advances.view', 'advances.manage', 'payroll.process'], 'advances & deductions'),
             ],
             'Operations' => [

@@ -10,7 +10,7 @@ A screen shows only when both are true:
 | Group | Modules | Note |
 |---|---|---|
 | Overview | Dashboard | |
-| People | Employees, Attendance, Shifts, Leave, Holidays | `docs/employees/PROFILE.md`, `docs/attendance/REGISTER.md`, `docs/shifts/ROSTERS.md`, `docs/leave/REQUESTS.md`, `docs/holidays/CALENDAR.md` |
+| People | Employees, Attendance, Leave, Holidays | `docs/employees/PROFILE.md`, `docs/attendance/REGISTER.md`, `docs/leave/REQUESTS.md`, `docs/holidays/CALENDAR.md`. Shifts stays out of the menu. Clocks are on the employee and on Hours & pay. Roster code stays. |
 | Payroll | Payroll, Salary, Advances | `docs/payroll/RUNS.md`, `docs/salary/STRUCTURES.md`, `docs/advances/DEDUCTIONS.md` |
 | Operations | Devices, Reports, Bank | `docs/devices/TERMINALS.md`, `docs/reports/ANALYTICS.md`, `docs/bank/TRANSFERS.md` |
 | Administration | Users, Roles, Departments, Designations, Statuses, Financial years, Work calendars, Custom fields, Branding, Audit logs | `docs/users/ACCOUNTS.md`, `docs/organization/` |
@@ -42,7 +42,7 @@ Add these only where `app/Support/PermissionCatalog.php` does not already have t
 | Super Admin | Full bypass | |
 | HR Admin | Every permission: create, edit, delete, and manage on every module | Assigning or removing the Super Admin role |
 | Payroll Admin | Payroll actions they have now | Device admin, employee create |
-| Accounts | Bank and payments | Attendance edit |
+| Accounts | Bank, payments, and salary-sheet approve or reject | Attendance edit, generating a salary sheet |
 | Manager | Dashboard, employees in department and direct reports, attendance view, and view-only shifts, leave, and holidays | Payroll, salary, advances, devices, reports, user admin, and any manage or edit action |
 | Director | Current read scope, plus attendance and reports inside that scope | Payroll process, devices |
 | Device Administrator | Devices and employee view | Payroll, user admin |

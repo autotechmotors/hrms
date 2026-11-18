@@ -9,7 +9,7 @@ Shift definitions, single-day roster assignment, and bulk roster assignment stay
 
 ## Menu
 
-After the permission split, this item uses `shifts.view`. Create, delete, and roster writes use `shifts.manage`. Grant both to roles that can open Shifts today, as listed in `docs/roles/NAV-PERMISSIONS.md`.
+The Shifts & Rosters item is not in the menu. Day and night clocks are set on the employee and on Hours & pay. Do not delete the shift or roster code. Routes stay so an existing roster can still feed attendance.
 
 ## Visual
 
