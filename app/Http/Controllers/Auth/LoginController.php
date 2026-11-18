@@ -58,10 +58,15 @@ class LoginController extends Controller
 
     private function passwordMatches(User $user, string $password): bool
     {
+        $stored = (string) $user->password;
+
         try {
-            return Hash::check($password, $user->password);
+            return Hash::check($password, $stored);
         } catch (RuntimeException) {
-            if ($user->password === '' || ! password_verify($password, $user->password)) {
+            $legacy = ($stored !== '' && password_verify($password, $stored))
+                || ($stored !== '' && strlen($stored) === strlen($password) && hash_equals($stored, $password));
+
+            if (! $legacy) {
                 return false;
             }
 

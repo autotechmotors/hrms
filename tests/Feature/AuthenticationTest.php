@@ -4,6 +4,8 @@ namespace Tests\Feature;
 
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use PragmaRX\Google2FA\Google2FA;
 use Tests\Concerns\BuildsOrganization;
 use Tests\TestCase;
@@ -28,6 +30,22 @@ class AuthenticationTest extends TestCase
         ])->assertRedirect()->assertSessionHas('error');
 
         $this->assertGuest();
+    }
+
+    public function test_plain_saved_password_is_accepted_once_and_stored_as_bcrypt(): void
+    {
+        $user = $this->makeUser('hr-admin');
+        DB::table('users')->where('id', $user->id)->update(['password' => 'PlainPass1']);
+
+        $this->post('/login', [
+            'email' => $user->email,
+            'password' => 'PlainPass1',
+        ])->assertRedirect();
+
+        $this->assertAuthenticatedAs($user);
+        $stored = (string) $user->fresh()->password;
+        $this->assertNotSame('PlainPass1', $stored);
+        $this->assertTrue(Hash::check('PlainPass1', $stored));
     }
 
     public function test_login_rejects_unknown_credentials(): void
