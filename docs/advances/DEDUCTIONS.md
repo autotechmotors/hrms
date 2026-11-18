@@ -1,6 +1,6 @@
 # Advances and deductions
 
-Advance create and close stay. Payroll deduction of an open advance stays as it is.
+Create and close stay. There is no monthly EMI and no start date. The advance is given in the current month. Payroll deducts the full amount once, from that month’s salary only, as a deduction line named `Advance · {title}`. Approving that month marks the advance deducted. A closed advance is not deducted.
 
 ## Code
 

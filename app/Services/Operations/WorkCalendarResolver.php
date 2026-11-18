@@ -24,12 +24,15 @@ class WorkCalendarResolver
             ->first();
 
         if (! $calendar || $calendar->days->isEmpty()) {
-            return ! in_array($date->dayOfWeek, [0, 6], true);
+            return true;
         }
 
         $day = $calendar->days->firstWhere('weekday', $date->dayOfWeek);
+        if (! $day) {
+            return true;
+        }
 
-        return (bool) ($day?->is_working);
+        return (bool) $day->is_working;
     }
 
     public function workingDaysInMonth(int $companyId, int $year, int $month): int

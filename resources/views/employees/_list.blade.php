@@ -28,13 +28,14 @@
                     $hasBank = (int) ($employee->active_bank_accounts_count ?? 0) > 0;
                     $pending = ! $hasDocs || ! $hasBank;
                     $blocked = (bool) $employee->is_blocked;
+                    $night = $employee->workHour?->shift_kind === 'night';
                 @endphp
                 <tr class="{{ $pending ? 'el-pending' : '' }} {{ $blocked ? 'el-blocked' : '' }}" data-employee-row="{{ $employee->id }}">
                     <td>
                         <a class="who el-link" href="{{ route('employees.show', $employee) }}">
                             <x-employee-avatar :employee="$employee" :size="32" />
                             <div>
-                                <b>{{ $employee->full_name }}</b>
+                                <span class="el-name"><b>{{ $employee->full_name }}</b><span class="et-badge {{ $night ? 'is-night' : 'is-day' }}">{{ $night ? 'Night' : 'Day' }}</span></span>
                                 <small>{{ $employee->designation?->name ?? '—' }}</small>
                             </div>
                         </a>
@@ -99,6 +100,7 @@
                 $hasBank = (int) ($employee->active_bank_accounts_count ?? 0) > 0;
                 $pending = ! $hasDocs || ! $hasBank;
                 $blocked = (bool) $employee->is_blocked;
+                $night = $employee->workHour?->shift_kind === 'night';
             @endphp
             <article class="el-card {{ $pending ? 'el-pending' : '' }} {{ $blocked ? 'el-blocked' : '' }}" data-employee-row="{{ $employee->id }}">
                 <a class="el-card-main" href="{{ route('employees.show', $employee) }}">
@@ -106,6 +108,7 @@
                     <div class="el-card-copy">
                         <div class="el-card-title">
                             <b>{{ $employee->full_name }}</b>
+                            <span class="et-badge {{ $night ? 'is-night' : 'is-day' }}">{{ $night ? 'Night' : 'Day' }}</span>
                             <span class="b {{ $badge }}">{{ $status }}</span>
                         </div>
                         <small>{{ $employee->employee_code }} · {{ $employee->designation?->name ?? '—' }}</small>

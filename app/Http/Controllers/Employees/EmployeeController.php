@@ -7,28 +7,33 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\EmployeeRequest;
 use App\Models\AttendanceDay;
 use App\Models\Department;
-use App\Models\Device;
 use App\Models\Designation;
+use App\Models\Device;
 use App\Models\DeviceTerminalUser;
 use App\Models\Employee;
+use App\Models\EmployeeCredential;
 use App\Models\EmployeeCustomField;
 use App\Models\EmployeeType;
 use App\Models\EmploymentStatus;
 use App\Models\Role;
 use App\Services\AccessScope;
+use App\Services\Devices\EmployeePush;
 use App\Services\Employees\EmployeeExporter;
 use App\Services\Employees\EmployeeImporter;
 use App\Services\Employees\EmployeeService;
+use App\Services\Operations\WorkHourResolver;
 use App\Services\Workspace;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
-use RuntimeException;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
+use RuntimeException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class EmployeeController extends Controller
@@ -39,6 +44,7 @@ class EmployeeController extends Controller
         private readonly EmployeeService $employees,
         private readonly EmployeeImporter $importer,
         private readonly EmployeeExporter $exporter,
+        private readonly WorkHourResolver $hours,
     ) {}
 
     public function index(Request $request): View
@@ -86,12 +92,16 @@ class EmployeeController extends Controller
     public function store(EmployeeRequest $request): RedirectResponse
     {
         $this->authorize('create', Employee::class);
+        $times = $this->validateTimes($request);
         $employee = $this->employees->create(
             $request->safe()->except(['photograph', 'remove_photo']),
             $request->user(),
             $request->file('photograph'),
         );
         $employee->refresh();
+        if ($times) {
+            $this->hours->saveForEmployee($employee, $times);
+        }
 
         [$flash, $message] = $this->terminalMessage($employee, false);
 
@@ -102,7 +112,7 @@ class EmployeeController extends Controller
     {
         $this->authorize('view', $employee);
         $employee->load([
-            'department', 'designation.employeeType', 'employeeType', 'role',
+            'department.workHour', 'workHour', 'designation.employeeType', 'employeeType', 'role',
             'employmentStatus', 'manager.designation', 'manager.role', 'documents', 'events', 'exits.employmentStatus',
             'bankAccounts', 'activeBankAccount', 'latestExit.employmentStatus', 'customValues.field',
         ]);
@@ -134,6 +144,31 @@ class EmployeeController extends Controller
             'canManageBank' => $user->hasPermission('bank_accounts.manage'),
             'activeBank' => $employee->activeBankAccount,
             'attendanceRows' => $attendanceRows,
+            'times' => $this->hours->editor($employee),
+        ]);
+    }
+
+    public function updateTimes(Request $request, Employee $employee): JsonResponse
+    {
+        $this->authorize('update', $employee);
+        $times = $this->validateTimes($request);
+        if (! $times) {
+            throw ValidationException::withMessages([
+                'weekday_start' => 'Enter the Monday to Saturday start.',
+            ]);
+        }
+        $this->hours->saveForEmployee($employee, $times);
+        $employee->unsetRelation('workHour');
+        $employee->load(['department.workHour', 'workHour']);
+
+        return response()->json([
+            'message' => 'Working times saved for '.$employee->full_name.'.',
+            'html' => view('employees._times', [
+                'employee' => $employee,
+                'times' => $this->hours->editor($employee),
+                'canEditTimes' => true,
+                'standalone' => true,
+            ])->render(),
         ]);
     }
 
@@ -144,7 +179,7 @@ class EmployeeController extends Controller
     {
         $saved = $updated ? 'Employee updated.' : 'Employee saved.';
         try {
-            $pushed = app(\App\Services\Devices\EmployeePush::class)->saveToTerminals($employee);
+            $pushed = app(EmployeePush::class)->saveToTerminals($employee);
         } catch (RuntimeException $exception) {
             return ['warning', $saved.' The face terminal did not add them: '.$exception->getMessage()];
         }
@@ -172,7 +207,7 @@ class EmployeeController extends Controller
             'kind' => ['required', 'in:face,finger,card,password'],
             'password' => ['required_if:kind,password', 'nullable', 'regex:/^\d{4,8}$/'],
         ]);
-        $result = app(\App\Services\Devices\EmployeePush::class)->collect($employee, $data['kind'], $data['password'] ?? null);
+        $result = app(EmployeePush::class)->collect($employee, $data['kind'], $data['password'] ?? null);
         if ($result['devices'] === 0) {
             return response()->json(['message' => $result['message']], 422);
         }
@@ -184,13 +219,13 @@ class EmployeeController extends Controller
         ]);
     }
 
-    public function destroyCredential(Employee $employee, \App\Models\EmployeeCredential $credential): JsonResponse
+    public function destroyCredential(Employee $employee, EmployeeCredential $credential): JsonResponse
     {
         $this->authorize('update', $employee);
         abort_unless((int) $credential->employee_id === (int) $employee->id, 404);
         set_time_limit(60);
         try {
-            $result = app(\App\Services\Devices\EmployeePush::class)->removeCredential($employee, $credential);
+            $result = app(EmployeePush::class)->removeCredential($employee, $credential);
         } catch (RuntimeException $exception) {
             return response()->json(['message' => $exception->getMessage()], 422);
         }
@@ -205,6 +240,7 @@ class EmployeeController extends Controller
     public function credentialState(Employee $employee): JsonResponse
     {
         $this->authorize('view', $employee);
+
         return response()->json([
             'counts' => $this->countsFor($employee),
             'slots' => $this->slotsFor($employee),
@@ -221,6 +257,7 @@ class EmployeeController extends Controller
     public function update(EmployeeRequest $request, Employee $employee): RedirectResponse
     {
         $this->authorize('update', $employee);
+        $times = $this->validateTimes($request);
         $this->employees->update(
             $employee,
             $request->safe()->except(['photograph', 'remove_photo']),
@@ -228,6 +265,9 @@ class EmployeeController extends Controller
             $request->file('photograph'),
         );
         $employee->refresh();
+        if ($times) {
+            $this->hours->saveForEmployee($employee, $times);
+        }
 
         [$flash, $message] = $this->terminalMessage($employee, true);
 
@@ -256,7 +296,7 @@ class EmployeeController extends Controller
     {
         $this->authorize('delete', $employee);
 
-        $push = app(\App\Services\Devices\EmployeePush::class);
+        $push = app(EmployeePush::class);
         $linked = $push->linked($employee);
         $userId = trim((string) $employee->employee_code);
 
@@ -341,7 +381,7 @@ class EmployeeController extends Controller
     }
 
     /**
-     * @param  \Illuminate\Support\Collection<int, Employee>  $employees
+     * @param  Collection<int, Employee>  $employees
      * @return array<int, array<string, int>>
      */
     private function credentialCounts($employees): array
@@ -351,7 +391,7 @@ class EmployeeController extends Controller
         }
 
         $counts = [];
-        $rows = \App\Models\EmployeeCredential::query()
+        $rows = EmployeeCredential::query()
             ->whereIn('employee_id', $employees->pluck('id'))
             ->selectRaw('employee_id, kind, COUNT(*) as total')
             ->groupBy('employee_id', 'kind')
@@ -369,7 +409,7 @@ class EmployeeController extends Controller
     private function countsFor(Employee $employee): array
     {
         $counts = ['password' => 0, 'card' => 0, 'finger' => 0, 'face' => 0];
-        $rows = \App\Models\EmployeeCredential::query()
+        $rows = EmployeeCredential::query()
             ->where('employee_id', $employee->id)
             ->selectRaw('kind, COUNT(*) as total')
             ->groupBy('kind')
@@ -389,7 +429,7 @@ class EmployeeController extends Controller
     private function slotsFor(Employee $employee): array
     {
         $slots = ['face' => [], 'finger' => []];
-        $rows = \App\Models\EmployeeCredential::query()
+        $rows = EmployeeCredential::query()
             ->where('employee_id', $employee->id)
             ->whereIn('kind', ['face', 'finger'])
             ->orderBy('slot')
@@ -402,7 +442,7 @@ class EmployeeController extends Controller
     }
 
     /**
-     * @param  \Illuminate\Support\Collection<int, Employee>  $employees
+     * @param  Collection<int, Employee>  $employees
      * @return array<int, array<string, list<array{id: int, slot: string}>>>
      */
     private function credentialSlots($employees): array
@@ -412,7 +452,7 @@ class EmployeeController extends Controller
         }
 
         $slots = [];
-        $rows = \App\Models\EmployeeCredential::query()
+        $rows = EmployeeCredential::query()
             ->whereIn('employee_id', $employees->pluck('id'))
             ->whereIn('kind', ['face', 'finger'])
             ->orderBy('slot')
@@ -437,7 +477,7 @@ class EmployeeController extends Controller
     private function filteredEmployees(Request $request): LengthAwarePaginator
     {
         return Employee::query()
-            ->with(['department', 'designation', 'employmentStatus'])
+            ->with(['department', 'designation', 'employmentStatus', 'workHour'])
             ->withCount([
                 'documents',
                 'activeBankAccount as active_bank_accounts_count',
@@ -458,6 +498,86 @@ class EmployeeController extends Controller
             ->paginate($this->pageSize($request))
             ->onEachSide(1)
             ->appends($request->except(['page', 'partial']));
+    }
+
+    /**
+     * @return array{weekday_start: string, weekday_end: string, sunday_start?: string, sunday_end?: string, works_sunday: bool}|null
+     */
+    private function validateTimes(Request $request): ?array
+    {
+        if (! $request->exists('weekday_start')) {
+            return null;
+        }
+
+        $works = $request->boolean('works_sunday');
+        $rules = [
+            'weekday_start' => ['required', 'regex:/^\d{2}:\d{2}(:\d{2})?$/'],
+            'weekday_end' => ['required', 'regex:/^\d{2}:\d{2}(:\d{2})?$/'],
+        ];
+        if ($works) {
+            $rules['sunday_start'] = ['required', 'regex:/^\d{2}:\d{2}(:\d{2})?$/'];
+            $rules['sunday_end'] = ['required', 'regex:/^\d{2}:\d{2}(:\d{2})?$/'];
+        }
+        $data = $request->validate($rules, [
+            'weekday_start.required' => 'Enter the Monday to Saturday start.',
+            'weekday_end.required' => 'Enter the Monday to Saturday end.',
+            'sunday_start.required' => 'Enter the Sunday start.',
+            'sunday_end.required' => 'Enter the Sunday end.',
+        ]);
+        $weekStart = $this->hours->clock($data['weekday_start'], '09:00');
+        $weekEnd = $this->hours->clock($data['weekday_end'], '18:00');
+        if ($this->hours->span($weekStart, $weekEnd) < 30) {
+            throw ValidationException::withMessages([
+                'weekday_end' => 'Monday to Saturday must cover at least 30 minutes.',
+            ]);
+        }
+        $kind = $request->input('shift_kind');
+        $night = $kind === 'night';
+        $weekBreak = $this->checkedBreak($request, 'weekday_break_start', 'weekday_break_end', $weekStart, $weekEnd, 'weekday_break_end', 'Monday to Saturday break');
+        $sunBreak = ['start' => null, 'end' => null];
+        if ($works) {
+            $sunStart = $this->hours->clock($data['sunday_start'], '08:00');
+            $sunEnd = $this->hours->clock($data['sunday_end'], '13:00');
+            if ($this->hours->span($sunStart, $sunEnd) < 30) {
+                throw ValidationException::withMessages([
+                    'sunday_end' => 'Sunday must cover at least 30 minutes.',
+                ]);
+            }
+            $sunBreak = $this->checkedBreak($request, 'sunday_break_start', 'sunday_break_end', $sunStart, $sunEnd, 'sunday_break_end', 'Sunday break');
+        }
+
+        return [
+            'weekday_start' => $data['weekday_start'],
+            'weekday_end' => $data['weekday_end'],
+            'sunday_start' => $data['sunday_start'] ?? null,
+            'sunday_end' => $data['sunday_end'] ?? null,
+            'weekday_break_start' => $weekBreak['start'],
+            'weekday_break_end' => $weekBreak['end'],
+            'sunday_break_start' => $sunBreak['start'],
+            'sunday_break_end' => $sunBreak['end'],
+            'works_sunday' => $works,
+            'shift_kind' => $night ? 'night' : ($kind === 'day' ? 'day' : null),
+        ];
+    }
+
+    /**
+     * @return array{start: ?string, end: ?string}
+     */
+    private function checkedBreak(Request $request, string $startKey, string $endKey, string $windowStart, string $windowEnd, string $field, string $label): array
+    {
+        $pair = $this->hours->pair($request->input($startKey), $request->input($endKey));
+        if (($pair['start'] === null) !== ($pair['end'] === null)) {
+            throw ValidationException::withMessages([
+                $field => 'Enter both the break start and the break end.',
+            ]);
+        }
+        if (! $this->hours->breakFits($windowStart, $windowEnd, $pair['start'], $pair['end'])) {
+            throw ValidationException::withMessages([
+                $field => $label.' must sit inside the working clock.',
+            ]);
+        }
+
+        return $pair;
     }
 
     /**
@@ -509,8 +629,38 @@ class EmployeeController extends Controller
                 ->where('is_active', true)
                 ->orderBy('sort_order')
                 ->get(),
+            'times' => $employee
+                ? $this->hours->editor($employee->loadMissing(['workHour', 'department.workHour']))
+                : [
+                    'weekday_start' => '09:00',
+                    'weekday_end' => '18:00',
+                    'sunday_start' => '08:00',
+                    'sunday_end' => '13:00',
+                    'works_sunday' => true,
+                    'shift_kind' => 'day',
+                    'day_start' => '09:00',
+                    'day_end' => '18:00',
+                    'night_start' => '21:00',
+                    'night_end' => '06:00',
+                    'day_sunday_start' => '08:00',
+                    'day_sunday_end' => '13:00',
+                    'night_sunday_start' => '21:00',
+                    'night_sunday_end' => '02:00',
+                    'weekday_break_start' => '',
+                    'weekday_break_end' => '',
+                    'sunday_break_start' => '',
+                    'sunday_break_end' => '',
+                    'day_break_start' => '',
+                    'day_break_end' => '',
+                    'night_break_start' => '',
+                    'night_break_end' => '',
+                    'day_sunday_break_start' => '',
+                    'day_sunday_break_end' => '',
+                    'night_sunday_break_start' => '',
+                    'night_sunday_break_end' => '',
+                ],
             'terminals' => $employee
-                ? \App\Models\Device::query()
+                ? Device::query()
                     ->where('company_id', $employee->company_id)
                     ->where(function ($query) use ($employee): void {
                         $query->whereHas('users', fn ($users) => $users->where('employee_id', $employee->id))

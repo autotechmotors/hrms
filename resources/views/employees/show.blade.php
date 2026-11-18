@@ -37,6 +37,7 @@
                     <p>{{ $employee->designation?->name ?? 'No designation' }}@if($category) · {{ $category }}@endif</p>
                     <div class="ed-chips">
                         <span>{{ $employee->department?->name ?? 'No department' }}</span>
+                        <span class="et-badge {{ ($times['shift_kind'] ?? 'day') === 'night' ? 'is-night' : 'is-day' }}">{{ ($times['shift_kind'] ?? 'day') === 'night' ? 'Night' : 'Day' }}</span>
                     </div>
                 </div>
             </div>
@@ -131,6 +132,13 @@
                         </div>
                     </div>
                 </section>
+
+                @include('employees._times', [
+                    'employee' => $employee,
+                    'times' => $times,
+                    'canEditTimes' => $canEdit,
+                    'standalone' => true,
+                ])
 
                 <section class="card ef-sec">
                     <header>
@@ -475,6 +483,76 @@
 @endsection
 
 @push('scripts')
+<script>
+(function ($) {
+    function paintSunday(root) {
+        if (!root) return;
+        var box = root.querySelector('[data-sunday]');
+        if (!box) return;
+        var on = box.checked;
+        root.querySelectorAll('[data-sunday-times]').forEach(function (el) { el.hidden = !on; });
+        root.querySelectorAll('[data-sunday-off]').forEach(function (el) { el.hidden = on; });
+        root.querySelectorAll('[data-sunday-times] input').forEach(function (input) {
+            input.required = on && input.name.indexOf('break') === -1;
+        });
+        var label = root.querySelector('.et-switch-txt');
+        if (label) label.textContent = on ? 'On' : 'Off';
+    }
+    paintSunday(document.getElementById('empTimes'));
+    function applyKind(root) {
+        var picked = root.querySelector('[data-kind]:checked');
+        var hold = root.querySelector('[data-kind-clocks]');
+        if (!picked || !hold) return;
+        var night = picked.value === 'night';
+        function set(name, value) {
+            var input = root.querySelector('[name="' + name + '"]');
+            if (input) input.value = value || '';
+        }
+        set('weekday_start', night ? hold.dataset.nightStart : hold.dataset.dayStart);
+        set('weekday_end', night ? hold.dataset.nightEnd : hold.dataset.dayEnd);
+        set('sunday_start', night ? hold.dataset.nightSundayStart : hold.dataset.daySundayStart);
+        set('sunday_end', night ? hold.dataset.nightSundayEnd : hold.dataset.daySundayEnd);
+        set('weekday_break_start', night ? hold.dataset.nightBreakStart : hold.dataset.dayBreakStart);
+        set('weekday_break_end', night ? hold.dataset.nightBreakEnd : hold.dataset.dayBreakEnd);
+        set('sunday_break_start', night ? hold.dataset.nightSundayBreakStart : hold.dataset.daySundayBreakStart);
+        set('sunday_break_end', night ? hold.dataset.nightSundayBreakEnd : hold.dataset.daySundayBreakEnd);
+        var badge = root.querySelector('[data-kind-badge]');
+        if (badge) {
+            badge.textContent = night ? 'Night' : 'Day';
+            badge.classList.toggle('is-night', night);
+            badge.classList.toggle('is-day', !night);
+        }
+    }
+    document.addEventListener('change', function (event) {
+        var root = event.target.closest('#empTimes');
+        if (!root) return;
+        if (event.target.matches('[data-sunday]')) paintSunday(root);
+        if (event.target.matches('[data-kind]')) applyKind(root);
+    });
+    document.addEventListener('submit', function (event) {
+        var form = event.target;
+        if (!form || form.id !== 'empTimesForm') return;
+        event.preventDefault();
+        var button = form.querySelector('button');
+        button.disabled = true;
+        $.ajax({
+            url: form.action,
+            method: 'POST',
+            data: $(form).serialize(),
+            headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+        }).done(function (body) {
+            var card = document.getElementById('empTimes');
+            if (card) card.outerHTML = body.html;
+            paintSunday(document.getElementById('empTimes'));
+            window.toast(body.message);
+        }).fail(function (xhr) {
+            var errors = xhr.responseJSON && xhr.responseJSON.errors;
+            var message = errors ? Object.values(errors)[0][0] : 'Could not save these times';
+            window.toast(message, 'er');
+        }).always(function () { button.disabled = false; });
+    });
+})(jQuery);
+</script>
 <script>
 (function () {
     const viewModal = document.getElementById('docViewModal');

@@ -1,7 +1,6 @@
 <?php
 
 use App\Http\Controllers\AccountController;
-use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\Admin\AuditLogController;
 use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\SettingController;
@@ -12,19 +11,21 @@ use App\Http\Controllers\Employees\EmployeeBankAccountController;
 use App\Http\Controllers\Employees\EmployeeController;
 use App\Http\Controllers\Employees\EmployeeDocumentController;
 use App\Http\Controllers\Employees\EmployeeExitController;
+use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\Operations\AdvanceController;
 use App\Http\Controllers\Operations\AttendanceController;
 use App\Http\Controllers\Operations\BankController;
 use App\Http\Controllers\Operations\DeviceController;
 use App\Http\Controllers\Operations\DeviceEventController;
+use App\Http\Controllers\Operations\GatePassController;
 use App\Http\Controllers\Operations\HikvisionEventController;
 use App\Http\Controllers\Operations\HolidayController;
 use App\Http\Controllers\Operations\HoursPayController;
-use App\Http\Controllers\Operations\GatePassController;
 use App\Http\Controllers\Operations\LeaveController;
 use App\Http\Controllers\Operations\PayrollController;
 use App\Http\Controllers\Operations\ReportController;
 use App\Http\Controllers\Operations\SalaryController;
+use App\Http\Controllers\Operations\SalarySheetController;
 use App\Http\Controllers\Operations\ShiftController;
 use App\Http\Controllers\Organization\BrandingController;
 use App\Http\Controllers\Organization\CompanyController;
@@ -116,12 +117,23 @@ Route::middleware(['auth', 'mfa'])->group(function (): void {
     Route::get('holidays', [HolidayController::class, 'index'])->name('holidays.index');
     Route::post('holidays', [HolidayController::class, 'store'])->name('holidays.store');
     Route::delete('holidays/{holiday}', [HolidayController::class, 'destroy'])->name('holidays.destroy');
+    Route::post('employee-holidays', [HolidayController::class, 'storeEmployee'])->name('employee-holidays.store');
+    Route::delete('employee-holidays/{employeeHoliday}', [HolidayController::class, 'destroyEmployee'])->name('employee-holidays.destroy');
 
     Route::get('hours-pay', [HoursPayController::class, 'index'])->name('hours-pay.index');
     Route::post('hours-pay/departments/{department}', [HoursPayController::class, 'storeDepartment'])->name('hours-pay.departments.store');
     Route::get('hours-pay/employees/{employee}', [HoursPayController::class, 'show'])->name('hours-pay.show');
     Route::post('hours-pay/employees/{employee}/hours', [HoursPayController::class, 'storeEmployeeHours'])->name('hours-pay.employees.hours');
     Route::post('hours-pay/employees/{employee}/salary', [HoursPayController::class, 'storeEmployeeSalary'])->name('hours-pay.employees.salary');
+
+    Route::get('salary-sheets', [SalarySheetController::class, 'index'])->name('salary-sheets.index');
+    Route::get('salary-sheets/people', [SalarySheetController::class, 'people'])->name('salary-sheets.people');
+    Route::post('salary-sheets', [SalarySheetController::class, 'store'])->name('salary-sheets.store');
+    Route::get('salary-sheets/{salarySheet}', [SalarySheetController::class, 'show'])->name('salary-sheets.show');
+    Route::post('salary-sheets/{salarySheet}/approve', [SalarySheetController::class, 'approve'])->name('salary-sheets.approve');
+    Route::post('salary-sheets/{salarySheet}/reject', [SalarySheetController::class, 'reject'])->name('salary-sheets.reject');
+    Route::get('salary-sheets/{salarySheet}/excel', [SalarySheetController::class, 'excel'])->name('salary-sheets.excel');
+    Route::get('salary-sheets/{salarySheet}/pdf', [SalarySheetController::class, 'pdf'])->name('salary-sheets.pdf');
 
     Route::get('salary', [SalaryController::class, 'index'])->name('salary.index');
     Route::post('salary/heads', [SalaryController::class, 'storeHead'])->name('salary.heads.store');
@@ -187,6 +199,7 @@ Route::middleware(['auth', 'mfa'])->group(function (): void {
     Route::post('employees/{employee}/exit', [EmployeeExitController::class, 'store'])->name('employees.exit.store');
     Route::post('employees/{employee}/bank-accounts', [EmployeeBankAccountController::class, 'store'])->name('employees.bank-accounts.store');
     Route::patch('employees/{employee}/blocked', [EmployeeController::class, 'toggleBlocked'])->name('employees.blocked');
+    Route::post('employees/{employee}/times', [EmployeeController::class, 'updateTimes'])->name('employees.times');
     Route::resource('employees', EmployeeController::class);
 
     Route::get('settings', [SettingController::class, 'edit'])->name('settings.edit');

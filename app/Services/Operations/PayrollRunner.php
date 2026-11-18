@@ -3,21 +3,19 @@
 namespace App\Services\Operations;
 
 use App\Models\Advance;
-use App\Models\AttendanceDay;
-use App\Models\AttendanceRule;
 use App\Models\Employee;
 use App\Models\EmployeeSalary;
-use App\Models\LeaveRequest;
 use App\Models\PayrollItem;
 use App\Models\PayrollRun;
 use App\Models\SalaryStructureLine;
 use Carbon\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class PayrollRunner
 {
-    public function __construct(private readonly WorkCalendarResolver $calendar) {}
+    public function __construct(private readonly PayDayMath $pay) {}
 
     public function compute(PayrollRun $run): PayrollRun
     {
@@ -26,18 +24,16 @@ class PayrollRunner
         }
 
         return DB::transaction(function () use ($run): PayrollRun {
-            $workingDays = $this->calendar->workingDaysInMonth((int) $run->company_id, (int) $run->period_year, (int) $run->period_month);
-            $run->update(['working_days' => $workingDays, 'status' => 'computed']);
-            $run->items()->delete();
-
             $start = Carbon::create($run->period_year, $run->period_month, 1)->startOfDay();
             $end = $start->copy()->endOfMonth();
+            $run->update(['working_days' => $start->daysInMonth, 'status' => 'computed']);
+            $run->items()->delete();
 
             Employee::query()
                 ->where('company_id', $run->company_id)
                 ->whereHas('employmentStatus', fn ($query) => $query->where('is_exit', false))
                 ->orderBy('id')
-                ->each(function (Employee $employee) use ($run, $start, $end, $workingDays): void {
+                ->each(function (Employee $employee) use ($run, $start, $end): void {
                     $salary = EmployeeSalary::query()
                         ->where('employee_id', $employee->id)
                         ->whereDate('effective_from', '<=', $end)
@@ -45,19 +41,41 @@ class PayrollRunner
                         ->with('structure.lines.head')
                         ->first();
 
-                    if (! $salary || $workingDays === 0) {
+                    if (! $salary || ! $salary->structure) {
                         return;
                     }
 
-                    $lop = $this->lopDays($employee, $start, $end);
-                    $paid = max(0, $workingDays - $lop);
-                    $payableGross = round(((float) $salary->gross_monthly) * ($paid / $workingDays), 2);
+                    $pay = $this->pay->range($employee, $start, $end);
+                    $payableGross = $pay['earned'];
                     [$earnings, $deductions, $lines] = $this->lines($salary->structure->lines, $payableGross);
-                    $advance = $this->plannedAdvance((int) $employee->id, $start);
-                    if ($advance > 0) {
-                        $lines[] = ['name' => 'Advance EMI', 'category' => 'deduction', 'amount' => $advance];
+                    foreach ($pay['cuts'] as $cut) {
+                        $lines[] = [
+                            'name' => $cut['date'].' · '.$cut['window'].' · '.$cut['reason'],
+                            'category' => 'cutoff',
+                            'amount' => $cut['rupees'],
+                            'date' => $cut['date'],
+                            'window' => $cut['window'],
+                            'in' => $cut['in'],
+                            'out' => $cut['out'],
+                            'minutes' => $cut['minutes'],
+                            'reason' => $cut['reason'],
+                        ];
                     }
-                    $deductions = round($deductions + $advance, 2);
+                    if ($pay['cutoff'] > 0) {
+                        $lines[] = ['name' => 'Salary cutoff', 'category' => 'cutoff', 'amount' => $pay['cutoff']];
+                    }
+                    $paid = $pay['paid_fraction'];
+                    $lop = $pay['lop_fraction'];
+                    $advanceTotal = 0.0;
+                    foreach ($this->monthAdvances((int) $employee->id, $start) as $advance) {
+                        $take = $this->advanceTake($advance);
+                        if ($take <= 0) {
+                            continue;
+                        }
+                        $lines[] = ['name' => 'Advance · '.$advance->title, 'category' => 'deduction', 'amount' => $take];
+                        $advanceTotal += $take;
+                    }
+                    $deductions = round($deductions + $advanceTotal, 2);
 
                     PayrollItem::query()->create([
                         'payroll_run_id' => $run->id,
@@ -84,22 +102,14 @@ class PayrollRunner
         DB::transaction(function () use ($run): void {
             $start = Carbon::create($run->period_year, $run->period_month, 1);
             foreach ($run->items as $item) {
-                $advance = Advance::query()
-                    ->where('employee_id', $item->employee_id)
-                    ->where('status', 'active')
-                    ->whereDate('starts_on', '<=', $start->copy()->endOfMonth())
-                    ->orderBy('id')
-                    ->first();
-                if (! $advance || (float) $advance->emi <= 0) {
-                    continue;
-                }
-                $take = min((float) $advance->emi, (float) $advance->balance);
-                $advance->balance = round((float) $advance->balance - $take, 2);
-                if ((float) $advance->balance <= 0) {
-                    $advance->status = 'completed';
+                foreach ($this->monthAdvances((int) $item->employee_id, $start) as $advance) {
+                    if ($this->advanceTake($advance) <= 0) {
+                        continue;
+                    }
                     $advance->balance = 0;
+                    $advance->status = 'completed';
+                    $advance->save();
                 }
-                $advance->save();
             }
             $run->update(['status' => 'approved']);
         });
@@ -161,56 +171,24 @@ class PayrollRunner
         };
     }
 
-    private function lopDays(Employee $employee, Carbon $start, Carbon $end): float
+    /**
+     * Advances given during this payroll month. The full open amount is deducted once, from that month only.
+     *
+     * @return Collection<int, Advance>
+     */
+    private function monthAdvances(int $employeeId, Carbon $start)
     {
-        $rule = AttendanceRule::query()->firstOrCreate(
-            ['company_id' => $employee->company_id],
-            ['grace_minutes' => 0, 'mark_absent_without_punch' => true],
-        );
-        $days = AttendanceDay::query()
-            ->where('employee_id', $employee->id)
-            ->whereBetween('work_date', [$start->toDateString(), $end->toDateString()])
-            ->get()
-            ->keyBy(fn (AttendanceDay $day) => $day->work_date->toDateString());
-        $unpaid = LeaveRequest::query()
-            ->where('employee_id', $employee->id)
-            ->where('status', 'approved')
-            ->whereDate('starts_on', '<=', $end)
-            ->whereDate('ends_on', '>=', $start)
-            ->whereHas('leaveType', fn ($query) => $query->where('is_paid', false))
-            ->get();
-
-        $lop = 0.0;
-        $cursor = $start->copy();
-        while ($cursor->lte($end)) {
-            if ($this->calendar->isWorkingDay((int) $employee->company_id, $cursor)) {
-                $row = $days->get($cursor->toDateString());
-                $onUnpaid = $unpaid->contains(fn (LeaveRequest $leave) => $cursor->between($leave->starts_on->copy()->startOfDay(), $leave->ends_on->copy()->endOfDay()));
-                if ($row?->status === 'half_day') {
-                    $lop += 0.5;
-                } elseif ($row?->status === 'absent' || $onUnpaid || (! $row && $rule->mark_absent_without_punch)) {
-                    $lop += 1;
-                }
-            }
-            $cursor->addDay();
-        }
-
-        return $lop;
-    }
-
-    private function plannedAdvance(int $employeeId, Carbon $start): float
-    {
-        $advance = Advance::query()
+        return Advance::query()
             ->where('employee_id', $employeeId)
             ->where('status', 'active')
-            ->whereDate('starts_on', '<=', $start->copy()->endOfMonth())
+            ->whereDate('starts_on', '>=', $start->toDateString())
+            ->whereDate('starts_on', '<=', $start->copy()->endOfMonth()->toDateString())
             ->orderBy('id')
-            ->first();
+            ->get();
+    }
 
-        if (! $advance) {
-            return 0;
-        }
-
-        return min((float) $advance->emi, (float) $advance->balance);
+    private function advanceTake(Advance $advance): float
+    {
+        return max(0, min((float) $advance->amount, (float) $advance->balance));
     }
 }

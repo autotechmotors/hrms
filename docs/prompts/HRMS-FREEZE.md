@@ -6,7 +6,7 @@ These already work. Layout, PWA, and menu work must not change their behaviour.
 - `AccessScope`: company, department, and employee scopes are additive. A manager also sees direct reports (`reporting_manager_id`). A user always sees their own employee row. Super Admin bypasses scope. Empty scope returns no rows (`whereRaw('1 = 0')`), never the whole company.
 - Attendance calculation (`AttendanceCalculator`), punch ingest, recalculate, rules, and selfie storage. Note: `docs/attendance/REGISTER.md`.
 - Device bridges: `device-events` and Hikvision token routes. Do not change tokens, throttles, CSRF exceptions, or payload handling. Note: `docs/devices/TERMINALS.md`.
-- Payroll compute, approve, lock, reopen, salary structures, advances, and bank batches, including the permission slugs they already have.
+- Payroll approve, lock, reopen, salary structures, advances, and bank batches, including the permission slugs they already have. Day pay and cutoff are the exception in `docs/prompts/HRMS-PAY-DAYS.md`: the salary sheet and payroll compute both divide by the calendar length of the month and cut late or early minutes from the clock window. Do not change that file’s rules from this freeze list.
 - Employee import, export, documents, credentials, bank accounts, block toggle, exit, custom fields, and the audit log.
 - Role slugs: `super-admin`, `hr-admin`, `payroll-admin`, `accounts`, `manager`, `head`, `director`, `device-administrator`, `employee`. The `employee` role is the self-service login. It sees only that person's own row.
 - Route names in `routes/web.php`. Add a route only when the module note says the gap has no route. Do not rename existing routes.

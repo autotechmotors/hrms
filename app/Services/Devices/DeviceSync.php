@@ -12,6 +12,7 @@ use App\Models\DeviceUser;
 use App\Models\Employee;
 use Illuminate\Support\Collection;
 use App\Services\Operations\AttendanceCalculator;
+use App\Services\Operations\WorkHourResolver;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
 
@@ -23,6 +24,7 @@ class DeviceSync
     public function __construct(
         private readonly DevicePeople $people,
         private readonly AttendanceCalculator $calculator,
+        private readonly WorkHourResolver $hours,
     ) {}
 
     public function run(Device $device): string
@@ -283,7 +285,15 @@ class DeviceSync
             ->get()
             ->groupBy(fn (AttendancePunch $punch) => $punch->employee_id.'|'.$punch->punched_at->timezone('Asia/Kolkata')->toDateString());
 
+        $keys = [];
         foreach ($groups as $key => $unused) {
+            $keys[(string) $key] = true;
+            [$employeeId, $date] = explode('|', (string) $key, 2);
+            $previous = Carbon::parse($date, 'Asia/Kolkata')->subDay()->toDateString();
+            $keys[$employeeId.'|'.$previous] = true;
+        }
+
+        foreach (array_keys($keys) as $key) {
             [$employeeId, $date] = explode('|', (string) $key, 2);
             $employee = Employee::query()->find($employeeId);
             if ($employee) {
@@ -292,14 +302,21 @@ class DeviceSync
         }
     }
 
+    public function rebuild(Employee $employee, Carbon $date): void
+    {
+        $this->applyDay($employee, $date);
+    }
+
     private function applyDay($employee, Carbon $date): void
     {
         $start = $date->copy()->timezone('Asia/Kolkata')->startOfDay();
+        $span = $this->hours->attendanceSpan($employee, $start);
         $punches = AttendancePunch::query()
             ->select(['id', 'employee_id', 'punched_at', 'direction', 'gate_pass_id'])
             ->where('employee_id', $employee->id)
             ->whereNull('gate_pass_id')
-            ->whereBetween('punched_at', [$start, $start->copy()->endOfDay()])
+            ->where('punched_at', '>=', $span['from'])
+            ->where('punched_at', '<', $span['to'])
             ->orderBy('punched_at')
             ->orderBy('id')
             ->get();

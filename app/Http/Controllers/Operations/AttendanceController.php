@@ -156,7 +156,9 @@ class AttendanceController extends Controller
         if (($data['punch_out'] ?? null) && ! ($data['punch_in'] ?? null)) {
             return back()->with('error', 'Add the in time before the out time.');
         }
-        if (($data['punch_in'] ?? null) && ($data['punch_out'] ?? null) && $data['punch_out'] <= $data['punch_in']) {
+        $employee->loadMissing('workHour');
+        $night = ($employee->workHour?->shift_kind ?? 'day') === 'night';
+        if (($data['punch_in'] ?? null) && ($data['punch_out'] ?? null) && $data['punch_out'] <= $data['punch_in'] && ! $night) {
             return back()->with('error', 'Punch out must be after punch in.');
         }
 

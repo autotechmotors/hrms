@@ -9,7 +9,7 @@
         if ($run->isApproved()) {
             $nextClass = 'ok';
             $nextTitle = 'This month is locked';
-            $nextHelp = 'Salaries are frozen and advance EMI was recovered. This screen does not send money. Use Bank Transfers if you need a file.';
+            $nextHelp = 'Salaries are frozen. Advances given this month were deducted in full. This screen does not send money. Use Bank Transfers if you need a file.';
             $nextAction = 'bank';
         } elseif ($run->isComputed() && $empty) {
             $nextClass = 'wn';
@@ -19,7 +19,7 @@
         } elseif ($run->isComputed()) {
             $nextClass = 'ac';
             $nextTitle = 'Review, then approve';
-            $nextHelp = 'Check each person’s take-home. Approve locks this month and recovers advance EMI. It does not send money to the bank.';
+            $nextHelp = 'Check each person’s take-home. Advances given this month are listed under Deductions. Approve locks the month. It does not send money to the bank.';
             $nextAction = 'approve';
         } else {
             $nextClass = 'wn';
@@ -36,9 +36,9 @@
             <p>
                 <span class="b {{ $run->statusBadgeClass() }}">{{ $run->statusLabel() }}</span>
                 @if($run->isApproved())
-                    · Locked · advance EMI recovered
+                    · Locked · advances deducted
                 @elseif($run->isComputed())
-                    · Ready to review · {{ $run->working_days }} working days
+                    · Ready to review · {{ $run->working_days }} calendar days
                 @else
                     · Not calculated yet
                 @endif
@@ -79,7 +79,7 @@
                     <button class="btn pr" type="submit">Calculate this month</button>
                 </form>
             @elseif($nextAction === 'approve' && $canApprove)
-                <form method="post" action="{{ route('payroll.approve', $run) }}" data-confirm="Approve {{ $label }}? Advance EMI will be deducted from salary. Money is not sent to the bank.">
+                <form method="post" action="{{ route('payroll.approve', $run) }}" data-confirm="Approve {{ $label }}? Advances given this month will be deducted from salary. Money is not sent to the bank.">
                     @csrf
                     <button class="btn pr" type="submit">Approve this month</button>
                 </form>
@@ -105,7 +105,7 @@
         <div class="card kp">
             <small><span class="py-dot draft"></span>Deductions</small>
             <b>{{ $run->isDraft() || $empty ? '—' : $inr($totals['deductions']) }}</b>
-            <span>Including advance EMI</span>
+            <span>Including this month’s advances</span>
         </div>
         <div class="card kp">
             <small><span class="py-dot approved"></span>Take-home</small>
@@ -170,6 +170,39 @@
                             </div>
                         </div>
                         <p class="py-days">{{ $item->daysSummary((int) $run->working_days) }}</p>
+                        @if($item->cutoffTotal() > 0)
+                            <p class="py-days">Salary cutoff {{ $inr($item->cutoffTotal()) }}</p>
+                        @endif
+                        @if($item->cutoffLines() !== [])
+                            <div class="tw">
+                                <table class="sg-cuts">
+                                    <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Window</th>
+                                        <th>In</th>
+                                        <th>Out</th>
+                                        <th>Minutes</th>
+                                        <th>Rupees</th>
+                                        <th>Reason</th>
+                                    </tr>
+                                    </thead>
+                                    <tbody>
+                                    @foreach($item->cutoffLines() as $cut)
+                                        <tr>
+                                            <td>{{ \Carbon\Carbon::parse($cut['date'])->format('d M Y') }}</td>
+                                            <td>{{ $cut['window'] }}</td>
+                                            <td>{{ $cut['in'] ?: '—' }}</td>
+                                            <td>{{ $cut['out'] ?: '—' }}</td>
+                                            <td>{{ $cut['minutes'] === 0 && $cut['reason'] === 'absent' ? 'Full day' : $cut['minutes'] }}</td>
+                                            <td>{{ $inr($cut['amount']) }}</td>
+                                            <td>{{ $cut['reason'] }}</td>
+                                        </tr>
+                                    @endforeach
+                                    </tbody>
+                                </table>
+                            </div>
+                        @endif
                         <div class="py-slip">
                             <div class="py-slip-col">
                                 <h4>Earnings</h4>

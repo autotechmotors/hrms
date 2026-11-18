@@ -11,7 +11,7 @@
     <div class="ph">
         <div>
             <h1>Payroll</h1>
-            <p>Open a month, calculate from attendance, then approve. Approval recovers advance EMI — it does not transfer money.</p>
+            <p>Open a month, calculate from attendance, then approve. An advance given in that month is deducted in full from salary. Approval does not transfer money.</p>
         </div>
         <div class="ac">
             @if($canProcess)
@@ -43,7 +43,7 @@
             <span class="py-flow-num">3</span>
             <div>
                 <b>Approve</b>
-                <small>Lock &amp; recover EMI</small>
+                <small>Lock the month</small>
             </div>
         </li>
     </ol>

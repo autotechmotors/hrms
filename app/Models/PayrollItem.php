@@ -40,7 +40,7 @@ class PayrollItem extends Model
     public function earningLines(): array
     {
         return collect($this->breakdown ?? [])
-            ->filter(fn (array $line): bool => ($line['category'] ?? '') !== 'deduction')
+            ->filter(fn (array $line): bool => ($line['category'] ?? '') === 'earning')
             ->map(fn (array $line): array => [
                 'name' => (string) ($line['name'] ?? 'Earning'),
                 'category' => 'earning',
@@ -68,7 +68,7 @@ class PayrollItem extends Model
         $remainder = round((float) $this->deductions - $named, 2);
         if ($remainder > 0.009) {
             $lines->push([
-                'name' => 'Advance EMI',
+                'name' => 'Advance',
                 'category' => 'deduction',
                 'amount' => $remainder,
             ]);
@@ -77,15 +77,48 @@ class PayrollItem extends Model
         return $lines->all();
     }
 
+    /**
+     * @return list<array{name: string, amount: float, date: string, window: string, in: ?string, out: ?string, minutes: int, reason: string}>
+     */
+    public function cutoffLines(): array
+    {
+        return collect($this->breakdown ?? [])
+            ->filter(fn (array $line): bool => ($line['category'] ?? '') === 'cutoff' && isset($line['date']))
+            ->map(fn (array $line): array => [
+                'name' => (string) ($line['name'] ?? 'Cutoff'),
+                'amount' => (float) ($line['amount'] ?? 0),
+                'date' => (string) ($line['date'] ?? ''),
+                'window' => (string) ($line['window'] ?? ''),
+                'in' => $line['in'] ?? null,
+                'out' => $line['out'] ?? null,
+                'minutes' => (int) ($line['minutes'] ?? 0),
+                'reason' => (string) ($line['reason'] ?? ''),
+            ])
+            ->values()
+            ->all();
+    }
+
+    public function cutoffTotal(): float
+    {
+        $named = collect($this->breakdown ?? [])
+            ->first(fn (array $line): bool => ($line['category'] ?? '') === 'cutoff' && ($line['name'] ?? '') === 'Salary cutoff');
+
+        if ($named) {
+            return (float) $named['amount'];
+        }
+
+        return round(array_sum(array_column($this->cutoffLines(), 'amount')), 2);
+    }
+
     public function daysSummary(int $workingDays): string
     {
         $paid = $this->qty((float) $this->paid_days);
         $unpaid = $this->qty((float) $this->lop_days);
         if ((float) $this->lop_days <= 0) {
-            return "Paid {$paid} of {$workingDays} working days";
+            return "Paid {$paid} of {$workingDays} calendar days";
         }
 
-        return "Paid {$paid} of {$workingDays} working days · {$unpaid} unpaid (absent or unpaid leave)";
+        return "Paid {$paid} of {$workingDays} calendar days · {$unpaid} unpaid";
     }
 
     private function qty(float $value): string

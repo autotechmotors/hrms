@@ -100,7 +100,7 @@ class PayrollController extends Controller
             return back()->with('error', $exception->validator->errors()->first());
         }
 
-        return back()->with('success', 'Payroll calculated from attendance, unpaid leave, salary heads, and advance EMI. Nothing is paid yet.');
+        return back()->with('success', 'Payroll calculated from attendance, unpaid leave, salary heads, and this month’s advances. Nothing is paid yet.');
     }
 
     public function approve(PayrollRun $payroll, PayrollRunner $runner): RedirectResponse

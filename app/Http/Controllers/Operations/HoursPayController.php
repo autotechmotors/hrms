@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class HoursPayController extends Controller
@@ -54,14 +55,29 @@ class HoursPayController extends Controller
             ->get()
             ->map(function (Department $department) use ($counts) {
                 $value = $department->workHour?->hours_per_day;
+                $window = $department->workHour;
 
                 return [
                     'id' => $department->id,
                     'name' => $department->name,
                     'code' => $department->code,
                     'people' => (int) ($counts[$department->id] ?? 0),
-                    'hours' => $this->hours->label($value !== null ? (float) $value : null),
-                    'value' => $value !== null ? rtrim(rtrim(number_format((float) $value, 2, '.', ''), '0'), '.') : '',
+                    'hours' => $this->windowLabel($window),
+                    'value' => $value !== null ? rtrim(rtrim(number_format((float) $value, 2, '.', ''), '0'), '.') : '9',
+                    'weekday_start' => $this->hours->clock($window?->weekday_start, '09:00'),
+                    'weekday_end' => $this->hours->clock($window?->weekday_end, '18:00'),
+                    'sunday_start' => $this->hours->clock($window?->sunday_start, '08:00'),
+                    'sunday_end' => $this->hours->clock($window?->sunday_end, '13:00'),
+                    'night_weekday_start' => $this->hours->clock($window?->night_weekday_start, '21:00'),
+                    'night_weekday_end' => $this->hours->clock($window?->night_weekday_end, '06:00'),
+                    'weekday_break_start' => $this->hours->clockOrEmpty($window?->weekday_break_start),
+                    'weekday_break_end' => $this->hours->clockOrEmpty($window?->weekday_break_end),
+                    'sunday_break_start' => $this->hours->clockOrEmpty($window?->sunday_break_start),
+                    'sunday_break_end' => $this->hours->clockOrEmpty($window?->sunday_break_end),
+                    'night_weekday_break_start' => $this->hours->clockOrEmpty($window?->night_weekday_break_start),
+                    'night_weekday_break_end' => $this->hours->clockOrEmpty($window?->night_weekday_break_end),
+                    'night_sunday_start' => $this->hours->clock($window?->night_sunday_start, '21:00'),
+                    'night_sunday_end' => $this->hours->clock($window?->night_sunday_end, '02:00'),
                 ];
             });
 
@@ -89,24 +105,17 @@ class HoursPayController extends Controller
             404
         );
 
-        $data = $request->validate([
-            'hours_per_day' => ['required', 'numeric', 'min:0.5', 'max:24'],
-        ], [
-            'hours_per_day.required' => 'Enter how many hours this department works in a day.',
-            'hours_per_day.min' => 'Hours must be at least half an hour.',
-            'hours_per_day.max' => 'Hours cannot be more than 24.',
-        ]);
+        $data = $this->windowInput($request);
+        $hours = $this->hours->hoursFromWindow($data['weekday_start'], $data['weekday_end']);
 
-        DepartmentWorkHour::query()->updateOrCreate(
+        $row = DepartmentWorkHour::query()->updateOrCreate(
             ['department_id' => $department->id],
-            ['hours_per_day' => $data['hours_per_day']]
+            $data + ['hours_per_day' => $hours]
         );
 
-        $hours = (float) $data['hours_per_day'];
-
         return response()->json([
-            'message' => $department->name.' now works '.$this->hours->label($hours).' a day.',
-            'hours' => $this->hours->label($hours),
+            'message' => $department->name.' now uses '.$this->windowLabel($row).'.',
+            'hours' => $this->windowLabel($row),
             'value' => rtrim(rtrim(number_format($hours, 2, '.', ''), '0'), '.'),
         ]);
     }
@@ -115,21 +124,27 @@ class HoursPayController extends Controller
     {
         $this->authorizeAny('salary.manage');
         $employee = $this->visibleEmployee($request, $employee);
-        $data = $request->validate([
+        $kind = $request->validate([
             'mode' => ['required', Rule::in(['department', 'own'])],
-            'hours_per_day' => ['nullable', 'numeric', 'min:0.5', 'max:24', 'required_if:mode,own'],
-        ], [
-            'hours_per_day.required_if' => 'Enter this person’s own hours.',
-            'hours_per_day.min' => 'Hours must be at least half an hour.',
-            'hours_per_day.max' => 'Hours cannot be more than 24.',
-        ]);
+            'shift_kind' => ['required', Rule::in(['day', 'night'])],
+        ])['shift_kind'];
+
+        $payload = [
+            'uses_department' => $request->input('mode') === 'department',
+            'shift_kind' => $kind,
+        ];
+        if ($request->input('mode') === 'own') {
+            $times = $this->windowInput($request);
+            $payload = $times + [
+                'uses_department' => false,
+                'shift_kind' => $kind,
+                'hours_per_day' => $this->hours->hoursFromWindow($times['weekday_start'], $times['weekday_end']),
+            ];
+        }
 
         EmployeeWorkHour::query()->updateOrCreate(
             ['employee_id' => $employee->id],
-            [
-                'uses_department' => $data['mode'] === 'department',
-                'hours_per_day' => $data['mode'] === 'own' ? $data['hours_per_day'] : null,
-            ]
+            $payload
         );
 
         $employee->unsetRelation('workHour');
@@ -194,7 +209,7 @@ class HoursPayController extends Controller
             })
             ->orderBy('first_name')
             ->orderBy('last_name')
-            ->paginate(12)
+            ->paginate(20)
             ->appends($request->except(['page', 'partial']))
             ->through(function (Employee $employee) {
                 $resolved = $this->hours->resolve($employee->department?->workHour, $employee->workHour);
@@ -206,6 +221,7 @@ class HoursPayController extends Controller
                     'code' => $employee->employee_code,
                     'department' => $employee->department?->name ?? 'No department',
                     'hours' => $this->hours->label($resolved['hours']),
+                    'shift' => $employee->workHour?->shift_kind === 'night' ? 'Night' : 'Day',
                     'source' => $resolved['source'] === 'unset' ? 'Not chosen yet' : $this->hours->sourceLabel($resolved['source']),
                     'salary' => $salary ? '₹'.number_format((float) $salary->gross_monthly, 2) : 'Not set',
                     'salaryNote' => $salary ? 'a month' : 'No salary yet',
@@ -274,6 +290,129 @@ class HoursPayController extends Controller
             'ownHours' => $employee->workHour && ! $employee->workHour->uses_department
                 ? rtrim(rtrim(number_format((float) $employee->workHour->hours_per_day, 2, '.', ''), '0'), '.')
                 : '',
+            'windows' => $this->formWindows($employee),
+            'departmentWindows' => $this->windowsFrom($employee->department?->workHour),
+            'shiftKind' => $employee->workHour?->shift_kind === 'night' ? 'night' : 'day',
+        ];
+    }
+
+    /**
+     * @return array{weekday_start: string, weekday_end: string, sunday_start: string, sunday_end: string}
+     */
+    private function windowInput(Request $request): array
+    {
+        $data = $request->validate([
+            'weekday_start' => ['required', 'regex:/^\d{2}:\d{2}(:\d{2})?$/'],
+            'weekday_end' => ['required', 'regex:/^\d{2}:\d{2}(:\d{2})?$/'],
+            'sunday_start' => ['required', 'regex:/^\d{2}:\d{2}(:\d{2})?$/'],
+            'sunday_end' => ['required', 'regex:/^\d{2}:\d{2}(:\d{2})?$/'],
+            'night_weekday_start' => ['required', 'regex:/^\d{2}:\d{2}(:\d{2})?$/'],
+            'night_weekday_end' => ['required', 'regex:/^\d{2}:\d{2}(:\d{2})?$/'],
+            'weekday_break_start' => ['nullable', 'regex:/^\d{2}:\d{2}(:\d{2})?$/'],
+            'weekday_break_end' => ['nullable', 'regex:/^\d{2}:\d{2}(:\d{2})?$/'],
+            'sunday_break_start' => ['nullable', 'regex:/^\d{2}:\d{2}(:\d{2})?$/'],
+            'sunday_break_end' => ['nullable', 'regex:/^\d{2}:\d{2}(:\d{2})?$/'],
+            'night_weekday_break_start' => ['nullable', 'regex:/^\d{2}:\d{2}(:\d{2})?$/'],
+            'night_weekday_break_end' => ['nullable', 'regex:/^\d{2}:\d{2}(:\d{2})?$/'],
+        ], [
+            'weekday_start.required' => 'Enter the day Monday to Saturday start.',
+            'weekday_end.required' => 'Enter the day Monday to Saturday end.',
+            'sunday_start.required' => 'Enter the day Sunday start.',
+            'sunday_end.required' => 'Enter the day Sunday end.',
+            'night_weekday_start.required' => 'Enter the night Monday to Saturday start.',
+            'night_weekday_end.required' => 'Enter the night Monday to Saturday end.',
+        ]);
+
+        $times = [
+            'weekday_start' => $this->hours->clock($data['weekday_start'], '09:00'),
+            'weekday_end' => $this->hours->clock($data['weekday_end'], '18:00'),
+            'sunday_start' => $this->hours->clock($data['sunday_start'], '08:00'),
+            'sunday_end' => $this->hours->clock($data['sunday_end'], '13:00'),
+            'night_weekday_start' => $this->hours->clock($data['night_weekday_start'], '21:00'),
+            'night_weekday_end' => $this->hours->clock($data['night_weekday_end'], '06:00'),
+        ];
+
+        $this->assertWindow($times['weekday_start'], $times['weekday_end'], 'weekday_end', 'Day Monday to Saturday');
+        $this->assertWindow($times['sunday_start'], $times['sunday_end'], 'sunday_end', 'Day Sunday');
+        $this->assertWindow($times['night_weekday_start'], $times['night_weekday_end'], 'night_weekday_end', 'Night Monday to Saturday');
+        $times = array_merge($times, $this->breakPair($request, 'weekday_break_start', 'weekday_break_end', $times['weekday_start'], $times['weekday_end'], 'weekday_break_end', 'Day Monday to Saturday break'));
+        $times = array_merge($times, $this->breakPair($request, 'sunday_break_start', 'sunday_break_end', $times['sunday_start'], $times['sunday_end'], 'sunday_break_end', 'Day Sunday break'));
+        $times = array_merge($times, $this->breakPair($request, 'night_weekday_break_start', 'night_weekday_break_end', $times['night_weekday_start'], $times['night_weekday_end'], 'night_weekday_break_end', 'Night Monday to Saturday break'));
+
+        return $times;
+    }
+
+    /**
+     * @return array<string, ?string>
+     */
+    private function breakPair(Request $request, string $startKey, string $endKey, string $windowStart, string $windowEnd, string $field, string $label): array
+    {
+        $pair = $this->hours->pair($request->input($startKey), $request->input($endKey));
+        if (($pair['start'] === null) !== ($pair['end'] === null)) {
+            throw ValidationException::withMessages([
+                $field => 'Enter both the break start and the break end.',
+            ]);
+        }
+        if (! $this->hours->breakFits($windowStart, $windowEnd, $pair['start'], $pair['end'])) {
+            throw ValidationException::withMessages([
+                $field => $label.' must sit inside the working clock.',
+            ]);
+        }
+
+        return [$startKey => $pair['start'], $endKey => $pair['end']];
+    }
+
+    private function assertWindow(string $start, string $end, string $field, string $label): void
+    {
+        if ($this->hours->span($start, $end) < 30) {
+            throw ValidationException::withMessages([
+                $field => $label.' must cover at least 30 minutes.',
+            ]);
+        }
+    }
+
+    private function windowLabel(?DepartmentWorkHour $row): string
+    {
+        if (! $row) {
+            return 'Not set';
+        }
+
+        $week = $this->hours->clock($row->weekday_start, '09:00').'–'.$this->hours->clock($row->weekday_end, '18:00');
+        $night = $this->hours->clock($row->night_weekday_start, '21:00').'–'.$this->hours->clock($row->night_weekday_end, '06:00');
+
+        return 'Day '.$week.' · Night '.$night;
+    }
+
+    /**
+     * @return array{weekday_start: string, weekday_end: string, sunday_start: string, sunday_end: string}
+     */
+    private function formWindows(Employee $employee): array
+    {
+        $own = $employee->workHour && ! $employee->workHour->uses_department ? $employee->workHour : null;
+
+        return $this->windowsFrom($own ?: $employee->department?->workHour);
+    }
+
+    /**
+     * @return array{weekday_start: string, weekday_end: string, sunday_start: string, sunday_end: string}
+     */
+    private function windowsFrom(?object $source): array
+    {
+        return [
+            'weekday_start' => $this->hours->clock($source?->weekday_start ?? null, '09:00'),
+            'weekday_end' => $this->hours->clock($source?->weekday_end ?? null, '18:00'),
+            'sunday_start' => $this->hours->clock($source?->sunday_start ?? null, '08:00'),
+            'sunday_end' => $this->hours->clock($source?->sunday_end ?? null, '13:00'),
+            'night_weekday_start' => $this->hours->clock($source?->night_weekday_start ?? null, '21:00'),
+            'night_weekday_end' => $this->hours->clock($source?->night_weekday_end ?? null, '06:00'),
+            'night_sunday_start' => $this->hours->clock($source?->night_sunday_start ?? null, '21:00'),
+            'night_sunday_end' => $this->hours->clock($source?->night_sunday_end ?? null, '02:00'),
+            'weekday_break_start' => $this->hours->clockOrEmpty($source?->weekday_break_start ?? null),
+            'weekday_break_end' => $this->hours->clockOrEmpty($source?->weekday_break_end ?? null),
+            'sunday_break_start' => $this->hours->clockOrEmpty($source?->sunday_break_start ?? null),
+            'sunday_break_end' => $this->hours->clockOrEmpty($source?->sunday_break_end ?? null),
+            'night_weekday_break_start' => $this->hours->clockOrEmpty($source?->night_weekday_break_start ?? null),
+            'night_weekday_break_end' => $this->hours->clockOrEmpty($source?->night_weekday_break_end ?? null),
         ];
     }
 }

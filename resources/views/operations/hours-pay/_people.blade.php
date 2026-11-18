@@ -1,9 +1,18 @@
-<div class="hp-people">
+<div class="hp-list">
+    <div class="hp-list-head">
+        <span>Person</span>
+        <span>Shift</span>
+        <span>Hours</span>
+        <span>Salary</span>
+    </div>
     @forelse($people as $person)
         <a class="hp-person" href="{{ $person['url'] }}">
             <div>
                 <b>{{ $person['name'] }}</b>
                 <small>{{ $person['code'] }} · {{ $person['department'] }}</small>
+            </div>
+            <div class="hp-fact">
+                <span class="et-badge {{ $person['shift'] === 'Night' ? 'is-night' : 'is-day' }}">{{ $person['shift'] }}</span>
             </div>
             <div class="hp-fact">
                 <b>{{ $person['hours'] }}</b>
@@ -15,25 +24,18 @@
             </div>
         </a>
     @empty
-        <p class="ed-empty">No people match this search.</p>
+        <p class="hp-empty">No people match this search.</p>
     @endforelse
 </div>
-@if($people->total() > 0)
-    <div class="hp-pager">
-        <span>Showing {{ $people->firstItem() }}–{{ $people->lastItem() }} of {{ $people->total() }}</span>
-        @if($people->hasPages())
-            <div>
-                @if($people->onFirstPage())
-                    <span class="btn sm" aria-disabled="true">Previous</span>
-                @else
-                    <a class="btn sm" href="{{ $people->previousPageUrl() }}">Previous</a>
-                @endif
-                @if($people->hasMorePages())
-                    <a class="btn sm" href="{{ $people->nextPageUrl() }}">Next</a>
-                @else
-                    <span class="btn sm" aria-disabled="true">Next</span>
-                @endif
-            </div>
+<div class="hp-pager">
+    <span>
+        @if($people->total() > 0)
+            Showing {{ $people->firstItem() }}–{{ $people->lastItem() }} of {{ $people->total() }}
+        @else
+            No people to show
         @endif
-    </div>
-@endif
+    </span>
+    @if($people->hasPages())
+        {{ $people->links('operations.hours-pay._pager') }}
+    @endif
+</div>

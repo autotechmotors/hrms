@@ -17,7 +17,7 @@ class Holiday extends Model
     ];
 
     public const KIND_HELP = [
-        'public' => 'Office closed. Non-working day for everyone.',
+        'public' => 'Paid day for everyone. No punch needed.',
         'restricted' => 'Shown on the calendar. Leave types decide if it is counted.',
         'optional' => 'Optional for employees. Follows leave settings.',
     ];

@@ -1,6 +1,8 @@
 # Payroll runs
 
-Compute and approve stay. Existing slugs stay: `payroll.process`, `payroll.approve`, `payroll.lock`, `payroll.reopen`. Do not change payslip math, lock rules, or reopen rules.
+Compute and approve stay. Existing slugs stay: `payroll.process`, `payroll.approve`, `payroll.lock`, `payroll.reopen`. Lock and reopen rules stay. The day-pay math is the exception in `docs/prompts/HRMS-PAY-DAYS.md`.
+
+A payroll month divides the monthly salary by the real calendar length of that month. It does not divide by working days. Sunday 08:00–13:00 pays a full day when that window is completed. Late and early minutes are cut at the Monday–Saturday minute rate. A missing punch cuts that day. A public holiday and a person’s own paid day pay the full day. The run stores each cut on the payroll item: date, window, in, out, minutes, rupees, and the reason. Structure deductions and the month’s advances still apply after that earned total. An approved run is not recalculated.
 
 ## Code
 

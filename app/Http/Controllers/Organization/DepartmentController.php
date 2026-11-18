@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Organization;
 
 use App\Models\Department;
+use Illuminate\Database\Eloquent\Builder;
 
 class DepartmentController extends CodedMasterController
 {
@@ -34,5 +35,15 @@ class DepartmentController extends CodedMasterController
     protected function summary(): string
     {
         return 'Departments used when placing employees.';
+    }
+
+    protected function showsPeople(): bool
+    {
+        return true;
+    }
+
+    protected function prepareIndex(Builder $query): void
+    {
+        $query->withCount('employees');
     }
 }

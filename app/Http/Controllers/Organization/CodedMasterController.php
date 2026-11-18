@@ -5,11 +5,13 @@ namespace App\Http\Controllers\Organization;
 use App\Http\Controllers\Concerns\GuardsCompany;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\CodedMasterRequest;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Illuminate\View\View;
 
 abstract class CodedMasterController extends Controller
@@ -35,7 +37,7 @@ abstract class CodedMasterController extends Controller
     {
         $this->authorize('viewAny', $this->model());
         $model = $this->model();
-        $records = $model::query()
+        $query = $model::query()
             ->with($this->indexRelations())
             ->visibleTo($request->user())
             ->when($request->filled('q'), function ($query) use ($request): void {
@@ -44,9 +46,9 @@ abstract class CodedMasterController extends Controller
                     $inner->where('name', 'like', $term)->orWhere('code', 'like', $term);
                 });
             })
-            ->orderBy('name')
-            ->paginate(15)
-            ->withQueryString();
+            ->orderBy('name');
+        $this->prepareIndex($query);
+        $records = $query->paginate(15)->withQueryString();
 
         $partial = $request->ajax() || $request->boolean('partial');
 
@@ -58,6 +60,7 @@ abstract class CodedMasterController extends Controller
             'permission' => $this->permission(),
             'showExit' => $this->hasExitFlag(),
             'showCategory' => $this->showsCategory(),
+            'showPeople' => $this->showsPeople(),
             'categoryLink' => $this->categoryLink(),
         ]);
     }
@@ -72,7 +75,7 @@ abstract class CodedMasterController extends Controller
             'title' => 'New '.$this->title(),
             'action' => route($this->routeName().'.store'),
             'listUrl' => route($this->routeName().'.index'),
-            'listLabel' => \Illuminate\Support\Str::plural($this->title()),
+            'listLabel' => Str::plural($this->title()),
             'showExit' => $this->hasExitFlag(),
         ] + $this->formExtras(null));
     }
@@ -99,7 +102,7 @@ abstract class CodedMasterController extends Controller
             'title' => 'Edit '.$record->name,
             'action' => route($this->routeName().'.update', $record),
             'listUrl' => route($this->routeName().'.index'),
-            'listLabel' => \Illuminate\Support\Str::plural($this->title()),
+            'listLabel' => Str::plural($this->title()),
             'showExit' => $this->hasExitFlag(),
         ] + $this->formExtras($record));
     }
@@ -178,6 +181,13 @@ abstract class CodedMasterController extends Controller
     {
         return ['company'];
     }
+
+    protected function showsPeople(): bool
+    {
+        return false;
+    }
+
+    protected function prepareIndex(Builder $query): void {}
 
     protected function showsCategory(): bool
     {

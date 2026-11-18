@@ -4,68 +4,252 @@
     <div class="ph">
         <div>
             <h1>Advances & Deductions</h1>
-            <p>EMI is only taken when payroll for that month is approved. Closing an advance stops further recovery.</p>
+            <p>An advance is deducted in full from the salary of the month it is given.</p>
         </div>
     </div>
+
     @include('operations.errors')
+
+    <div class="ad-stats g c3">
+        <div class="card kp">
+            <small>Active</small>
+            <b id="adStatActive">{{ $stats['active'] }}</b>
+            <span>Waiting for that month’s payroll</span>
+        </div>
+        <div class="card kp">
+            <small>To deduct</small>
+            <b id="adStatBalance">₹{{ number_format($stats['balance'], 2) }}</b>
+            <span>Full amount, from that month’s salary</span>
+        </div>
+        <div class="card kp">
+            <small>Deducted</small>
+            <b id="adStatDeducted">{{ $stats['deducted'] }}</b>
+            <span>Already taken in payroll</span>
+        </div>
+    </div>
+
     @if($canEdit)
-        <section class="card" style="padding:16px;margin-bottom:16px">
-            <form method="post" action="{{ route('advances.store') }}" style="display:flex;gap:10px;flex-wrap:wrap;align-items:end">
+        <section class="card ad-form-card">
+            <header>
+                <div>
+                    <h3>New advance</h3>
+                    <p>The full amount is deducted from this month’s salary when payroll is calculated.</p>
+                </div>
+            </header>
+            <form id="advanceForm" class="ad-form" method="post" action="{{ route('advances.store') }}">
                 @csrf
-                <label>Employee<br>
+                <label class="ad-employee">
+                    <span>Employee</span>
                     <select class="in" name="employee_id" required>
-                        <option value="">Select</option>
+                        <option value="">Select employee</option>
                         @foreach($employees as $employee)
-                            <option value="{{ $employee->id }}">{{ $employee->full_name }}</option>
+                            <option value="{{ $employee->id }}">{{ $employee->full_name }} · {{ $employee->employee_code }}</option>
                         @endforeach
                     </select>
                 </label>
-                <label>Title<br><input class="in" name="title" required></label>
-                <label>Amount<br><input class="in" type="number" step="0.01" min="1" name="amount" required></label>
-                <label>Monthly EMI<br><input class="in" type="number" step="0.01" min="0" name="emi" required></label>
-                <label>Starts<br><input class="in" type="date" name="starts_on" required></label>
-                <button class="btn pr" type="submit">Add advance</button>
+                <label class="ad-title-field">
+                    <span>Title</span>
+                    <input class="in" name="title" required maxlength="120" placeholder="Salary advance">
+                </label>
+                <label>
+                    <span>Amount</span>
+                    <input class="in" type="number" name="amount" min="1" step="0.01" required placeholder="0.00">
+                </label>
+                <div class="ad-form-actions">
+                    <button class="btn pr" type="submit">Add advance</button>
+                </div>
             </form>
         </section>
     @endif
-    <section class="card">
-        <div class="tw">
-            <table>
-                <thead><tr><th>Employee</th><th>Title</th><th>Amount</th><th>EMI</th><th>Balance</th><th>From</th><th>Status</th><th></th></tr></thead>
-                <tbody>
-                @forelse($advances as $advance)
-                    <tr>
-                        <td>
-                            @if($advance->employee)
-                                <div class="who">
-                                    <x-employee-avatar :employee="$advance->employee" :size="28" />
-                                    <div><b>{{ $advance->employee->full_name }}</b></div>
-                                </div>
-                            @else
-                                —
-                            @endif
-                        </td>
-                        <td>{{ $advance->title }}</td>
-                        <td>₹{{ number_format((float) $advance->amount, 2) }}</td>
-                        <td>₹{{ number_format((float) $advance->emi, 2) }}</td>
-                        <td>₹{{ number_format((float) $advance->balance, 2) }}</td>
-                        <td>{{ $advance->starts_on->format('d M Y') }}</td>
-                        <td><span class="b {{ $advance->status === 'active' ? 'wn' : 'ok' }}">{{ $advance->status }}</span></td>
-                        <td>
-                            @if($canEdit && $advance->status === 'active')
-                                <form method="post" action="{{ route('advances.close', $advance) }}" data-confirm="Close this advance?">
-                                    @csrf
-                                    <button class="btn" type="submit">Close</button>
-                                </form>
-                            @endif
-                        </td>
-                    </tr>
-                @empty
-                    <tr><td colspan="8" style="text-align:center;color:var(--mu);padding:32px">No advances</td></tr>
-                @endforelse
-                </tbody>
-            </table>
+
+    <section class="card ad" id="advanceList">
+        <form class="tbar ad-bar" id="advanceFilters" method="get" action="{{ route('advances.index') }}">
+            <div class="sr ad-search">
+                <span><x-i name="search" /></span>
+                <input type="search" name="q" value="{{ $filters['q'] }}" placeholder="Search employee or title" autocomplete="off">
+            </div>
+            <select class="in" name="status" data-native>
+                <option value="">All statuses</option>
+                <option value="active" @selected($filters['status'] === 'active')>Active</option>
+                <option value="completed" @selected($filters['status'] === 'completed')>Deducted</option>
+                <option value="closed" @selected($filters['status'] === 'closed')>Closed</option>
+            </select>
+            <div class="sp"></div>
+            <span class="ad-count" id="adCount">{{ $advances->total() }} {{ \Illuminate\Support\Str::plural('advance', $advances->total()) }}</span>
+        </form>
+        <div id="advanceResults">
+            @include('operations.advances._list')
         </div>
-        <div class="pgn"><span></span><div>{{ $advances->links() }}</div></div>
     </section>
 @endsection
+
+@push('scripts')
+<script>
+(function ($) {
+    const root = $('#advanceList');
+    const filters = $('#advanceFilters');
+    const create = $('#advanceForm');
+    if (!root.length || !filters.length) return;
+
+    const phone = () => window.matchMedia('(max-width: 700px)').matches;
+    const token = $('meta[name="csrf-token"]').attr('content');
+    let timer = null;
+    let req = null;
+    let loadingMore = false;
+
+    function query(extra) {
+        const params = new URLSearchParams();
+        filters.serializeArray().forEach(function (item) {
+            if (String(item.value || '').trim() !== '') params.set(item.name, item.value);
+        });
+        if (extra) {
+            Object.keys(extra).forEach(function (key) {
+                if (extra[key] === null || extra[key] === '') params.delete(key);
+                else params.set(key, extra[key]);
+            });
+        }
+        params.delete('partial');
+        return params;
+    }
+
+    function paint(node) {
+        const active = document.getElementById('adStatActive');
+        const deducted = document.getElementById('adStatDeducted');
+        const balance = document.getElementById('adStatBalance');
+        const count = document.getElementById('adCount');
+        if (active) active.textContent = node.getAttribute('data-active') || '0';
+        if (deducted) deducted.textContent = node.getAttribute('data-deducted') || '0';
+        if (balance) balance.textContent = '₹' + (node.getAttribute('data-balance') || '0.00');
+        if (count) {
+            const total = Number(node.getAttribute('data-total') || 0);
+            count.textContent = total + (total === 1 ? ' advance' : ' advances');
+        }
+    }
+
+    function load(extra, append) {
+        if (req) req.abort();
+        const params = query(extra);
+        const url = filters.attr('action') + (params.toString() ? '?' + params.toString() : '');
+        const current = req = $.ajax({
+            url: url,
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            data: { partial: 1 }
+        }).done(function (html) {
+            const incoming = document.createElement('div');
+            incoming.innerHTML = html;
+            const next = incoming.querySelector('.ad-body');
+            const host = document.querySelector('#advanceResults .ad-body');
+            if (!next || !host) return;
+            if (append) {
+                const cards = host.querySelector('.ad-cards');
+                next.querySelectorAll('.ad-card').forEach(function (card) {
+                    if (cards) cards.appendChild(card);
+                });
+                const body = host.querySelector('tbody');
+                next.querySelectorAll('tbody tr').forEach(function (row) {
+                    if (body && !row.querySelector('.ad-empty')) body.appendChild(row);
+                });
+                host.dataset.page = next.dataset.page;
+                host.dataset.last = next.dataset.last;
+                const pager = host.querySelector('.pgn');
+                const nextPager = next.querySelector('.pgn');
+                if (pager && nextPager) pager.replaceWith(nextPager);
+            } else {
+                host.replaceWith(next);
+                paint(next);
+                if (window.history.replaceState) window.history.replaceState({}, '', url);
+            }
+        }).always(function () {
+            if (req !== current) return;
+            loadingMore = false;
+            req = null;
+            if (phone()) requestAnimationFrame(maybeMore);
+        });
+    }
+
+    function maybeMore() {
+        if (!phone() || loadingMore || req) return;
+        const host = document.querySelector('#advanceResults .ad-body');
+        if (!host) return;
+        const page = Number(host.dataset.page || 1);
+        const last = Number(host.dataset.last || 1);
+        if (page >= last) return;
+        const cards = host.querySelector('.ad-cards');
+        if (!cards || cards.getBoundingClientRect().bottom > window.innerHeight + 420) return;
+        loadingMore = true;
+        load({ page: page + 1 }, true);
+    }
+
+    function failMessage(xhr, fallback) {
+        const errors = xhr.responseJSON && xhr.responseJSON.errors;
+        if (errors) {
+            const first = Object.values(errors)[0];
+            if (first && first[0]) return first[0];
+        }
+        return (xhr.responseJSON && xhr.responseJSON.message) || fallback;
+    }
+
+    filters.on('submit', function (event) {
+        event.preventDefault();
+        load({ page: 1 });
+    });
+    filters.on('input', 'input[name="q"]', function () {
+        clearTimeout(timer);
+        timer = setTimeout(function () { load({ page: 1 }); }, 280);
+    });
+    filters.on('change', 'select[name="status"]', function () {
+        load({ page: 1 });
+    });
+    root.on('click', '.pgn a', function (event) {
+        event.preventDefault();
+        const url = new URL(this.href, window.location.origin);
+        load({ page: url.searchParams.get('page') || 1 });
+    });
+    root.on('click', '.ad-close', function () {
+        const button = this;
+        const go = function () {
+            $.ajax({
+                url: button.getAttribute('data-url'),
+                method: 'POST',
+                headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': token },
+                data: { _token: token }
+            }).done(function (payload) {
+                window.toast((payload && payload.message) || 'Advance closed.');
+                load();
+            }).fail(function (xhr) {
+                window.toast(failMessage(xhr, 'Could not close this advance.'), 'er');
+            });
+        };
+        if (window.askConfirm) {
+            window.askConfirm('Close this advance? It will not be deducted from salary.', { label: 'Close', danger: true }).then(function (ok) {
+                if (ok) go();
+            });
+            return;
+        }
+        go();
+    });
+
+    if (create.length) {
+        create.on('submit', function (event) {
+            event.preventDefault();
+            $.ajax({
+                url: create.attr('action'),
+                method: 'POST',
+                headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': token },
+                data: create.serialize()
+            }).done(function (payload) {
+                window.toast((payload && payload.message) || 'Advance recorded.');
+                create[0].reset();
+                create.find('select').val('').trigger('change');
+                load({ page: 1 });
+            }).fail(function (xhr) {
+                window.toast(failMessage(xhr, 'Could not record this advance.'), 'er');
+            });
+        });
+    }
+
+    window.addEventListener('scroll', maybeMore, { passive: true });
+    requestAnimationFrame(maybeMore);
+})(jQuery);
+</script>
+@endpush

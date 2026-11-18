@@ -164,6 +164,13 @@
                     </div>
                 </section>
 
+                @include('employees._times', [
+                    'employee' => $employee,
+                    'times' => $times,
+                    'canEditTimes' => true,
+                    'standalone' => false,
+                ])
+
                 <section class="card ef-sec">
                     <header>
                         <div>
@@ -282,6 +289,51 @@
 @push('scripts')
 <script>
 (function ($) {
+    function paintSunday(root) {
+        if (!root) return;
+        var box = root.querySelector('[data-sunday]');
+        if (!box) return;
+        var on = box.checked;
+        root.querySelectorAll('[data-sunday-times]').forEach(function (el) { el.hidden = !on; });
+        root.querySelectorAll('[data-sunday-off]').forEach(function (el) { el.hidden = on; });
+        root.querySelectorAll('[data-sunday-times] input').forEach(function (input) {
+            input.required = on && input.name.indexOf('break') === -1;
+        });
+        var label = root.querySelector('.et-switch-txt');
+        if (label) label.textContent = on ? 'On' : 'Off';
+    }
+    function applyKind(root) {
+        var picked = root.querySelector('[data-kind]:checked');
+        var hold = root.querySelector('[data-kind-clocks]');
+        if (!picked || !hold) return;
+        var night = picked.value === 'night';
+        function set(name, value) {
+            var input = root.querySelector('[name="' + name + '"]');
+            if (input) input.value = value || '';
+        }
+        set('weekday_start', night ? hold.dataset.nightStart : hold.dataset.dayStart);
+        set('weekday_end', night ? hold.dataset.nightEnd : hold.dataset.dayEnd);
+        set('sunday_start', night ? hold.dataset.nightSundayStart : hold.dataset.daySundayStart);
+        set('sunday_end', night ? hold.dataset.nightSundayEnd : hold.dataset.daySundayEnd);
+        set('weekday_break_start', night ? hold.dataset.nightBreakStart : hold.dataset.dayBreakStart);
+        set('weekday_break_end', night ? hold.dataset.nightBreakEnd : hold.dataset.dayBreakEnd);
+        set('sunday_break_start', night ? hold.dataset.nightSundayBreakStart : hold.dataset.daySundayBreakStart);
+        set('sunday_break_end', night ? hold.dataset.nightSundayBreakEnd : hold.dataset.daySundayBreakEnd);
+        var badge = root.querySelector('[data-kind-badge]');
+        if (badge) {
+            badge.textContent = night ? 'Night' : 'Day';
+            badge.classList.toggle('is-night', night);
+            badge.classList.toggle('is-day', !night);
+        }
+    }
+    paintSunday(document.getElementById('empTimes'));
+    document.addEventListener('change', function (event) {
+        var root = event.target.closest('#empTimes');
+        if (!root) return;
+        if (event.target.matches('[data-sunday]')) paintSunday(root);
+        if (event.target.matches('[data-kind]')) applyKind(root);
+    });
+
     $(document).on('click', '#employeeForm [data-photo]', function (event) {
         event.preventDefault();
         const src = this.getAttribute('data-photo');

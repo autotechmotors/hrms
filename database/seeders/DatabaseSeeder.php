@@ -14,6 +14,7 @@ class DatabaseSeeder extends Seeder
             SampleRosterSeeder::class,
             RoleLoginSeeder::class,
             GatePassPeopleSeeder::class,
+            SalarySheetDemoSeeder::class,
         ]);
     }
 }

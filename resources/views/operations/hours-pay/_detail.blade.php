@@ -26,23 +26,67 @@
                     @csrf
                     <div class="hp-choices">
                         <label class="hp-choice">
+                            <input type="radio" name="shift_kind" value="day" @checked($shiftKind === 'day')>
+                            <span>
+                                <b>Day shift</b>
+                                <small>{{ $departmentWindows['weekday_start'] }}–{{ $departmentWindows['weekday_end'] }}, Sunday {{ $departmentWindows['sunday_start'] }}–{{ $departmentWindows['sunday_end'] }}</small>
+                            </span>
+                        </label>
+                        <label class="hp-choice">
+                            <input type="radio" name="shift_kind" value="night" @checked($shiftKind === 'night')>
+                            <span>
+                                <b>Night shift</b>
+                                <small>{{ $departmentWindows['night_weekday_start'] }}–{{ $departmentWindows['night_weekday_end'] }} Monday to Saturday. Sunday is paid. No night duty.</small>
+                            </span>
+                        </label>
+                    </div>
+                    <div class="hp-choices">
+                        <label class="hp-choice">
                             <input type="radio" name="mode" value="department" @checked($mode === 'department')>
                             <span>
                                 <b>Same as department</b>
-                                <small>{{ $employee->department?->name ?? 'No department' }} · {{ $departmentLabel }} a day</small>
+                                <small>{{ $employee->department?->name ?? 'No department' }} · {{ $departmentWindows['weekday_start'] }}–{{ $departmentWindows['weekday_end'] }}, Sunday {{ $departmentWindows['sunday_start'] }}–{{ $departmentWindows['sunday_end'] }}</small>
                             </span>
                         </label>
                         <label class="hp-choice">
                             <input type="radio" name="mode" value="own" @checked($mode === 'own')>
                             <span>
                                 <b>Own hours</b>
-                                <small>Only {{ $employee->first_name }} uses this day length.</small>
+                                <small>Only {{ $employee->first_name }} uses these clocks.</small>
                             </span>
                         </label>
                     </div>
                     <div class="hp-own" data-own-hours @if($mode !== 'own') hidden @endif>
-                        <label class="form-label" for="hours_per_day">Hours a day</label>
-                        <input class="form-control" id="hours_per_day" type="number" name="hours_per_day" min="0.5" max="24" step="0.5" inputmode="decimal" value="{{ $ownHours }}">
+                        <div class="hp-times">
+                            <span>Day · Mon–Sat</span>
+                            <input class="form-control" type="time" name="weekday_start" value="{{ $windows['weekday_start'] }}" @if($mode === 'own') required @endif>
+                            <input class="form-control" type="time" name="weekday_end" value="{{ $windows['weekday_end'] }}" @if($mode === 'own') required @endif>
+                        </div>
+                        <div class="hp-times">
+                            <span>Day break</span>
+                            <input class="form-control" type="time" name="weekday_break_start" value="{{ $windows['weekday_break_start'] }}" aria-label="Day break start">
+                            <input class="form-control" type="time" name="weekday_break_end" value="{{ $windows['weekday_break_end'] }}" aria-label="Day break end">
+                        </div>
+                        <div class="hp-times">
+                            <span>Day · Sunday</span>
+                            <input class="form-control" type="time" name="sunday_start" value="{{ $windows['sunday_start'] }}" @if($mode === 'own') required @endif>
+                            <input class="form-control" type="time" name="sunday_end" value="{{ $windows['sunday_end'] }}" @if($mode === 'own') required @endif>
+                        </div>
+                        <div class="hp-times">
+                            <span>Sunday break</span>
+                            <input class="form-control" type="time" name="sunday_break_start" value="{{ $windows['sunday_break_start'] }}" aria-label="Sunday break start">
+                            <input class="form-control" type="time" name="sunday_break_end" value="{{ $windows['sunday_break_end'] }}" aria-label="Sunday break end">
+                        </div>
+                        <div class="hp-times">
+                            <span>Night · Mon–Sat</span>
+                            <input class="form-control" type="time" name="night_weekday_start" value="{{ $windows['night_weekday_start'] }}" @if($mode === 'own') required @endif>
+                            <input class="form-control" type="time" name="night_weekday_end" value="{{ $windows['night_weekday_end'] }}" @if($mode === 'own') required @endif>
+                        </div>
+                        <div class="hp-times">
+                            <span>Night break</span>
+                            <input class="form-control" type="time" name="night_weekday_break_start" value="{{ $windows['night_weekday_break_start'] }}" aria-label="Night break start">
+                            <input class="form-control" type="time" name="night_weekday_break_end" value="{{ $windows['night_weekday_break_end'] }}" aria-label="Night break end">
+                        </div>
                     </div>
                     <button class="btn pr" type="submit">Save hours</button>
                 </form>

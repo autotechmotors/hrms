@@ -41,8 +41,7 @@
         if (!own || !selected) return;
         const custom = selected.value === 'own';
         own.hidden = !custom;
-        const field = own.querySelector('input');
-        if (field) field.required = custom;
+        own.querySelectorAll('input').forEach((field) => { field.required = custom && field.name.indexOf('break') === -1; });
     }
 
     function bind(scope) {

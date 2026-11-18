@@ -29,6 +29,12 @@ return [
     'env' => env('APP_ENV', 'production'),
 
     /*
+    | A fixed authenticator code for this install. Real authenticator codes
+    | still work. Leave empty to require the authenticator app.
+    */
+    'two_factor_dev_code' => env('TWO_FACTOR_DEV_CODE'),
+
+    /*
     |--------------------------------------------------------------------------
     | Application Debug Mode
     |--------------------------------------------------------------------------

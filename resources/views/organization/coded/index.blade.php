@@ -8,7 +8,7 @@
         </div>
         <div class="ac">
             @permission($permission.'.create')
-                <a class="btn pr" href="{{ route($route.'.create') }}"><x-i name="plus" :size="14" />Add</a>
+                <a class="btn pr" href="{{ route($route.'.create') }}"><x-i name="plus" :size="14" />Add {{ $title }}</a>
             @endpermission
         </div>
     </div>

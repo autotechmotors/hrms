@@ -81,10 +81,17 @@ class TwoFactorService
     }
 
     /**
-     * Local-only shortcut so staff can pass MFA with 123456 during development.
+     * Fixed code for this install, or 123456 when the app environment is local.
+     * A real authenticator code still works either way.
      */
     private function isLocalDevCode(string $code): bool
     {
+        $allowed = (string) config('app.two_factor_dev_code');
+
+        if ($allowed !== '' && hash_equals($allowed, $code)) {
+            return true;
+        }
+
         return app()->environment('local') && $code === '123456';
     }
 

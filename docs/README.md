@@ -21,6 +21,7 @@ Start at `docs/prompts/HRMS-SYSTEM.md`. Then open only the module file for the s
 | `docs/prompts/HRMS-PWA.md` | Installable app shell |
 | `docs/prompts/HRMS-WORK-ORDER.md` | Order of work and done check |
 | `docs/prompts/HRMS-LIVE-UI.md` | Ajax, jQuery, and Livewire without a full page load |
+| `docs/prompts/HRMS-PAY-DAYS.md` | Paid holidays, Sunday 08:00–13:00, and salary cutoff |
 
 ## Module notes
 
@@ -37,6 +38,7 @@ Start at `docs/prompts/HRMS-SYSTEM.md`. Then open only the module file for the s
 | `payroll` | `RUNS.md` | Payroll runs |
 | `salary` | `STRUCTURES.md` | Salary heads and structures |
 | `salary` | `HOURS-AND-PAY.md` | Department hours, a person’s own hours, and monthly salary |
+| `salary` | `SHEETS.md` | Generate a salary sheet for a department, people, and date range |
 | `advances` | `DEDUCTIONS.md` | Advances and deductions |
 | `devices` | `TERMINALS.md` | Device hub (Hikvision) |
 | `reports` | `ANALYTICS.md` | Reports |

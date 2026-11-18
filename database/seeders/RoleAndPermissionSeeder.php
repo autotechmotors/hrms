@@ -28,6 +28,7 @@ class RoleAndPermissionSeeder extends Seeder
             ])->values()->all());
             $this->role('Accounts', 'accounts', true, true, $all->only([
                 'dashboard.view', 'employees.view', 'bank.view', 'bank_accounts.view', 'bank_accounts.manage', 'payments.release', 'audit_logs.view',
+                'salary.view', 'salary.decide',
             ])->values()->all());
             $this->role('Manager', 'manager', true, false, $all->only([
                 'dashboard.view', 'employees.view', 'departments.view',

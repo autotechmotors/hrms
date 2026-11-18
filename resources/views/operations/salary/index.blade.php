@@ -69,7 +69,7 @@
             </header>
             <div class="cb">
                 @if($heads->isEmpty())
-                    <p class="sa-empty">No heads yet. Add Basic first, then HRA, PF, and others.</p>
+                    <p class="sa-empty">No heads yet. Add Basic first, then the other earnings and deductions.</p>
                 @else
                     <div class="sa-chips">
                         @foreach($heads as $head)

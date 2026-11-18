@@ -1,6 +1,6 @@
 # Holiday calendar
 
-Holiday create and delete stay. A holiday still produces attendance status `holiday`. Do not change that link or the calendar day partial.
+Holiday create and delete stay on the page. A public holiday is a paid day for everyone and still produces attendance status `holiday`. One person’s paid day is an `employee_holidays` row, unique per person and date. It is not a company holiday and not a leave request. Deleting either one puts that day back through `AttendanceCalculator`.
 
 ## Code
 
