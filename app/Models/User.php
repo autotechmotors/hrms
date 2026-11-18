@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Models\Concerns\AuditsChanges;
 use App\Models\Concerns\DecidesGatePasses;
+use App\Notifications\ResetPasswordNotice;
 use App\Services\AccessScope;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Builder;
@@ -114,6 +115,11 @@ class User extends Authenticatable
         $this->loadMissing('roles');
 
         return $this->roles->contains(fn (Role $role) => $role->is_active);
+    }
+
+    public function sendPasswordResetNotification($token): void
+    {
+        $this->notify(new ResetPasswordNotice($token));
     }
 
     public function notificationActionUrl(array $data): string

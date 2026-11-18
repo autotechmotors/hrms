@@ -28,6 +28,7 @@ Start at `docs/prompts/HRMS-SYSTEM.md`. Then open only the module file for the s
 | Module folder | File | Topic |
 |---|---|---|
 | `auth` | `SIGN-IN.md` | Login, logout, authenticator |
+| `auth` | `PASSWORD-RESET.md` | Forgot password email and new password |
 | `roles` | `NAV-PERMISSIONS.md` | Which role sees which module |
 | `employees` | `PROFILE.md` | Profile fields still missing on the form |
 | `employees` | `PARENT-ROLE.md` | Role on the employee form, and who appears as Parent |

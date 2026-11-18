@@ -6,6 +6,9 @@
         @csrf
         <x-text-field name="email" label="Email" type="email" required autofocus />
         <x-text-field name="password" label="Password" type="password" required />
+        <div class="guest-extra">
+            <a class="guest-link" href="{{ route('password.request') }}">Forgot password?</a>
+        </div>
         <button class="btn pr w-100" type="submit">Sign in</button>
     </form>
     <button class="btn pwa-guest" type="button" data-pwa-install hidden>

@@ -74,6 +74,10 @@ textarea.form-control{height:auto;padding:8px 10px}
 .guest-shell{min-height:100vh;display:grid;place-items:center;padding:24px}
 .guest-card{width:min(420px,100%);background:var(--glass);border:1px solid var(--glass-bd);border-radius:16px;box-shadow:0 18px 48px rgba(20,20,40,.12);backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur);padding:24px}
 .guest-card h1{font-size:22px;letter-spacing:-.4px;font-weight:650}
+.guest-extra{display:flex;justify-content:flex-end;margin:-6px 0 14px}
+.guest-link{display:inline-block;margin-top:14px;color:var(--ac);font-size:13px;font-weight:600;text-decoration:none}
+.guest-extra .guest-link{margin-top:0}
+.guest-link:hover{text-decoration:underline}
 .brand-mark{width:28px;height:28px;border-radius:8px;background:var(--ac);display:grid;place-items:center;color:#fff;font-weight:650}
 @media(max-width:1200px){.c6{grid-template-columns:repeat(3,minmax(0,1fr))}.c4,.c3{grid-template-columns:repeat(2,minmax(0,1fr))}.sr{width:200px}}
 @media(max-width:900px){.sb{transform:translateX(-100%)}.mo .sb{transform:none;width:244px}.mn,.col .mn{margin-left:0}.pg,.tb{padding-left:16px;padding-right:16px}.col .lb,.col .gh span{display:inline}.crumb{display:none}.hp-clocks{grid-template-columns:1fr}.hp-clock{border-right:0;border-bottom:1px solid var(--bd)}}

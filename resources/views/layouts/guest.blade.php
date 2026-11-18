@@ -11,7 +11,7 @@
     <link rel="stylesheet" href="{{ asset('assets/vendor/bootstrap/bootstrap.min.css') }}">
     <link rel="stylesheet" href="{{ asset('assets/vendor/select2/select2.min.css') }}">
     <link rel="stylesheet" href="{{ asset('assets/vendor/flatpickr/flatpickr.min.css') }}">
-    <link rel="stylesheet" href="{{ asset('assets/css/app.css') }}?v=108">
+    <link rel="stylesheet" href="{{ asset('assets/css/app.css') }}?v=109">
 </head>
 <body class="guest-body">
     <div class="glass-wave" aria-hidden="true"></div>
@@ -20,7 +20,10 @@
             <div class="guest-card">
                 <div class="logo" style="padding:0 0 16px"><img class="brand-icon" src="{{ asset('icons/icon-192.png') }}" alt="" width="28" height="28"><span class="lb">{{ config('app.name') }}</span></div>
                 <h1 style="font-size:18px">@yield('heading', 'Sign in')</h1>
-                <p style="color:var(--mu);margin:4px 0 18px">Sign in with the role account you were given. An employee account sees only that person's own records.</p>
+                <p style="color:var(--mu);margin:4px 0 18px">@yield('lead', 'Sign in with the role account you were given. An employee account sees only that person\'s own records.')</p>
+                @if (session('status'))
+                    <div class="alert alert-success">{{ session('status') }}</div>
+                @endif
                 @if (session('error'))
                     <div class="alert alert-danger">{{ session('error') }}</div>
                 @endif

@@ -11,6 +11,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\View\View;
+use RuntimeException;
 
 class LoginController extends Controller
 {
@@ -22,8 +23,9 @@ class LoginController extends Controller
     public function store(LoginRequest $request): RedirectResponse
     {
         $user = User::query()->where('email', $request->string('email')->lower()->toString())->first();
+        $password = $request->string('password')->toString();
 
-        if (! $user || ! $user->is_active || ! $user->hasStaffLogin() || ! Hash::check($request->string('password')->toString(), $user->password)) {
+        if (! $user || ! $user->is_active || ! $user->hasStaffLogin() || ! $this->passwordMatches($user, $password)) {
             AuditLogger::record('login_failed', $user, [], ['email' => $request->string('email')->toString()]);
 
             return back()
@@ -52,5 +54,21 @@ class LoginController extends Controller
         $request->session()->regenerateToken();
 
         return redirect()->route('login');
+    }
+
+    private function passwordMatches(User $user, string $password): bool
+    {
+        try {
+            return Hash::check($password, $user->password);
+        } catch (RuntimeException) {
+            if ($user->password === '' || ! password_verify($password, $user->password)) {
+                return false;
+            }
+
+            $user->password = $password;
+            $user->save();
+
+            return true;
+        }
     }
 }
