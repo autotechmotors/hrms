@@ -3,7 +3,7 @@
 @section('content')
     <div class="ph">
         <div>
-            <h1>Employees</h1>
+            <h1>{{ __('Employees') }}</h1>
             <p id="elMeta">{{ $employees->total() }} people in your scope</p>
         </div>
         <div class="ac">
@@ -144,7 +144,6 @@
             }
             bindRowActions();
             paintFilterMark();
-            window.requestAnimationFrame(maybeMore);
         }).fail(function (xhr) {
             if (xhr.statusText === 'abort') return;
             meta.text('Could not refresh the list');
@@ -156,17 +155,9 @@
         });
     }
 
-    function maybeMore() {
-        if (!phone() || loadingMore || req) return;
-        const host = results.find('.el-body');
-        const page = Number(host.attr('data-page') || 1);
-        const last = Number(host.attr('data-last') || 1);
-        if (page >= last) return;
-        const edge = results.get(0).getBoundingClientRect().bottom;
-        if (edge > window.innerHeight + 360) return;
-        loadingMore = true;
-        load({ page: page + 1 }, true);
-    }
+    results.on('hrms:list-updated', function () {
+        bindRowActions();
+    });
 
     function applyBlockedState(row, blocked) {
         row.toggleClass('el-blocked', blocked);
@@ -304,8 +295,6 @@
         $('#elFilterOpen').toggleClass('on', active);
     }
     paintFilterMark();
-    window.addEventListener('scroll', maybeMore, { passive: true });
-    window.requestAnimationFrame(maybeMore);
     window.addEventListener('resize', function () {
         placeSheet();
         setView(localStorage.getItem('employees.view') || 'list');
@@ -412,10 +401,10 @@
             return;
         }
 
-        const label = kind === 'finger' ? 'fingerprint' : kind;
+        const label = kind === 'finger' ? @json(__('fingerprint')) : kind;
         window.askConfirm(
-            'Remove this ' + label + ' from the employee record and the face terminal? This cannot be undone.',
-            { label: 'Remove', danger: true }
+            @json(__('Remove this :item from the employee record and the face terminal? This cannot be undone.')).replace(':item', label),
+            { label: @json(__('Remove')), danger: true }
         ).then(function (ok) {
             if (ok) run(pairs[0]);
         });

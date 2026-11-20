@@ -12,7 +12,7 @@
                 <p class="sg-reject-hint">A reason is required. The person who generated the salary will see it.</p>
             </div>
             <div class="modal-footer">
-                <button class="btn" type="button" data-bs-dismiss="modal">Cancel</button>
+                <button class="btn" type="button" data-bs-dismiss="modal">{{ __('Cancel') }}</button>
                 <button class="btn pr" type="submit">Reject salary</button>
             </div>
         </form>

@@ -52,30 +52,57 @@ class AttendanceCalculator
         $in = $day->punch_in ? Carbon::parse($date->toDateString().' '.$day->punch_in) : null;
         $out = $day->punch_out ? Carbon::parse($date->toDateString().' '.$day->punch_out) : null;
         $open = $passes->first(fn (GatePass $pass) => $pass->isOpenOuting());
-        if ($in && ! $out && $open?->out_at) {
+        $officeStillOut = (bool) ($open?->isOfficeWork() && $open->out_at);
+        if ($in && ! $out && $open?->out_at && ! $officeStillOut) {
             $out = $open->out_at->copy()->timezone('Asia/Kolkata');
         }
         if ($in && $out && $out->lessThanOrEqualTo($in)) {
             $out = $out->copy()->addDay();
         }
-        $gross = ($in && $out && $out->greaterThan($in)) ? (int) round($in->diffInMinutes($out, true)) : 0;
+        $leftAt = ($officeStillOut && $open?->out_at)
+            ? $open->out_at->copy()->timezone('Asia/Kolkata')
+            : null;
+        $backAfterOffice = $leftAt && $out && $out->greaterThan($leftAt);
+        $coverOpenOffice = $officeStillOut && $in && ! $backAfterOffice;
+        $measureOut = $coverOpenOffice ? $this->shiftEnd($employee, $date) : $out;
+        $gross = ($in && $measureOut && $measureOut->greaterThan($in)) ? (int) round($in->diffInMinutes($measureOut, true)) : 0;
 
+        $clocks = $this->hours->breakClocks($employee, $date);
         $away = 0;
         $office = 0;
+        $personal = 0;
         foreach ($passes as $pass) {
-            $away += $pass->outingMinutes($out);
-            $office += $pass->officeCreditMinutes();
+            if (! $pass->out_at || ! $pass->in_at) {
+                continue;
+            }
+            $left = $pass->out_at->copy()->timezone('Asia/Kolkata');
+            $back = $pass->in_at->copy()->timezone('Asia/Kolkata');
+            if ($back->lessThanOrEqualTo($left)) {
+                continue;
+            }
+            $span = (int) round($left->diffInMinutes($back, true));
+            $away += $span;
+            if ($pass->isOfficeWork()) {
+                $office += $span;
+
+                continue;
+            }
+            $personal += $this->hours->minutesOutsideBreak($left, $back, $clocks['start'], $clocks['end']);
         }
-        $personal = max(0, $away - $office);
+        if ($coverOpenOffice && $open?->out_at && $measureOut && $measureOut->greaterThan($open->out_at)) {
+            $left = $open->out_at->copy()->timezone('Asia/Kolkata');
+            $span = (int) round($left->diffInMinutes($measureOut, true));
+            $away += $span;
+            $office += $this->hours->minutesOutsideBreak($left, $measureOut, $clocks['start'], $clocks['end']);
+        }
         $break = 0;
-        if ($in && $out && $out->greaterThan($in)) {
-            $clocks = $this->hours->breakClocks($employee, $date);
-            $break = $this->hours->coveredBreakMinutes($in, $out, $clocks['start'], $clocks['end']);
+        if ($in && $measureOut && $measureOut->greaterThan($in)) {
+            $break = $this->hours->coveredBreakMinutes($in, $measureOut, $clocks['start'], $clocks['end']);
         }
-        $minutes = max(0, $gross - $away + $office - $break);
+        $minutes = max(0, $gross - $personal - $break);
 
         $status = 'absent';
-        if (($holiday && $holiday->kind === 'public') || $employeeHoliday) {
+        if (($holiday && $holiday->closesTheCompany()) || $employeeHoliday) {
             $status = 'holiday';
         } elseif ($leave) {
             $status = 'on_leave';
@@ -91,6 +118,7 @@ class AttendanceCalculator
             $status = 'unmarked';
         }
 
+        $storedOut = $day->punch_out;
         $day->fill([
             'shift_id' => $roster?->shift_id,
             'status' => $status,
@@ -99,9 +127,22 @@ class AttendanceCalculator
             'minutes_personal' => $personal,
             'minutes_office' => $office,
             'source' => $day->source ?: 'manual',
+            'punch_out' => $coverOpenOffice ? null : ($storedOut ?: $out?->format('H:i:s')),
         ])->save();
 
         return $day;
+    }
+
+    private function shiftEnd(Employee $employee, Carbon $date): Carbon
+    {
+        $window = $this->hours->windowFor($employee, $date);
+        $start = Carbon::parse($date->toDateString().' '.$window['start'], 'Asia/Kolkata');
+        $end = Carbon::parse($date->toDateString().' '.$window['end'], 'Asia/Kolkata');
+        if (($window['overnight'] ?? false) && $end->lessThanOrEqualTo($start)) {
+            $end->addDay();
+        }
+
+        return $end;
     }
 
     private function sundayOff(Employee $employee, Carbon $date): bool
@@ -110,7 +151,7 @@ class AttendanceCalculator
             return false;
         }
 
-        return ! $this->hours->worksSunday($employee);
+        return ! $this->hours->worksSunday($employee, $date);
     }
 
     /**
@@ -123,11 +164,13 @@ class AttendanceCalculator
         }
 
         return $passes->contains(function (GatePass $pass) {
-            if (! $pass->isOpenOuting()) {
+            if (! $pass->isOpenOuting() || $pass->isOfficeWork()) {
                 return false;
             }
 
-            return $pass->isEarlyLeave() || $pass->status === GatePass::STATUS_EXPIRED;
+            return $pass->isEarlyLeave()
+                || $pass->status === GatePass::STATUS_EXPIRED
+                || ($pass->expires_at !== null && $pass->expires_at->lte(now()));
         });
     }
 }

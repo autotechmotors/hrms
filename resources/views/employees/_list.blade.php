@@ -2,24 +2,25 @@
     $canEdit = $canEdit ?? false;
     $canDelete = $canDelete ?? false;
     $canBlock = $canBlock ?? false;
+    $canSalary = $canSalary ?? false;
     $credentialCounts = $credentialCounts ?? [];
 @endphp
-<div class="el-body" data-total="{{ $employees->total() }}" data-count="{{ $employees->count() }}" data-page="{{ $employees->currentPage() }}" data-last="{{ $employees->lastPage() }}">
+<div class="el-body" data-live-list="employees" data-total="{{ $employees->total() }}" data-count="{{ $employees->count() }}" data-page="{{ $employees->currentPage() }}" data-last="{{ $employees->lastPage() }}">
     <div class="el-table tw">
         <table>
             <thead>
                 <tr>
-                    <th>Employee</th>
-                    <th>ID</th>
-                    <th>Department</th>
-                    <th>Status</th>
-                    <th>Checklist</th>
-                    <th>Access Credentials</th>
-                    <th>Blocked</th>
+                    <th>{{ __('Employee') }}</th>
+                    <th>{{ __('ID') }}</th>
+                    <th>{{ __('Department') }}</th>
+                    <th>{{ __('Status') }}</th>
+                    <th>{{ __('Checklist') }}</th>
+                    <th>{{ __('Access Credentials') }}</th>
+                    <th>{{ __('Blocked') }}</th>
                     <th class="el-act">Actions</th>
                 </tr>
             </thead>
-            <tbody>
+            <tbody data-list-rows>
             @forelse($employees as $employee)
                 @php
                     $status = $employee->employmentStatus?->name ?? '—';
@@ -28,7 +29,12 @@
                     $hasBank = (int) ($employee->active_bank_accounts_count ?? 0) > 0;
                     $pending = ! $hasDocs || ! $hasBank;
                     $blocked = (bool) $employee->is_blocked;
-                    $night = $employee->workHour?->shift_kind === 'night';
+                    $today = now()->toDateString();
+                    $spanKind = $employee->shiftSpans->first(function ($span) use ($today) {
+                        return $span->starts_on->toDateString() <= $today
+                            && ($span->ends_on === null || $span->ends_on->toDateString() >= $today);
+                    })?->kind;
+                    $night = ($spanKind ?? $employee->workHour?->shift_kind) === 'night';
                 @endphp
                 <tr class="{{ $pending ? 'el-pending' : '' }} {{ $blocked ? 'el-blocked' : '' }}" data-employee-row="{{ $employee->id }}">
                     <td>
@@ -73,8 +79,11 @@
                             @if($canEdit)
                                 <a class="ib" href="{{ route('employees.edit', $employee) }}" title="Edit" aria-label="Edit"><x-i name="pen" :size="15" /></a>
                             @endif
+                            @if($canSalary)
+                                <a class="ib" href="{{ route('hours-pay.show', $employee) }}" title="Salary" aria-label="Salary"><x-i name="wallet" :size="15" /></a>
+                            @endif
                             @if($canDelete)
-                                <form class="el-del" method="post" action="{{ route('employees.destroy', $employee) }}" data-confirm="Delete {{ $employee->full_name }}? This cannot be undone.">
+                                <form class="el-del" method="post" action="{{ route('employees.destroy', $employee) }}" data-confirm="{{ __('Delete :name? This cannot be undone.', ['name' => $employee->full_name]) }}">
                                     @csrf @method('delete')
                                     <button class="ib er" type="submit" title="Delete" aria-label="Delete"><x-i name="trash" :size="15" /></button>
                                 </form>
@@ -83,7 +92,7 @@
                     </td>
                 </tr>
             @empty
-                <tr>
+                <tr data-list-empty>
                     <td colspan="8" class="el-empty">No employees match your filters</td>
                 </tr>
             @endforelse
@@ -91,7 +100,7 @@
         </table>
     </div>
 
-    <div class="el-blocks">
+    <div class="el-blocks" data-list-rows>
         @forelse($employees as $employee)
             @php
                 $status = $employee->employmentStatus?->name ?? '—';
@@ -100,7 +109,12 @@
                 $hasBank = (int) ($employee->active_bank_accounts_count ?? 0) > 0;
                 $pending = ! $hasDocs || ! $hasBank;
                 $blocked = (bool) $employee->is_blocked;
-                $night = $employee->workHour?->shift_kind === 'night';
+                $today = now()->toDateString();
+                $spanKind = $employee->shiftSpans->first(function ($span) use ($today) {
+                    return $span->starts_on->toDateString() <= $today
+                        && ($span->ends_on === null || $span->ends_on->toDateString() >= $today);
+                })?->kind;
+                $night = ($spanKind ?? $employee->workHour?->shift_kind) === 'night';
             @endphp
             <article class="el-card {{ $pending ? 'el-pending' : '' }} {{ $blocked ? 'el-blocked' : '' }}" data-employee-row="{{ $employee->id }}">
                 <a class="el-card-main" href="{{ route('employees.show', $employee) }}">
@@ -144,8 +158,11 @@
                         @if($canEdit)
                             <a class="ib" href="{{ route('employees.edit', $employee) }}" title="Edit" aria-label="Edit"><x-i name="pen" :size="15" /></a>
                         @endif
+                        @if($canSalary)
+                            <a class="ib" href="{{ route('hours-pay.show', $employee) }}" title="Salary" aria-label="Salary"><x-i name="wallet" :size="15" /></a>
+                        @endif
                         @if($canDelete)
-                            <form class="el-del" method="post" action="{{ route('employees.destroy', $employee) }}" data-confirm="Delete {{ $employee->full_name }}? This cannot be undone.">
+                            <form class="el-del" method="post" action="{{ route('employees.destroy', $employee) }}" data-confirm="{{ __('Delete :name? This cannot be undone.', ['name' => $employee->full_name]) }}">
                                 @csrf @method('delete')
                                 <button class="ib er" type="submit" title="Delete" aria-label="Delete"><x-i name="trash" :size="15" /></button>
                             </form>
@@ -154,20 +171,9 @@
                 </footer>
             </article>
         @empty
-            <div class="el-empty">No employees match your filters</div>
+            <div class="el-empty" data-list-empty>No employees match your filters</div>
         @endforelse
     </div>
 
-    <div class="pgn el-pgn">
-        <span class="el-range">
-            @if ($employees->total() > 0)
-                Showing {{ $employees->firstItem() }}–{{ $employees->lastItem() }} of {{ $employees->total() }}
-            @else
-                No employees to show
-            @endif
-        </span>
-        @if ($employees->hasPages())
-            <div class="el-pages">{{ $employees->links('employees._pager') }}</div>
-        @endif
-    </div>
+    @include('partials.list-footer', ['paginator' => $employees])
 </div>

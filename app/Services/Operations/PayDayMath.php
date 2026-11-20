@@ -7,6 +7,7 @@ use App\Models\AttendanceRule;
 use App\Models\Employee;
 use App\Models\EmployeeHoliday;
 use App\Models\EmployeeSalary;
+use App\Models\GatePass;
 use App\Models\Holiday;
 use App\Models\LeaveRequest;
 use App\Models\Shift;
@@ -62,22 +63,29 @@ class PayDayMath
             ->with('leaveType')
             ->get();
 
-        $public = Holiday::query()
+        $publicHolidays = Holiday::query()
             ->where('company_id', $employee->company_id)
-            ->where('kind', 'public')
+            ->whereIn('kind', ['public', 'cutoff'])
             ->whereDate('holiday_date', '>=', $start)
             ->whereDate('holiday_date', '<=', $end)
-            ->pluck('holiday_date')
-            ->map(fn ($date) => Carbon::parse($date)->toDateString())
-            ->all();
+            ->get()
+            ->keyBy(fn (Holiday $holiday) => $holiday->holiday_date->toDateString());
 
-        $own = EmployeeHoliday::query()
+        $ownHolidays = EmployeeHoliday::query()
             ->where('employee_id', $employee->id)
             ->whereDate('holiday_date', '>=', $start)
             ->whereDate('holiday_date', '<=', $end)
-            ->pluck('holiday_date')
-            ->map(fn ($date) => Carbon::parse($date)->toDateString())
-            ->all();
+            ->get()
+            ->keyBy(fn (EmployeeHoliday $holiday) => $holiday->holiday_date->toDateString());
+
+        $gatePasses = GatePass::query()
+            ->where('employee_id', $employee->id)
+            ->whereIn('status', [GatePass::STATUS_APPROVED, GatePass::STATUS_EXPIRED])
+            ->whereDate('date', '>=', $start)
+            ->whereDate('date', '<=', $end)
+            ->orderBy('out_time')
+            ->get()
+            ->groupBy(fn (GatePass $pass) => $pass->date->toDateString());
 
         $rosters = ShiftRoster::query()
             ->where('employee_id', $employee->id)
@@ -127,16 +135,40 @@ class PayDayMath
 
             $beforeJoin = $employee->joining_date && $cursor->lt($employee->joining_date->copy()->startOfDay());
             $leave = $this->leaveOn($leaves, $cursor);
+            $companyHoliday = $publicHolidays->get($key);
+            $ownHoliday = $ownHolidays->get($key);
             $kind = 'working';
             if ($beforeJoin) {
                 $kind = 'before_join';
-            } elseif (in_array($key, $public, true) || in_array($key, $own, true)) {
+            } elseif ($ownHoliday || ($companyHoliday && $companyHoliday->kind !== 'cutoff')) {
                 $kind = 'holiday';
+            } elseif ($companyHoliday && $companyHoliday->kind === 'cutoff') {
+                $kind = 'holiday_cutoff';
             } elseif ($leave) {
                 $kind = $leave->leaveType?->is_paid ? 'paid_leave' : 'unpaid_leave';
             }
 
             $cell = $this->day($employee, $cursor, $monthly, $grace, $attendance->get($key), $kind, $rosters->get($key)?->shift);
+            if ($companyHoliday && $kind === 'holiday_cutoff') {
+                $cell['grid']['holiday'] = 'Company holiday · '.$companyHoliday->name.' · cutoff';
+            } elseif ($companyHoliday) {
+                $cell['grid']['holiday'] = 'Company holiday · '.$companyHoliday->name;
+            } else {
+                $cell['grid']['holiday'] = $ownHoliday ? 'Paid day · '.($ownHoliday->name ?: 'Personal') : '';
+            }
+            $cell['grid']['leave'] = $leave
+                ? 'Leave · '.($leave->leaveType?->name ?: 'Leave').($leave->leaveType && ! $leave->leaveType->is_paid ? ' · cutoff' : ' · no cutoff')
+                : '';
+            $cell['grid']['gate'] = ($gatePasses->get($key) ?? collect())
+                ->map(fn (GatePass $pass) => $pass->work_type_label.' · '.$pass->duration_label)
+                ->implode(' · ');
+            if ($companyHoliday) {
+                foreach ($cell['cuts'] as $index => $cut) {
+                    if (($cut['reason'] ?? '') === 'paid holiday') {
+                        $cell['cuts'][$index]['detail'] = $companyHoliday->name;
+                    }
+                }
+            }
             $days[$key] = $cell['grid'];
             foreach ($cell['cuts'] as $cut) {
                 $cuts[] = $cut;
@@ -246,6 +278,19 @@ class PayDayMath
             ];
         }
 
+        if ($kind === 'holiday_cutoff') {
+            $grid['status'] = 'H';
+            $grid['absence'] = 1;
+
+            return [
+                'day_pay' => $dayPay,
+                'net' => 0.0,
+                'cutoff' => $dayPay,
+                'cuts' => [$this->cut($day, $window['label'], $in, $out, 0, $dayPay, 'holiday cutoff')],
+                'grid' => $grid,
+            ];
+        }
+
         if ($this->sundayOff($employee, $day)) {
             $grid['status'] = 'N';
             $grid['window'] = 'Sunday off';
@@ -276,6 +321,22 @@ class PayDayMath
             ];
         }
 
+        $departure = $in !== null ? $this->openOfficeDeparture($employee, $day) : null;
+        $coverOpenOffice = false;
+        if ($departure !== null) {
+            $startMinutes = (int) $this->hours->minutes($window['start']);
+            $finishMinutes = (int) $this->hours->minutes($window['end']);
+            $overnightWindow = (bool) ($window['overnight'] ?? false);
+            $leftAt = $this->place((int) $this->hours->minutes($departure->format('H:i:s')), $startMinutes, $finishMinutes, $overnightWindow);
+            $outAtNow = $out !== null
+                ? $this->place((int) $this->hours->minutes($out), $startMinutes, $finishMinutes, $overnightWindow)
+                : null;
+            if ($outAtNow === null || $outAtNow <= $leftAt) {
+                $out = $window['end'];
+                $coverOpenOffice = true;
+            }
+        }
+
         if ($in === null || $out === null) {
             $grid['status'] = 'A';
             $grid['absence'] = 1;
@@ -299,6 +360,24 @@ class PayDayMath
         $endAt = $overnight ? $finish + 1440 : $finish;
         $late = max(0, $inAt - $start - max(0, $grace));
         $early = (! $overnight && $outMinutes < $inMinutes) ? 0 : max(0, $endAt - $outAt);
+        $clocks = $this->hours->breakClocks($employee, $day);
+        if ($early > 0 && $clocks['start'] && $clocks['end']) {
+            $outClock = Carbon::parse($day->toDateString().' '.$out, 'Asia/Kolkata');
+            $endClock = Carbon::parse($day->toDateString().' '.$window['end'], 'Asia/Kolkata');
+            $startClock = Carbon::parse($day->toDateString().' '.$window['start'], 'Asia/Kolkata');
+            if ($window['overnight'] && $endClock->lessThanOrEqualTo($startClock)) {
+                $endClock->addDay();
+            }
+            if ($window['overnight'] && $outClock->lessThan($startClock)) {
+                $outClock->addDay();
+            }
+            if ($outClock->lt($endClock)) {
+                $early = min($early, $this->hours->minutesOutsideBreak($outClock, $endClock, $clocks['start'], $clocks['end']));
+            }
+        }
+        if ($coverOpenOffice) {
+            $early = 0;
+        }
         $personal = max(0, (int) ($attendance->minutes_personal ?? 0));
         $early += $personal;
 
@@ -338,6 +417,21 @@ class PayDayMath
         ];
     }
 
+    private function openOfficeDeparture(Employee $employee, CarbonInterface $day): ?Carbon
+    {
+        $pass = GatePass::query()
+            ->where('employee_id', $employee->id)
+            ->whereDate('date', $day->toDateString())
+            ->where('work_type', GatePass::WORK_OFFICE)
+            ->whereIn('status', [GatePass::STATUS_APPROVED, GatePass::STATUS_EXPIRED])
+            ->whereNotNull('out_at')
+            ->whereNull('in_at')
+            ->orderByDesc('id')
+            ->first();
+
+        return $pass?->out_at?->copy()->timezone('Asia/Kolkata');
+    }
+
     private function place(int $clock, int $start, int $finish, bool $overnight): int
     {
         if (! $overnight) {
@@ -360,7 +454,7 @@ class PayDayMath
             return false;
         }
 
-        return ! $this->hours->worksSunday($employee);
+        return ! $this->hours->worksSunday($employee, $day);
     }
 
     /**

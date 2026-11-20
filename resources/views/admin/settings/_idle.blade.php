@@ -1,4 +1,4 @@
-<div id="stResults" data-matched="{{ $idle->total() }}">
+<div id="stResults" data-live-list="settings-idle" data-page="{{ $idle->currentPage() }}" data-last="{{ $idle->lastPage() }}" data-matched="{{ $idle->total() }}">
     @if($idle->total() === 0)
         <p class="st-empty">
             @if($overdueTerm !== '')
@@ -10,7 +10,7 @@
             @endif
         </p>
     @else
-        <div class="st-list">
+        <div class="st-list" data-list-rows>
             @foreach($idle as $person)
                 <a class="st-row" href="{{ route('employees.show', $person) }}">
                     <span class="av st-av" style="--h:{{ ($person->id * 47) % 360 }}">{{ mb_strtoupper(mb_substr($person->full_name, 0, 1)) }}</span>
@@ -22,33 +22,6 @@
                 </a>
             @endforeach
         </div>
-        <div class="st-foot">
-            <p class="st-range">Showing {{ $idle->firstItem() }}–{{ $idle->lastItem() }} of {{ $idle->total() }}</p>
-            @if($idle->hasPages())
-                <nav class="el-pager" aria-label="Overdue pages">
-                    @if($idle->onFirstPage())
-                        <span class="is-off" aria-hidden="true">‹</span>
-                    @else
-                        <a href="{{ $idle->previousPageUrl() }}" rel="prev" aria-label="Previous page">‹</a>
-                    @endif
-                    @foreach($idle->linkCollection() as $link)
-                        @if($link['label'] === '...')
-                            <span class="is-gap">…</span>
-                        @elseif(is_numeric($link['label']))
-                            @if($link['active'])
-                                <span class="is-on" aria-current="page">{{ $link['label'] }}</span>
-                            @else
-                                <a href="{{ $link['url'] }}">{{ $link['label'] }}</a>
-                            @endif
-                        @endif
-                    @endforeach
-                    @if($idle->hasMorePages())
-                        <a href="{{ $idle->nextPageUrl() }}" rel="next" aria-label="Next page">›</a>
-                    @else
-                        <span class="is-off" aria-hidden="true">›</span>
-                    @endif
-                </nav>
-            @endif
-        </div>
+        @include('partials.list-footer', ['paginator' => $idle])
     @endif
 </div>

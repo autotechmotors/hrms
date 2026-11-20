@@ -1,6 +1,6 @@
 # Designations
 
-Designations and employee types stay. The nav item Designations still covers both `designations.*` and `employee-types.*`.
+Designations and employee types stay. The nav item Designations still covers both `designations.*` and `employee-types.*`. A designation’s category must belong to the same company. A designation or category that an employee still uses cannot be deleted.
 
 ## Code
 

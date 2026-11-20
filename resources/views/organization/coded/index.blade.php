@@ -1,14 +1,14 @@
 @extends('layouts.app')
-@section('title', \Illuminate\Support\Str::plural($title))
+@section('title', __(\Illuminate\Support\Str::plural($title)))
 @section('content')
     <div class="ph">
         <div>
-            <h1>{{ \Illuminate\Support\Str::plural($title) }}</h1>
-            <p>{{ $summary }}</p>
+            <h1>{{ __( \Illuminate\Support\Str::plural($title) ) }}</h1>
+            <p>{{ __($summary) }}</p>
         </div>
         <div class="ac">
             @permission($permission.'.create')
-                <a class="btn pr" href="{{ route($route.'.create') }}"><x-i name="plus" :size="14" />Add {{ $title }}</a>
+                <a class="btn pr" href="{{ route($route.'.create') }}"><x-i name="plus" :size="14" />{{ __('Add :item', ['item' => __($title)]) }}</a>
             @endpermission
         </div>
     </div>
@@ -98,21 +98,7 @@
             if (req !== current) return;
             loadingMore = false;
             req = null;
-            if (phone()) requestAnimationFrame(maybeMore);
         });
-    }
-
-    function maybeMore() {
-        if (!phone() || loadingMore || req) return;
-        const host = document.querySelector('#orgResults .org-body');
-        if (!host) return;
-        const page = Number(host.dataset.page || 1);
-        const last = Number(host.dataset.last || 1);
-        if (page >= last) return;
-        const cards = host.querySelector('.org-cards');
-        if (!cards || cards.getBoundingClientRect().bottom > window.innerHeight + 420) return;
-        loadingMore = true;
-        load({ page: page + 1 }, true);
     }
 
     form.on('submit', function (event) {
@@ -131,7 +117,8 @@
     root.on('click', '[data-org-delete]', function () {
         const button = this;
         const name = button.getAttribute('data-name') || 'this record';
-        window.askConfirm('Delete ' + name + '?', { label: 'Delete', danger: true }).then(function (ok) {
+        const phrase = (window.__I18N && window.__I18N.deleteName) ? window.__I18N.deleteName.replace(':name', name) : ('Delete ' + name + '?');
+        window.askConfirm(phrase, { label: (window.__I18N && window.__I18N.delete) || 'Delete', danger: true }).then(function (ok) {
             if (!ok) return;
             $.ajax({
                 url: button.getAttribute('data-url'),
@@ -149,8 +136,6 @@
             });
         });
     });
-    window.addEventListener('scroll', maybeMore, { passive: true });
-    requestAnimationFrame(maybeMore);
 })(jQuery);
 </script>
 @endpush

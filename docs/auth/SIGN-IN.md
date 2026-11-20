@@ -19,4 +19,4 @@ Login, logout, throttles, and authenticator setup stay as they are.
 
 ## Visual only
 
-Login and both two-factor screens may use the glass card and the red mark from `docs/prompts/HRMS-BRAND.md` and `docs/prompts/HRMS-LIQUID-GLASS.md`. Form fields, validation, and redirects stay.
+Login, forgot password, reset password, and both two-factor screens share one guest stage in `layouts/guest.blade.php`. The plant scene `public/assets/images/auth-plant.jpg` covers the left side from the top, bottom, and left edges. Its right edge is curved and carries a soft dark board shadow onto the white form. Under 900px the scene is a full-width band, curved along the bottom. Fields stay solid white with a visible border. The red mark is `docs/brand/app-icon.png`. Form fields, validation, and redirects stay. Error pages stay a single card on the wash, without the plant scene.

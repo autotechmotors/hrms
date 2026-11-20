@@ -31,12 +31,12 @@
     <div class="sg-stats g c4">
         <div class="card kp"><small>Earned</small><b>₹{{ number_format($earned, 2) }}</b><span>Day pay after salary cutoff</span></div>
         <div class="card kp"><small>Advances</small><b>₹{{ number_format($advance, 2) }}</b><span>Full amount, if given in these dates</span></div>
-        <div class="card kp"><small>Other deductions</small><b>₹{{ number_format($deductions, 2) }}</b><span>Salary-structure deductions on the earned pay</span></div>
+        <div class="card kp"><small>Other deductions</small><b>₹{{ number_format($deductions, 2) }}</b><span>Advances are the deduction</span></div>
         <div class="card kp"><small>Net</small><b>₹{{ number_format($net, 2) }}</b><span>Earned minus advances and other deductions</span></div>
     </div>
 
     <p class="sg-formula">Day pay = monthly salary ÷ the real days in that month. Completing Sunday pays the same day as completing Monday. A night shift does not work Sunday: that day is paid and has no cutoff. Late and early minutes are cut at the Monday–Saturday minute rate. A missing punch on a working day cuts the whole day. A public holiday and a person’s own paid day pay the full day. Unpaid leave pays nothing. There is no overtime. An advance is taken in full when its date falls inside this range.</p>
-    <p class="sg-legend"><b>P</b> present · <b>A</b> absent · <b>L</b> paid leave · <b>UL</b> unpaid leave · <b>H</b> holiday · <b>N</b> Sunday off, paid, no punch. Late and early leave are minutes against the clock window.</p>
+    <p class="sg-legend"><b>P</b> present · <b>A</b> absent · <b>L</b> leave, no cutoff · <b>UL</b> leave, salary cutoff · <b>H</b> company holiday, paid · <b>N</b> Sunday off, paid, no punch. The day grid names the holiday, the leave, and any gate pass. Late and early leave are minutes against the clock window.</p>
 
     @foreach($sheet->lines as $line)
         @php $person = $line->employee; @endphp
@@ -86,13 +86,13 @@
                     <table class="sg-cuts">
                         <thead>
                         <tr>
-                            <th>Date</th>
-                            <th>Window</th>
-                            <th>In</th>
-                            <th>Out</th>
-                            <th>Minutes</th>
-                            <th>Rupees</th>
-                            <th>Reason</th>
+                            <th>{{ __('Date') }}</th>
+                            <th>{{ __('Window') }}</th>
+                            <th>{{ __('In') }}</th>
+                            <th>{{ __('Out') }}</th>
+                            <th>{{ __('Minutes') }}</th>
+                            <th>{{ __('Rupees') }}</th>
+                            <th>{{ __('Reason') }}</th>
                         </tr>
                         </thead>
                         <tbody>
@@ -104,7 +104,7 @@
                                 <td>{{ $cut['out'] ?: '—' }}</td>
                                 <td>{{ (int) $cut['minutes'] === 0 && ($cut['reason'] ?? '') === 'absent' ? 'Full day' : (int) $cut['minutes'] }}</td>
                                 <td>₹{{ number_format((float) $cut['rupees'], 2) }}</td>
-                                <td>{{ $cut['reason'] }}</td>
+                                <td>{{ $cut['reason'] }}@if(!empty($cut['detail'])) · {{ $cut['detail'] }}@endif</td>
                             </tr>
                         @endforeach
                         </tbody>
@@ -123,12 +123,12 @@
                     </tr>
                     </thead>
                     <tbody>
-                    @foreach(['in' => 'Check-In', 'out' => 'Check-Out', 'late' => 'Late', 'ot' => 'OT', 'early' => 'Early Leave', 'break' => 'Break', 'attended' => 'Attended', 'status' => 'Status'] as $key => $label)
+                    @foreach(['in' => 'Check-In', 'out' => 'Check-Out', 'late' => 'Late', 'ot' => 'OT', 'early' => 'Early Leave', 'break' => 'Break', 'attended' => 'Attended', 'status' => 'Status', 'holiday' => 'Company holiday', 'leave' => 'Leave', 'gate' => 'Gate pass'] as $key => $label)
                         <tr @class(['is-status' => $key === 'status'])>
                             <th>{{ $label }}</th>
                             @foreach($dates as $date)
                                 @php $cell = $line->days[$date] ?? []; $value = $cell[$key] ?? null; @endphp
-                                <td>{{ $value === null || $value === '' ? '—' : $value }}</td>
+                                <td class="sg-day {{ $key }}">{{ $value === null || $value === '' || $value === 0 && in_array($key, ['holiday', 'leave', 'gate'], true) ? '—' : $value }}</td>
                             @endforeach
                         </tr>
                     @endforeach

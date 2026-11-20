@@ -3,7 +3,7 @@
 @section('content')
     <div class="ph">
         <div>
-            <h1>Reports</h1>
+            <h1>{{ __('Reports') }}</h1>
             <p>Month counts for the people you can see. Present, absent, holidays, and salary cutoff use the same clocks as pay.</p>
         </div>
     </div>

@@ -9,32 +9,61 @@ use Illuminate\Database\Eloquent\Builder;
 
 class AccessScope
 {
+    /** @var array<int, list<int>> */
+    private array $companyIds = [];
+
     /**
      * Scopes are additive. A company scope grants that company.
-     * A manager also sees direct reports, without a company-wide grant.
+     * A person on the reporting tree sees themself and every person below them,
+     * at every level. A company scope does not add the rest of the company.
      *
      * @return list<int>
      */
     public function companyIds(User $user): array
     {
+        $key = $user->getKey();
+        if ($key && array_key_exists((int) $key, $this->companyIds)) {
+            return $this->companyIds[(int) $key];
+        }
+
         $user->loadMissing('scopes', 'employee');
 
         $ids = [];
+        $departmentIds = [];
+        $employeeIds = [];
 
         foreach ($user->scopes as $scope) {
-            $ids[] = match ($scope->scope_type) {
-                'company' => (int) $scope->scope_id,
-                'department' => (int) Department::query()->whereKey($scope->scope_id)->value('company_id'),
-                'employee' => (int) Employee::query()->whereKey($scope->scope_id)->value('company_id'),
-                default => 0,
-            };
+            if ($scope->scope_type === 'company') {
+                $ids[] = (int) $scope->scope_id;
+            } elseif ($scope->scope_type === 'department') {
+                $departmentIds[] = (int) $scope->scope_id;
+            } elseif ($scope->scope_type === 'employee') {
+                $employeeIds[] = (int) $scope->scope_id;
+            }
+        }
+
+        if ($departmentIds !== []) {
+            foreach (Department::query()->whereIn('id', $departmentIds)->pluck('company_id') as $companyId) {
+                $ids[] = (int) $companyId;
+            }
+        }
+
+        if ($employeeIds !== []) {
+            foreach (Employee::query()->whereIn('id', $employeeIds)->pluck('company_id') as $companyId) {
+                $ids[] = (int) $companyId;
+            }
         }
 
         if ($user->employee) {
             $ids[] = (int) $user->employee->company_id;
         }
 
-        return array_values(array_unique(array_filter($ids)));
+        $ids = array_values(array_unique(array_filter($ids)));
+        if ($key) {
+            $this->companyIds[(int) $key] = $ids;
+        }
+
+        return $ids;
     }
 
     public function canAccessCompany(User $user, int $companyId): bool
@@ -100,11 +129,21 @@ class AccessScope
         $user->loadMissing('scopes', 'employee', 'roles');
         $table = $query->getModel()->getTable();
 
-        if ($this->limitedToOwnRow($user)) {
-            return $query->where($table.'.id', $user->employee?->id ?? 0);
+        if ($user->hasRole('hr-admin')) {
+            return $this->applyToCompanyRecords($query, $user, $table.'.company_id');
         }
 
-        return $query->where(function (Builder $outer) use ($user, $table): void {
+        $visibleIds = $user->employee
+            ? $user->employee->familyMemberIds()->map(fn ($id) => (int) $id)->all()
+            : [];
+
+        if ($this->limitedToReportingTree($user)) {
+            return $visibleIds === []
+                ? $query->whereRaw('1 = 0')
+                : $query->whereIn($table.'.id', $visibleIds);
+        }
+
+        return $query->where(function (Builder $outer) use ($user, $table, $visibleIds): void {
             $applied = false;
 
             foreach ($user->scopes as $scope) {
@@ -119,13 +158,9 @@ class AccessScope
                 });
             }
 
-            if ($user->employee && ($user->hasRole('manager') || $user->hasRole('head') || $user->hasRole('director'))) {
+            if ($visibleIds !== []) {
                 $applied = true;
-                $ids = $user->employee->familyMemberIds();
-                $outer->orWhereIn($table.'.id', $ids->all());
-            } elseif ($user->employee) {
-                $applied = true;
-                $outer->orWhere($table.'.id', $user->employee->id);
+                $outer->orWhereIn($table.'.id', $visibleIds);
             }
 
             if (! $applied) {
@@ -140,15 +175,18 @@ class AccessScope
     }
 
     /**
-     * The employee role is a self-service login. A company scope must not widen it.
+     * Director, Head, Manager, Employee, Helper, and any other role follow the
+     * reporting tree once that login is linked to a person. People under a
+     * manager are also visible to every parent above that manager.
+     * Payroll, accounts, and device admin keep the company or department scope.
      */
-    private function limitedToOwnRow(User $user): bool
+    private function limitedToReportingTree(User $user): bool
     {
-        if (! $user->hasRole('employee')) {
+        if (! $user->employee) {
             return false;
         }
 
-        foreach (['super-admin', 'hr-admin', 'payroll-admin', 'accounts', 'manager', 'head', 'director', 'device-administrator'] as $slug) {
+        foreach (['payroll-admin', 'accounts', 'device-administrator'] as $slug) {
             if ($user->hasRole($slug)) {
                 return false;
             }

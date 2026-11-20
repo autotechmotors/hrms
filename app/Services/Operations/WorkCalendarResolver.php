@@ -11,7 +11,7 @@ class WorkCalendarResolver
 {
     public function isWorkingDay(int $companyId, CarbonInterface $date): bool
     {
-        if (Holiday::query()->where('company_id', $companyId)->whereDate('holiday_date', $date)->where('kind', 'public')->exists()) {
+        if (Holiday::query()->where('company_id', $companyId)->whereDate('holiday_date', $date)->whereIn('kind', ['public', 'cutoff'])->exists()) {
             return false;
         }
 

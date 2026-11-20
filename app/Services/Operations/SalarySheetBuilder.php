@@ -4,7 +4,6 @@ namespace App\Services\Operations;
 
 use App\Models\Advance;
 use App\Models\Employee;
-use App\Models\EmployeeSalary;
 use App\Models\SalarySheet;
 use App\Models\SalarySheetLine;
 use Carbon\Carbon;
@@ -69,9 +68,8 @@ class SalarySheetBuilder
         $paidLeave = $pay['paid_leave_days'];
         $unpaidLeave = $pay['unpaid_leave_days'];
         $rate = $pay['day_pay'];
-        $basic = $this->basic($employee, $earned);
-        $deductionLines = $this->deductionLines($employee, $earned, $basic);
-        $deductions = round(array_sum(array_column($deductionLines, 'amount')), 2);
+        $deductionLines = [];
+        $deductions = 0.0;
         $advances = $this->advances($employee, $from, $to);
         $advanceTotal = round(array_sum(array_column($advances, 'amount')), 2);
         $net = max(0, round($earned - $deductions - $advanceTotal, 2));
@@ -105,69 +103,27 @@ class SalarySheetBuilder
         ];
     }
 
-    private function basic(Employee $employee, float $earned): float
+    public function settleAdvances(SalarySheet $sheet): void
     {
-        $salary = EmployeeSalary::query()
-            ->where('employee_id', $employee->id)
-            ->orderByDesc('effective_from')
-            ->with('structure.lines.head')
-            ->first();
-
-        $basic = $earned;
-        foreach ($salary?->structure?->lines ?? [] as $line) {
-            $head = $line->head;
-            if (! $head || ! $head->is_active || $head->category !== 'earning') {
-                continue;
-            }
-            if (! in_array($head->code, ['BASIC', 'SGBASIC'], true)) {
-                continue;
-            }
-            $value = $line->value !== null ? (float) $line->value : (float) $head->value;
-            $basic = $head->method === 'percent_gross' ? round($earned * $value / 100, 2) : round($value, 2);
+        $sheet->loadMissing('lines');
+        foreach ($sheet->lines as $line) {
+            Advance::query()
+                ->where('employee_id', $line->employee_id)
+                ->where('status', 'active')
+                ->whereDate('starts_on', '>=', $sheet->starts_on)
+                ->whereDate('starts_on', '<=', $sheet->ends_on)
+                ->orderBy('id')
+                ->get()
+                ->each(function (Advance $advance): void {
+                    $take = max(0, min((float) $advance->amount, (float) $advance->balance));
+                    if ($take <= 0) {
+                        return;
+                    }
+                    $advance->balance = 0;
+                    $advance->status = 'completed';
+                    $advance->save();
+                });
         }
-
-        return $basic;
-    }
-
-    /**
-     * @return list<array{name: string, amount: float}>
-     */
-    private function deductionLines(Employee $employee, float $earned, float $basic): array
-    {
-        $salary = EmployeeSalary::query()
-            ->where('employee_id', $employee->id)
-            ->orderByDesc('effective_from')
-            ->with('structure.lines.head')
-            ->first();
-
-        $rows = [];
-        foreach ($salary?->structure?->lines ?? [] as $line) {
-            $head = $line->head;
-            if (! $head || ! $head->is_active || $head->category !== 'deduction') {
-                continue;
-            }
-            $value = $line->value !== null ? (float) $line->value : (float) $head->value;
-            $amount = match ($head->method) {
-                'percent_gross' => round($earned * $value / 100, 2),
-                'percent_basic' => round($basic * $value / 100, 2),
-                default => $this->proratedFixed($value, $earned, (float) $salary->gross_monthly),
-            };
-            if ($amount <= 0) {
-                continue;
-            }
-            $rows[] = ['name' => $head->name, 'amount' => $amount];
-        }
-
-        return $rows;
-    }
-
-    private function proratedFixed(float $monthlyFixed, float $earned, float $monthly): float
-    {
-        if ($monthlyFixed <= 0 || $monthly <= 0 || $earned <= 0) {
-            return 0.0;
-        }
-
-        return round($monthlyFixed * ($earned / $monthly), 2);
     }
 
     /**

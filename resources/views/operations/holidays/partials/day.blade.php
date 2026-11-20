@@ -20,11 +20,13 @@
     <button
         type="button"
         class="{{ implode(' ', $classes) }}"
-        title="{{ $holiday->name }} ({{ $holiday->kind }})"
+        title="{{ $holiday->name }} ({{ $holiday->kindLabel() }})"
         data-bs-toggle="modal"
         data-bs-target="#holidayViewModal"
         data-name="{{ $holiday->name }}"
         data-kind="{{ $holiday->kind }}"
+        data-kind-label="{{ $holiday->kindLabel() }}"
+        data-kind-help="{{ $holiday->kindHelp() }}"
         data-date="{{ $holiday->holiday_date->format('D, d M Y') }}"
         data-iso="{{ $date }}"
         @if($canEdit) data-delete="{{ route('holidays.destroy', $holiday) }}" @endif

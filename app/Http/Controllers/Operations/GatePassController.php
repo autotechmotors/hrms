@@ -61,7 +61,9 @@ class GatePassController extends Controller
                 'today' => $request->boolean('today'),
             ],
             'canCreate' => $user->hasPermission('gate_passes.create'),
-            'canDecide' => $user->hasPermission('gate_passes.decide'),
+            'canDecide' => $user->hasPermission('gate_passes.decide')
+                || $user->hasPermission('gate_passes.manage')
+                || ($user->employee && $user->employee->managedEmployeeIds()->isNotEmpty()),
             'canManage' => $user->hasPermission('gate_passes.manage'),
         ]);
     }
@@ -104,7 +106,6 @@ class GatePassController extends Controller
         return view('operations.gate-passes.show', [
             'gatePass' => $gatePass,
             'canDecide' => $gatePass->isPending()
-                && $user->hasPermission('gate_passes.decide')
                 && $gatePass->employee
                 && $user->canDecideGatePassFor($gatePass->employee),
         ]);
@@ -112,7 +113,7 @@ class GatePassController extends Controller
 
     public function approve(Request $request, GatePass $gatePass): RedirectResponse
     {
-        $this->authorizeAny('gate_passes.decide');
+        $this->authorizeAny('gate_passes.view');
         $this->assertVisible($gatePass);
         $pass = $this->gatePasses->approve($gatePass, $request->user());
 
@@ -121,7 +122,7 @@ class GatePassController extends Controller
 
     public function reject(Request $request, GatePass $gatePass): RedirectResponse
     {
-        $this->authorizeAny('gate_passes.decide');
+        $this->authorizeAny('gate_passes.view');
         $this->assertVisible($gatePass);
         $pass = $this->gatePasses->reject($gatePass, $request->user(), $request->validate([
             'decision_note' => ['required', 'string', 'min:3', 'max:500'],

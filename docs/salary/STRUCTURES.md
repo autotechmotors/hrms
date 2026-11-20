@@ -1,16 +1,16 @@
 # Salary structures
 
-Salary heads, structures, and employee assignment stay. Payroll must keep reading the same structure records.
+The Salary Structures screen is gone. A person’s monthly amount is saved on Hours & pay. Extra salary-head deductions are not calculated. An advance is the deduction, from Advances & Deductions, and it is taken when a salary sheet that covers that date is approved.
 
 ## Code
 
-- `app/Http/Controllers/Operations/SalaryController.php`
-- Routes: `salary.index`, `salary.heads.store`, `salary.structures.store`, `salary.assign`
+- `app/Http/Controllers/Operations/HoursPayController.php` `storeEmployeeSalary`
+- Route: `hours-pay.employees.salary`
 
 ## Menu
 
-View uses `salary.view`. Head, structure, and assign writes use `salary.manage`. Grants follow roles that can open Salary today. Map: `docs/roles/NAV-PERMISSIONS.md`.
+Hours & pay uses `salary.view` to open and `salary.manage` to save the amount. Map: `docs/roles/NAV-PERMISSIONS.md`.
 
 ## Visual
 
-Chrome only. Do not change head or structure field names that payroll compute already reads.
+The amount and the start date are the fields. There is no structure picker.

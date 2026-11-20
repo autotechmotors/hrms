@@ -4,7 +4,7 @@
     <div class="ph">
         <div>
             <x-back :href="route('more')" label="More" />
-            <h1>Edit profile</h1>
+            <h1>{{ __('Edit profile') }}</h1>
             <p>Update your name, email, and password.</p>
         </div>
     </div>
@@ -18,7 +18,7 @@
             <x-text-field name="password" label="New password" type="password" autocomplete="new-password" />
             <x-text-field name="password_confirmation" label="Confirm password" type="password" autocomplete="new-password" />
             <div class="more-save">
-                <a class="btn" href="{{ route('more') }}">Cancel</a>
+                <a class="btn" href="{{ route('more') }}">{{ __('Cancel') }}</a>
                 <button class="btn pr" type="submit">Save profile</button>
             </div>
         </form>

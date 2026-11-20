@@ -1,6 +1,6 @@
 # Advances and deductions
 
-Create and close stay. There is no monthly EMI and no start date. The advance is given in the current month. Payroll deducts the full amount once, from that month’s salary only, as a deduction line named `Advance · {title}`. Approving that month marks the advance deducted. A closed advance is not deducted.
+Create and close stay. The form has a title and an amount of at least 1. There is no EMI field and no date field. The given date is today, stored as `starts_on`. A salary sheet deducts the full remaining amount once, as a line named `Advance · {title}`, when that given date falls inside the sheet. Approving the sheet sets status `completed` and balance 0. Close sets status `closed` and does not deduct. `advances.manage` or `payroll.process` can create and close.
 
 ## Code
 

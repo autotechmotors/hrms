@@ -4,7 +4,7 @@
     <div class="ph">
         <div>
             <div class="sg-title">
-                <h1>Salary sheets</h1>
+                <h1>{{ __('Salary sheets') }}</h1>
                 <div class="sg-help" id="sgHelp">
                     <button class="sg-info" id="sgInfo" type="button" aria-label="How a salary sheet works" aria-expanded="false" aria-controls="sgPop">
                         <x-i name="help" :size="15" />
@@ -30,7 +30,7 @@
         <section class="card sg-card">
             <header>
                 <div>
-                    <h3>Generate a sheet</h3>
+                    <h3>{{ __('Generate a sheet') }}</h3>
                     <p>Generating sends this salary to the accountant. They approve it, or reject it with a reason.</p>
                 </div>
             </header>
@@ -64,7 +64,7 @@
     <section class="card sg-card">
         <header class="sg-hist-head">
             <div>
-                <h3>Requests</h3>
+                <h3>{{ __('Requests') }}</h3>
                 <p>Pending requests are waiting for the accountant. Super Admin and Admin can approve or reject them too.</p>
             </div>
             <div class="sg-hist-tools">

@@ -10,7 +10,10 @@ class CompanyBankAccount extends Model
 {
     use AuditsChanges, BelongsToCompany;
 
-    protected $fillable = ['company_id', 'label', 'bank_name', 'account_number', 'account_last4', 'ifsc', 'is_primary'];
+    protected $fillable = [
+        'company_id', 'label', 'account_holder', 'bank_name', 'branch_name',
+        'account_number', 'account_last4', 'ifsc', 'gst_number', 'is_primary',
+    ];
 
     protected $hidden = ['account_number'];
 

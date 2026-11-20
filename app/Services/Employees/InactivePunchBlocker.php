@@ -16,7 +16,7 @@ class InactivePunchBlocker
      */
     public const PROTECTED_ROLES = ['super-admin', 'hr-admin'];
 
-    /** @var array<int, Carbon>|null */
+    /** @var array<int, array{at: Carbon, from_punch: bool}>|null */
     private ?array $activity = null;
 
     public function apply(?int $companyId = null): int
@@ -45,7 +45,6 @@ class InactivePunchBlocker
     public function candidates(CompanySetting $setting): Collection
     {
         $days = max(1, (int) $setting->block_inactive_days);
-        $cutoff = now()->startOfDay()->subDays($days);
 
         $employees = Employee::query()
             ->with(['role', 'department', 'user.roles', 'employmentStatus'])
@@ -58,22 +57,45 @@ class InactivePunchBlocker
         $this->rememberActivity($employees);
 
         return $employees
-            ->filter(function (Employee $employee) use ($cutoff): bool {
+            ->filter(function (Employee $employee) use ($days): bool {
                 return ! $this->isProtected($employee)
-                    && $this->lastPunchAt($employee)->lt($cutoff);
+                    && $this->idleDays($employee) >= $days;
             })
             ->values();
     }
 
     public function idleDays(Employee $employee): int
     {
-        return (int) $this->lastPunchAt($employee)->startOfDay()->diffInDays(now()->startOfDay());
+        $mark = $this->mark($employee);
+        $today = now()->startOfDay();
+        $anchor = $mark['at']->copy()->startOfDay();
+        if ($anchor->gt($today)) {
+            return 0;
+        }
+
+        $span = (int) round($anchor->diffInDays($today, true));
+        if ($mark['from_punch']) {
+            return max(0, $span - 1);
+        }
+
+        return $span;
     }
 
     public function lastPunchAt(Employee $employee): Carbon
     {
+        return $this->mark($employee)['at']->copy();
+    }
+
+    /**
+     * @return array{at: Carbon, from_punch: bool}
+     */
+    private function mark(Employee $employee): array
+    {
         if ($this->activity !== null && array_key_exists($employee->id, $this->activity)) {
-            return $this->activity[$employee->id]->copy();
+            return [
+                'at' => $this->activity[$employee->id]['at']->copy(),
+                'from_punch' => $this->activity[$employee->id]['from_punch'],
+            ];
         }
 
         $punch = AttendancePunch::query()
@@ -85,7 +107,7 @@ class InactivePunchBlocker
             ->where(fn ($query) => $query->whereNotNull('punch_in')->orWhereNotNull('punch_out'))
             ->max('work_date');
 
-        return $this->resolveLastPunch($punch, $day, $employee);
+        return $this->resolveMark($punch, $day, $employee);
     }
 
     private function rememberActivity(Collection $employees): void
@@ -110,7 +132,7 @@ class InactivePunchBlocker
             ->pluck('work_date', 'employee_id');
 
         foreach ($employees as $employee) {
-            $this->activity[$employee->id] = $this->resolveLastPunch(
+            $this->activity[$employee->id] = $this->resolveMark(
                 $punches[$employee->id] ?? null,
                 $days[$employee->id] ?? null,
                 $employee,
@@ -118,7 +140,13 @@ class InactivePunchBlocker
         }
     }
 
-    private function resolveLastPunch(mixed $punch, mixed $day, Employee $employee): Carbon
+    /**
+     * A punch day is not an empty day. With no punch, the joining date is the first empty day.
+     * Today is never counted, because it is not a full day yet.
+     *
+     * @return array{at: Carbon, from_punch: bool}
+     */
+    private function resolveMark(mixed $punch, mixed $day, Employee $employee): array
     {
         $dates = array_filter([
             $punch ? Carbon::parse($punch) : null,
@@ -126,12 +154,18 @@ class InactivePunchBlocker
         ]);
 
         if ($dates !== []) {
-            return collect($dates)->reduce(
-                fn (?Carbon $best, Carbon $date) => $best && $best->gt($date) ? $best : $date
-            );
+            return [
+                'at' => collect($dates)->reduce(
+                    fn (?Carbon $best, Carbon $date) => $best && $best->gt($date) ? $best : $date
+                ),
+                'from_punch' => true,
+            ];
         }
 
-        return Carbon::parse($employee->joining_date ?? $employee->created_at)->startOfDay();
+        return [
+            'at' => Carbon::parse($employee->joining_date ?? $employee->created_at)->startOfDay(),
+            'from_punch' => false,
+        ];
     }
 
     public function isProtected(Employee $employee): bool

@@ -1,31 +1,20 @@
 @extends('layouts.app')
 @section('title', 'Leave Management')
 @section('content')
-    @php
-        $statusLabels = [
-            'pending' => 'Pending',
-            'approved' => 'Approved',
-            'rejected' => 'Rejected',
-        ];
-        $statusClass = [
-            'pending' => 'wn',
-            'approved' => 'ok',
-            'rejected' => 'er',
-        ];
-    @endphp
-
     <div class="ph">
         <div>
-            <h1>Leave Management</h1>
-            <p>Staff record leave for employees. Employees do not apply themselves.</p>
+            <h1>{{ __('Leave Management') }}</h1>
+            <p>{{ __('An employee can request leave. Super Admin, HR Admin, and that employee’s parent approve it or reject it with a reason.') }}</p>
         </div>
         <div class="ac">
             @if($canEdit)
-                <button class="btn" type="button" data-bs-toggle="modal" data-bs-target="#leaveTypeModal">
-                    <x-i name="plus" :size="14" />Add type
+                <button class="btn" type="button" data-bs-toggle="modal" data-bs-target="#leaveTypeModal" data-mode="create">
+                    <x-i name="plus" :size="14" />{{ __('Add type') }}
                 </button>
-                <button class="btn pr" type="button" data-bs-toggle="modal" data-bs-target="#leaveRecordModal">
-                    <x-i name="plus" :size="14" />Record leave
+            @endif
+            @if($canEdit || $canApply)
+                <button class="btn pr" type="button" data-bs-toggle="modal" data-bs-target="#leaveRecordModal" data-mode="create">
+                    <x-i name="plus" :size="14" />{{ $canEdit ? __('Record leave') : __('Request leave') }}
                 </button>
             @endif
         </div>
@@ -33,250 +22,57 @@
 
     @include('operations.errors')
 
-    <div class="lv-stats g c4">
-        <div class="card kp">
-            <small><span class="lv-dot pending"></span>Pending</small>
-            <b>{{ $stats['pending'] }}</b>
-            <span>Waiting for decision</span>
-        </div>
-        <div class="card kp">
-            <small><span class="lv-dot approved"></span>Approved</small>
-            <b>{{ $stats['approved'] }}</b>
-            <span>Counted on roster</span>
-        </div>
-        <div class="card kp">
-            <small><span class="lv-dot rejected"></span>Rejected</small>
-            <b>{{ $stats['rejected'] }}</b>
-            <span>Not counted</span>
-        </div>
-        <div class="card kp">
-            <small><span class="lv-dot types"></span>Leave types</small>
-            <b>{{ $stats['types'] }}</b>
-            <span>Policies for this company</span>
-        </div>
+    <div id="leaveBody">
+        @include('operations.leave._body')
     </div>
-
-    <section class="card lv-types">
-        <header>
-            <div>
-                <h3>Leave types</h3>
-                <p>Yearly days of 0 means no cap. Offs and holidays are skipped unless counted.</p>
-            </div>
-            @if($canEdit)
-                <button class="btn sm" type="button" data-bs-toggle="modal" data-bs-target="#leaveTypeModal">
-                    <x-i name="plus" :size="12" />New
-                </button>
-            @endif
-        </header>
-        <div class="cb">
-            @if($types->isEmpty())
-                <p class="lv-empty">No leave types yet. Add Casual, Sick, or unpaid policies first.</p>
-            @else
-                <div class="lv-chips">
-                    @foreach($types as $type)
-                        <article class="lv-chip">
-                            <div class="lv-chip-code">{{ $type->code }}</div>
-                            <div class="lv-chip-body">
-                                <div class="lv-chip-top">
-                                    <b title="{{ $type->name }}">{{ $type->name }}</b>
-                                    <span class="b {{ $type->is_paid ? 'ok' : '' }}">{{ $type->is_paid ? 'Paid' : 'Unpaid' }}</span>
-                                </div>
-                                <div class="lv-chip-meta">
-                                    <span>{{ (float) $type->annual_days === 0.0 ? 'No yearly cap' : $type->annual_days.' days / year' }}</span>
-                                    @if($type->counts_weekly_off)
-                                        <span class="lv-chip-sep">·</span>
-                                        <span>Counts off</span>
-                                    @endif
-                                    @if($type->counts_holidays)
-                                        <span class="lv-chip-sep">·</span>
-                                        <span>Counts holidays</span>
-                                    @endif
-                                </div>
-                            </div>
-                        </article>
-                    @endforeach
-                </div>
-            @endif
-        </div>
-    </section>
-
-    <section class="card lv" id="leaveList">
-        <form class="tbar lv-bar" method="get" action="{{ route('leave.index') }}" id="leaveFilters">
-            <div class="sr lv-search">
-                <span><x-i name="search" /></span>
-                <input type="search" name="q" value="{{ $filters['q'] }}" placeholder="Search employee…" autocomplete="off">
-            </div>
-            <select class="in" name="leave_type_id" data-filter>
-                <option value="">All types</option>
-                @foreach($types as $type)
-                    <option value="{{ $type->id }}" @selected((string) $filters['leave_type_id'] === (string) $type->id)>{{ $type->name }}</option>
-                @endforeach
-            </select>
-            <select class="in" name="status" data-filter>
-                <option value="">All statuses</option>
-                @foreach($statusLabels as $value => $label)
-                    <option value="{{ $value }}" @selected($filters['status'] === $value)>{{ $label }}</option>
-                @endforeach
-            </select>
-            <a class="btn lv-reset" href="{{ route('leave.index') }}" title="Reset filters">
-                <x-i name="reset" :size="14" />Reset
-            </a>
-            <div class="sp"></div>
-            <span class="lv-meta">{{ $requests->total() }} {{ \Illuminate\Support\Str::plural('request', $requests->total()) }}</span>
-        </form>
-
-        <div class="tw lv-table">
-            <table>
-                <thead>
-                    <tr>
-                        <th>Employee</th>
-                        <th>Type</th>
-                        <th>Dates</th>
-                        <th>Days</th>
-                        <th>Reason</th>
-                        <th>Status</th>
-                        @if($canEdit)<th class="lv-act">Action</th>@endif
-                    </tr>
-                </thead>
-                <tbody>
-                @forelse($requests as $row)
-                    @php
-                        $badge = $statusClass[$row->status] ?? '';
-                        $label = $statusLabels[$row->status] ?? ucfirst($row->status);
-                    @endphp
-                    <tr class="{{ $row->status === 'pending' ? 'lv-row-pending' : '' }}">
-                        <td>
-                            @if($row->employee)
-                                <div class="who">
-                                    <x-employee-avatar :employee="$row->employee" :size="32" />
-                                    <div>
-                                        <b>{{ $row->employee->full_name }}</b>
-                                        <small>{{ $row->employee->employee_code }}@if($row->employee->department) · {{ $row->employee->department->name }}@endif</small>
-                                    </div>
-                                </div>
-                            @else
-                                —
-                            @endif
-                        </td>
-                        <td>
-                            <span class="lv-type">{{ $row->leaveType?->code ?? '—' }}</span>
-                            <small class="lv-type-name">{{ $row->leaveType?->name }}</small>
-                        </td>
-                        <td class="lv-dates">
-                            <b>{{ $row->starts_on->format('d M') }} – {{ $row->ends_on->format('d M Y') }}</b>
-                            @if($row->starts_on->equalTo($row->ends_on))
-                                <small>{{ $row->starts_on->format('l') }}</small>
-                            @endif
-                        </td>
-                        <td class="lv-days">{{ $row->days }}</td>
-                        <td>
-                            <span class="lv-reason" title="{{ $row->reason }}">{{ \Illuminate\Support\Str::limit($row->reason, 36) }}</span>
-                        </td>
-                        <td><span class="b {{ $badge }}">{{ $label }}</span></td>
-                        @if($canEdit)
-                            <td class="lv-act">
-                                <div class="lv-ops">
-                                    @if($row->status === 'pending')
-                                        <form method="post" action="{{ route('leave.decide', $row) }}" class="lv-decide" data-confirm="Approve leave for {{ $row->employee?->full_name }}?">
-                                            @csrf
-                                            <input type="hidden" name="decision" value="approved">
-                                            @include('operations.leave._retain', ['filters' => $filters])
-                                            <button class="btn sm pr" type="submit" title="Approve">Approve</button>
-                                        </form>
-                                        <form method="post" action="{{ route('leave.decide', $row) }}" class="lv-decide" data-confirm="Reject leave for {{ $row->employee?->full_name }}?">
-                                            @csrf
-                                            <input type="hidden" name="decision" value="rejected">
-                                            @include('operations.leave._retain', ['filters' => $filters])
-                                            <button class="btn sm" type="submit" title="Reject">Reject</button>
-                                        </form>
-                                    @endif
-                                    <button
-                                        class="ib"
-                                        type="button"
-                                        title="Edit"
-                                        data-bs-toggle="modal"
-                                        data-bs-target="#leaveRecordModal"
-                                        data-mode="edit"
-                                        data-action="{{ route('leave.update', $row) }}"
-                                        data-employee-id="{{ $row->employee_id }}"
-                                        data-leave-type-id="{{ $row->leave_type_id }}"
-                                        data-starts-on="{{ $row->starts_on->toDateString() }}"
-                                        data-ends-on="{{ $row->ends_on->toDateString() }}"
-                                        data-reason="{{ $row->reason }}"
-                                    >
-                                        <x-i name="pen" :size="14" />
-                                    </button>
-                                    <form method="post" action="{{ route('leave.destroy', $row) }}" data-confirm="Delete leave for {{ $row->employee?->full_name }}? This cannot be undone.">
-                                        @csrf @method('delete')
-                                        @include('operations.leave._retain', ['filters' => $filters])
-                                        <button class="ib er" type="submit" title="Delete"><x-i name="trash" :size="14" /></button>
-                                    </form>
-                                </div>
-                            </td>
-                        @endif
-                    </tr>
-                @empty
-                    <tr>
-                        <td colspan="{{ $canEdit ? 7 : 6 }}" class="lv-empty-row">No leave requests match these filters.</td>
-                    </tr>
-                @endforelse
-                </tbody>
-            </table>
-        </div>
-        <div class="pgn">
-            <span>{{ $requests->firstItem() ?? 0 }}–{{ $requests->lastItem() ?? 0 }} of {{ $requests->total() }}</span>
-            <div>{{ $requests->links() }}</div>
-        </div>
-    </section>
 
     @if($canEdit)
         <div class="modal fade" id="leaveTypeModal" tabindex="-1" aria-labelledby="leaveTypeTitle" aria-hidden="true">
             <div class="modal-dialog modal-dialog-centered">
-                <form class="modal-content" method="post" action="{{ route('leave.types.store') }}">
+                <form class="modal-content" method="post" action="{{ route('leave.types.store') }}" id="leaveTypeForm">
                     @csrf
+                    <input type="hidden" name="_method" id="leaveTypeMethod" value="POST">
                     @include('operations.leave._retain', ['filters' => $filters])
                     <div class="modal-header">
-                        <h5 class="modal-title" id="leaveTypeTitle">Add leave type</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        <h5 class="modal-title" id="leaveTypeTitle">{{ __('Add leave type') }}</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ __('Close') }}"></button>
                     </div>
                     <div class="modal-body lv-modal-body">
-                        <p class="lv-modal-help">Yearly days of 0 means unlimited. Tick offs/holidays only if those days should reduce the balance.</p>
+                        <p class="lv-modal-help">{{ __('Cutoff takes one day of pay for each leave day. No cutoff pays that day. Weekly offs and company holidays are not counted as leave.') }}</p>
+                        <label class="form-label">{{ __('Department') }}</label>
+                        <select class="in w-100" name="department_ids[]" id="leaveTypeDepartment" multiple>
+                            <option value="">{{ __('All departments') }}</option>
+                            @foreach($departments as $department)
+                                <option value="{{ $department->id }}">{{ $department->name }}</option>
+                            @endforeach
+                        </select>
+                        <p class="lv-modal-help">{{ __('Pick one or more departments. Leave it empty to use this type for every department.') }}</p>
                         <div class="lv-modal-grid">
                             <div>
-                                <label class="form-label">Name *</label>
-                                <input class="in w-100" name="name" required value="{{ old('name') }}" placeholder="Casual">
+                                <label class="form-label">{{ __('Name') }} *</label>
+                                <input class="in w-100" name="name" id="leaveTypeName" required maxlength="120" placeholder="Casual">
                             </div>
                             <div>
-                                <label class="form-label">Code *</label>
-                                <input class="in w-100" name="code" required value="{{ old('code') }}" placeholder="CL" maxlength="40">
+                                <label class="form-label">{{ __('Code') }} *</label>
+                                <input class="in w-100" name="code" id="leaveTypeCode" required maxlength="40" placeholder="CL">
                             </div>
                         </div>
-                        <div class="lv-modal-grid">
-                            <div>
-                                <label class="form-label">Yearly days</label>
-                                <input class="in w-100" type="number" step="0.5" min="0" name="annual_days" value="{{ old('annual_days', 0) }}">
-                            </div>
-                            <div>
-                                <label class="form-label">Paid</label>
-                                <select class="in w-100" name="is_paid">
-                                    <option value="1" @selected(old('is_paid', '1') == '1')>Paid</option>
-                                    <option value="0" @selected(old('is_paid') === '0')>Unpaid</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="lv-checks">
-                            <label class="lv-check"><input type="checkbox" name="counts_weekly_off" value="1" @checked(old('counts_weekly_off'))><span>Count weekly off</span></label>
-                            <label class="lv-check"><input type="checkbox" name="counts_holidays" value="1" @checked(old('counts_holidays'))><span>Count holidays</span></label>
-                        </div>
+                        <label class="form-label">{{ __('Salary cutoff') }} *</label>
+                        <select class="in w-100" name="cuts_pay" id="leaveTypeCutoff" required>
+                            <option value="0">{{ __('No — pay the day') }}</option>
+                            <option value="1">{{ __('Yes — cut the day from salary') }}</option>
+                        </select>
                     </div>
                     <div class="modal-footer">
-                        <button type="button" class="btn" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" class="btn pr">Save type</button>
+                        <button type="button" class="btn" data-bs-dismiss="modal">{{ __('Cancel') }}</button>
+                        <button type="submit" class="btn pr" id="leaveTypeSubmit">{{ __('Save type') }}</button>
                     </div>
                 </form>
             </div>
         </div>
+    @endif
 
+    @if($canEdit || $canApply)
         <div class="modal fade" id="leaveRecordModal" tabindex="-1" aria-labelledby="leaveRecordTitle" aria-hidden="true">
             <div class="modal-dialog modal-dialog-centered">
                 <form class="modal-content" method="post" action="{{ route('leave.store') }}" id="leaveRecordForm">
@@ -284,41 +80,70 @@
                     <input type="hidden" name="_method" id="leaveMethod" value="POST">
                     @include('operations.leave._retain', ['filters' => $filters])
                     <div class="modal-header">
-                        <h5 class="modal-title" id="leaveRecordTitle">Record leave</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        <h5 class="modal-title" id="leaveRecordTitle">{{ __('Request leave') }}</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ __('Close') }}"></button>
                     </div>
                     <div class="modal-body lv-modal-body">
-                        <p class="lv-modal-help" id="leaveEditNote" hidden>Editing resets the request to pending for approval again.</p>
-                        <label class="form-label">Employee *</label>
-                        <select class="in w-100" name="employee_id" id="leaveEmployee" required>
-                            <option value="">Select employee</option>
-                            @foreach($employees as $employee)
-                                <option value="{{ $employee->id }}" @selected(old('employee_id') == $employee->id)>{{ $employee->employee_code }} — {{ $employee->full_name }}</option>
-                            @endforeach
-                        </select>
-                        <label class="form-label">Leave type *</label>
+                        <p class="lv-modal-help" id="leaveEditNote" hidden>{{ __('Editing resets the request to pending for approval again.') }}</p>
+                        <label class="form-label">{{ __('Employee') }} *</label>
+                        @if($canEdit)
+                            <select class="in w-100" name="employee_id" id="leaveEmployee" required>
+                                <option value="">{{ __('Select employee') }}</option>
+                                @foreach($employees as $employee)
+                                    <option value="{{ $employee->id }}" data-department="{{ $employee->department_id }}" data-department-name="{{ $employee->department?->name }}">{{ $employee->employee_code }} — {{ $employee->full_name }}</option>
+                                @endforeach
+                            </select>
+                        @else
+                            <input type="hidden" name="employee_id" id="leaveEmployee" value="{{ $ownEmployee?->id }}">
+                            <input class="in w-100" value="{{ $ownEmployee?->employee_code }} — {{ $ownEmployee?->full_name }}" readonly>
+                        @endif
+                        <label class="form-label">{{ __('Leave type') }} *</label>
                         <select class="in w-100" name="leave_type_id" id="leaveTypeId" required>
-                            <option value="">Select type</option>
-                            @foreach($types as $type)
-                                <option value="{{ $type->id }}" @selected(old('leave_type_id') == $type->id)>{{ $type->code }} — {{ $type->name }}</option>
+                            <option value="">{{ __('Select type') }}</option>
+                            @foreach($typeChoices as $type)
+                                <option value="{{ $type->id }}" data-department="{{ $type->department_id }}">{{ $type->code }} — {{ $type->name }}{{ $type->is_paid ? '' : ' · '.__('Cutoff') }}</option>
                             @endforeach
                         </select>
+                        <p class="lv-modal-help" id="leaveTypeHint"></p>
                         <div class="lv-modal-grid">
                             <div>
-                                <label class="form-label">From *</label>
-                                <input class="in w-100" type="date" name="starts_on" id="leaveStartsOn" required value="{{ old('starts_on') }}">
+                                <label class="form-label">{{ __('From') }} *</label>
+                                <input class="in w-100" type="date" name="starts_on" id="leaveStartsOn" required>
                             </div>
                             <div>
-                                <label class="form-label">To *</label>
-                                <input class="in w-100" type="date" name="ends_on" id="leaveEndsOn" required value="{{ old('ends_on') }}">
+                                <label class="form-label">{{ __('To') }} *</label>
+                                <input class="in w-100" type="date" name="ends_on" id="leaveEndsOn" required>
                             </div>
                         </div>
-                        <label class="form-label">Reason *</label>
-                        <input class="in w-100" name="reason" id="leaveReason" required maxlength="500" value="{{ old('reason') }}" placeholder="Short note for HR">
+                        <label class="form-label">{{ __('Reason') }} *</label>
+                        <input class="in w-100" name="reason" id="leaveReason" required maxlength="500" placeholder="{{ __('Short note') }}">
                     </div>
                     <div class="modal-footer">
-                        <button type="button" class="btn" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" class="btn pr" id="leaveSubmitBtn">Save leave</button>
+                        <button type="button" class="btn" data-bs-dismiss="modal">{{ __('Cancel') }}</button>
+                        <button type="submit" class="btn pr" id="leaveSubmitBtn">{{ __('Send request') }}</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="modal fade" id="leaveRejectModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <form class="modal-content" method="post" action="#" id="leaveRejectForm">
+                    @csrf
+                    @include('operations.leave._retain', ['filters' => $filters])
+                    <input type="hidden" name="decision" value="rejected">
+                    <div class="modal-header">
+                        <h5 class="modal-title">{{ __('Reject leave') }}</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ __('Close') }}"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p class="lv-modal-help" id="leaveRejectName"></p>
+                        <label class="form-label">{{ __('Rejection reason') }} *</label>
+                        <textarea class="in w-100" name="decision_note" id="leaveRejectNote" required maxlength="500" rows="3"></textarea>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn" data-bs-dismiss="modal">{{ __('Cancel') }}</button>
+                        <button type="submit" class="btn pr">{{ __('Reject') }}</button>
                     </div>
                 </form>
             </div>
@@ -329,84 +154,258 @@
 @push('scripts')
 <script>
 (function ($) {
-    const form = $('#leaveFilters');
-    if (form.length) {
-        let timer = null;
-        form.on('change', '[data-filter]', function () {
-            form.trigger('submit');
+    const body = document.getElementById('leaveBody');
+    let searchTimer = null;
+    let paintLeaveTypes = function () {};
+
+    function bindLeaveSelects() {
+        if (!window.jQuery || !window.jQuery.fn.select2 || !body) return;
+        window.jQuery(body).find('select').not('[data-native]').each(function () {
+            const select = window.jQuery(this);
+            if (select.data('select2')) return;
+            const blank = select.find('option[value=""]').first();
+            select.select2({
+                width: '100%',
+                dropdownParent: window.jQuery(document.body),
+                minimumResultsForSearch: select.find('option').length > 8 ? 0 : Infinity,
+                placeholder: blank.length ? blank.text() : undefined,
+            });
         });
-        form.on('input', 'input[name="q"]', function () {
-            clearTimeout(timer);
-            timer = setTimeout(function () { form.trigger('submit'); }, 350);
+    }
+
+    function reloadLeave() {
+        if (!body) return;
+        const filterForm = document.getElementById('leaveFilters');
+        const url = new URL(filterForm ? filterForm.action : window.location.href, window.location.origin);
+        if (filterForm) {
+            new FormData(filterForm).forEach(function (value, key) {
+                if (value) url.searchParams.set(key, value);
+                else url.searchParams.delete(key);
+            });
+        }
+        const clean = new URL(url.toString());
+        window.history.replaceState({}, '', clean.pathname + clean.search);
+        url.searchParams.set('partial', '1');
+        window.jQuery.ajax({
+            url: url.toString(),
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            success: function (html) {
+                body.innerHTML = html;
+                bindLeaveSelects();
+                paintLeaveTypes('');
+                document.dispatchEvent(new CustomEvent('hrms:list-updated', { bubbles: true }));
+            }
+        });
+    }
+
+    document.addEventListener('change', function (event) {
+        if (event.target.closest && event.target.closest('#leaveFilters') && event.target.matches('[data-filter]')) {
+            reloadLeave();
+        }
+    });
+    document.addEventListener('input', function (event) {
+        if (!event.target.matches || !event.target.matches('#leaveFilters input[name="q"]')) return;
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(reloadLeave, 350);
+    });
+
+    function sendForm(form) {
+        const data = new FormData(form);
+        window.jQuery.ajax({
+            url: form.action,
+            method: 'POST',
+            data: data,
+            processData: false,
+            contentType: false,
+            headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
+            success: function (body) {
+                window.toast((body && body.message) || 'Saved');
+                form.querySelectorAll('.modal').forEach(function () {});
+                document.querySelectorAll('.modal.show').forEach(function (node) {
+                    const modal = bootstrap.Modal.getInstance(node);
+                    if (modal) modal.hide();
+                });
+                reloadLeave();
+            },
+            error: function (xhr) {
+                const errors = xhr.responseJSON && xhr.responseJSON.errors;
+                const first = errors ? Object.values(errors)[0] : null;
+                window.toast((first && first[0]) || (xhr.responseJSON && xhr.responseJSON.message) || 'Could not save', 'er');
+            }
+        });
+    }
+
+    document.addEventListener('submit', function (event) {
+        const form = event.target;
+        if (!form || !form.closest || !form.closest('#leaveBody, #leaveTypeModal, #leaveRecordModal, #leaveRejectModal')) return;
+        if (form.id === 'leaveFilters') {
+            event.preventDefault();
+            reloadLeave();
+            return;
+        }
+        event.preventDefault();
+        event.stopPropagation();
+        if (form.dataset.confirm && form.dataset.confirmed !== '1') {
+            window.askConfirm(form.dataset.confirm, { danger: true }).then(function (ok) {
+                if (!ok) return;
+                form.dataset.confirmed = '1';
+                sendForm(form);
+            });
+            return;
+        }
+        sendForm(form);
+    }, true);
+
+    const typeModal = document.getElementById('leaveTypeModal');
+    const typeStore = @json(route('leave.types.store'));
+    if (typeModal) {
+        typeModal.addEventListener('show.bs.modal', function (event) {
+            const btn = event.relatedTarget;
+            const form = document.getElementById('leaveTypeForm');
+            const method = document.getElementById('leaveTypeMethod');
+            const editing = btn && btn.getAttribute('data-mode') === 'edit';
+            document.getElementById('leaveTypeTitle').textContent = editing ? @json(__('Edit leave type')) : @json(__('Add leave type'));
+            document.getElementById('leaveTypeSubmit').textContent = editing ? @json(__('Update type')) : @json(__('Save type'));
+            form.action = editing ? btn.getAttribute('data-action') : typeStore;
+            method.value = editing ? 'PUT' : 'POST';
+            const department = document.getElementById('leaveTypeDepartment');
+            const cutoff = document.getElementById('leaveTypeCutoff');
+            const departmentId = editing ? (btn.getAttribute('data-department-id') || '') : '';
+            document.getElementById('leaveTypeName').value = editing ? (btn.getAttribute('data-name') || '') : '';
+            document.getElementById('leaveTypeCode').value = editing ? (btn.getAttribute('data-code') || '') : '';
+            cutoff.value = editing ? (btn.getAttribute('data-cuts-pay') || '0') : '0';
+            if (window.jQuery) {
+                window.jQuery(department).val(departmentId ? [departmentId] : null).trigger('change');
+                window.jQuery(cutoff).trigger('change');
+            }
         });
     }
 
     const modal = document.getElementById('leaveRecordModal');
-    if (!modal) return;
+    if (modal) {
+        const recordForm = document.getElementById('leaveRecordForm');
+        const methodInput = document.getElementById('leaveMethod');
+        const title = document.getElementById('leaveRecordTitle');
+        const note = document.getElementById('leaveEditNote');
+        const submitBtn = document.getElementById('leaveSubmitBtn');
+        const storeUrl = @json(route('leave.store'));
+        const ownDepartment = @json((string) ($ownEmployee->department_id ?? ''));
+        const ownDepartmentName = @json((string) ($ownEmployee?->department?->name ?? ''));
+        const typeCopy = {
+            pickEmployee: @json(__('Select an employee first')),
+            pickType: @json(__('Select type')),
+            none: @json(__('No leave type for this department')),
+            wait: @json(__('Select an employee. Only that department’s leave types are shown.')),
+            empty: @json(__(':department has no leave type yet.')),
+            ready: @json(__('Showing leave types for :department.')),
+        };
 
-    const recordForm = document.getElementById('leaveRecordForm');
-    const methodInput = document.getElementById('leaveMethod');
-    const title = document.getElementById('leaveRecordTitle');
-    const note = document.getElementById('leaveEditNote');
-    const submitBtn = document.getElementById('leaveSubmitBtn');
-    const storeUrl = @json(route('leave.store'));
-
-    function setDateValue(input, value) {
-        if (!input) return;
-        input.value = value || '';
-        if (input._flatpickr) {
-            input._flatpickr.setDate(value || null, true);
+        function setDateValue(input, value) {
+            if (!input) return;
+            input.value = value || '';
+            if (input._flatpickr) input._flatpickr.setDate(value || null, true);
         }
-    }
 
-    function setSelectValue(input, value) {
-        if (!input) return;
-        const next = value == null ? '' : String(value);
-        input.value = next;
-        const $el = $(input);
-        if ($el.data('select2')) {
+        function setSelectValue(input, value) {
+            if (!input || input.tagName !== 'SELECT') return;
+            const next = value == null ? '' : String(value);
+            input.value = next;
+            const $el = $(input);
+            if ($el.data('select2')) $el.val(next).trigger('change');
+            else input.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+
+        paintLeaveTypes = function (selected) {
+            const select = document.getElementById('leaveTypeId');
+            const source = document.getElementById('leaveTypeChoiceSource');
+            if (!select || !source) return;
+            const employee = document.getElementById('leaveEmployee');
+            let chosen = Boolean(employee && employee.tagName !== 'SELECT');
+            let department = chosen ? ownDepartment : '';
+            let departmentName = chosen ? ownDepartmentName : '';
+            if (employee && employee.tagName === 'SELECT') {
+                const option = Array.from(employee.options).find(function (item) { return item.value === employee.value; });
+                chosen = Boolean(option && option.value);
+                department = chosen ? (option.getAttribute('data-department') || '') : '';
+                departmentName = chosen ? (option.getAttribute('data-department-name') || '') : '';
+            }
+            const $el = window.jQuery(select);
+            if ($el.data('select2')) $el.select2('destroy');
+            const matched = [];
+            source.content.querySelectorAll('option').forEach(function (type) {
+                const typeDepartment = type.getAttribute('data-department') || '';
+                if (!chosen && typeDepartment !== '') return;
+                if (chosen && typeDepartment !== '' && typeDepartment !== department) return;
+                matched.push(type.cloneNode(true));
+            });
+            const blankLabel = !chosen ? typeCopy.pickEmployee : (matched.length ? typeCopy.pickType : typeCopy.none);
+            select.innerHTML = '';
+            const blank = document.createElement('option');
+            blank.value = '';
+            blank.textContent = blankLabel;
+            select.appendChild(blank);
+            matched.forEach(function (type) { select.appendChild(type); });
+            const hint = document.getElementById('leaveTypeHint');
+            if (hint) {
+                const name = departmentName || 'This department';
+                hint.textContent = !chosen
+                    ? typeCopy.wait
+                    : (matched.length ? typeCopy.ready : typeCopy.empty).replace(':department', name);
+            }
+            $el.select2({
+                width: '100%',
+                dropdownParent: window.jQuery(document.body),
+                minimumResultsForSearch: select.options.length > 8 ? 0 : Infinity,
+                placeholder: blankLabel,
+            });
+            const next = selected && select.querySelector('option[value="' + String(selected) + '"]') ? String(selected) : '';
             $el.val(next).trigger('change');
-        } else {
-            input.dispatchEvent(new Event('change', { bubbles: true }));
+        };
+
+        function fillLeaveForm(btn) {
+            const mode = btn && btn.getAttribute('data-mode');
+            if (mode === 'edit' && btn) {
+                title.textContent = @json(__('Edit leave'));
+                note.hidden = false;
+                submitBtn.textContent = @json(__('Update leave'));
+                recordForm.action = btn.getAttribute('data-action');
+                methodInput.value = 'PUT';
+                setSelectValue(document.getElementById('leaveEmployee'), btn.getAttribute('data-employee-id'));
+                paintLeaveTypes(btn.getAttribute('data-leave-type-id'));
+                setDateValue(document.getElementById('leaveStartsOn'), btn.getAttribute('data-starts-on'));
+                setDateValue(document.getElementById('leaveEndsOn'), btn.getAttribute('data-ends-on'));
+                document.getElementById('leaveReason').value = btn.getAttribute('data-reason') || '';
+                return;
+            }
+            title.textContent = @json($canEdit ? 'Record leave' : 'Request leave');
+            note.hidden = true;
+            submitBtn.textContent = @json(__('Send request'));
+            recordForm.action = storeUrl;
+            methodInput.value = 'POST';
+            setSelectValue(document.getElementById('leaveEmployee'), '');
+            paintLeaveTypes('');
+            setDateValue(document.getElementById('leaveStartsOn'), '');
+            setDateValue(document.getElementById('leaveEndsOn'), '');
+            document.getElementById('leaveReason').value = '';
         }
+
+        modal.addEventListener('show.bs.modal', function (event) { fillLeaveForm(event.relatedTarget); });
+        document.getElementById('leaveEmployee')?.addEventListener('change', function () {
+            paintLeaveTypes(document.getElementById('leaveTypeId')?.value || '');
+        });
+        document.addEventListener('DOMContentLoaded', function () { paintLeaveTypes(''); });
     }
 
-    function fillLeaveForm(btn) {
-        const mode = btn && btn.getAttribute('data-mode');
-
-        if (mode === 'edit' && btn) {
-            title.textContent = 'Edit leave';
-            note.hidden = false;
-            submitBtn.textContent = 'Update leave';
-            recordForm.action = btn.getAttribute('data-action');
-            methodInput.value = 'PUT';
-            setSelectValue(document.getElementById('leaveEmployee'), btn.getAttribute('data-employee-id'));
-            setSelectValue(document.getElementById('leaveTypeId'), btn.getAttribute('data-leave-type-id'));
-            setDateValue(document.getElementById('leaveStartsOn'), btn.getAttribute('data-starts-on'));
-            setDateValue(document.getElementById('leaveEndsOn'), btn.getAttribute('data-ends-on'));
-            document.getElementById('leaveReason').value = btn.getAttribute('data-reason') || '';
-            return;
-        }
-
-        title.textContent = 'Record leave';
-        note.hidden = true;
-        submitBtn.textContent = 'Save leave';
-        recordForm.action = storeUrl;
-        methodInput.value = 'POST';
-        setSelectValue(document.getElementById('leaveEmployee'), '');
-        setSelectValue(document.getElementById('leaveTypeId'), '');
-        setDateValue(document.getElementById('leaveStartsOn'), '');
-        setDateValue(document.getElementById('leaveEndsOn'), '');
-        document.getElementById('leaveReason').value = '';
+    const rejectModal = document.getElementById('leaveRejectModal');
+    if (rejectModal) {
+        rejectModal.addEventListener('show.bs.modal', function (event) {
+            const btn = event.relatedTarget;
+            document.getElementById('leaveRejectForm').action = btn ? btn.getAttribute('data-action') : '#';
+            document.getElementById('leaveRejectName').textContent = btn ? (btn.getAttribute('data-name') || '') : '';
+            document.getElementById('leaveRejectNote').value = '';
+        });
     }
 
-    modal.addEventListener('show.bs.modal', function (event) {
-        fillLeaveForm(event.relatedTarget);
-    });
-
-    modal.addEventListener('shown.bs.modal', function (event) {
-        fillLeaveForm(event.relatedTarget);
-    });
 })(jQuery);
 </script>
 @endpush

@@ -16,7 +16,7 @@
         </div>
         <div class="ac">
             @if($canEdit)
-                <a class="btn" href="{{ route('employees.edit', $employee) }}"><x-i name="pen" :size="14" />Edit</a>
+                <a class="btn" href="{{ route('employees.edit', $employee) }}"><x-i name="pen" :size="14" />{{ __('Edit') }}</a>
             @endif
         </div>
     </div>
@@ -37,7 +37,8 @@
                     <p>{{ $employee->designation?->name ?? 'No designation' }}@if($category) · {{ $category }}@endif</p>
                     <div class="ed-chips">
                         <span>{{ $employee->department?->name ?? 'No department' }}</span>
-                        <span class="et-badge {{ ($times['shift_kind'] ?? 'day') === 'night' ? 'is-night' : 'is-day' }}">{{ ($times['shift_kind'] ?? 'day') === 'night' ? 'Night' : 'Day' }}</span>
+                        @php $shiftToday = app(\App\Services\Operations\ShiftSchedule::class)->kindOn($employee, now()); @endphp
+                        <span class="et-badge {{ $shiftToday === 'night' ? 'is-night' : 'is-day' }}">{{ $shiftToday === 'night' ? 'Night' : 'Day' }}</span>
                     </div>
                 </div>
             </div>
@@ -66,7 +67,7 @@
                 <section class="card ef-sec">
                     <header>
                         <div>
-                            <h3>Identity</h3>
+                            <h3>{{ __('Identity') }}</h3>
                             <p>Name and how they appear on the roster</p>
                         </div>
                     </header>
@@ -84,7 +85,7 @@
                 <section class="card ef-sec">
                     <header>
                         <div>
-                            <h3>Contact</h3>
+                            <h3>{{ __('Contact') }}</h3>
                             <p>How you reach them at work</p>
                         </div>
                     </header>
@@ -100,7 +101,7 @@
                 <section class="card ef-sec">
                     <header>
                         <div>
-                            <h3>Address</h3>
+                            <h3>{{ __('Address') }}</h3>
                             <p>Where they live</p>
                         </div>
                     </header>
@@ -117,7 +118,7 @@
                 <section class="card ef-sec">
                     <header>
                         <div>
-                            <h3>Placement</h3>
+                            <h3>{{ __('Placement') }}</h3>
                             <p>Where they sit in the organisation</p>
                         </div>
                     </header>
@@ -140,10 +141,12 @@
                     'standalone' => true,
                 ])
 
+                @include('employees._shift_month', ['employee' => $employee])
+
                 <section class="card ef-sec">
                     <header>
                         <div>
-                            <h3>Employment terms</h3>
+                            <h3>{{ __('Employment terms') }}</h3>
                             <p>Joining, probation, and notice</p>
                         </div>
                     </header>
@@ -161,7 +164,7 @@
                     <section class="card ef-sec">
                         <header>
                             <div>
-                                <h3>Custom fields</h3>
+                                <h3>{{ __('Custom fields') }}</h3>
                                 <p>Extra details for this company</p>
                             </div>
                         </header>
@@ -180,7 +183,7 @@
                     <section class="card ef-sec" id="attendance">
                         <header>
                             <div>
-                                <h3>Attendance</h3>
+                                <h3>{{ __('Attendance') }}</h3>
                                 <p>Today first, then earlier days</p>
                             </div>
                             <a class="btn sm" href="{{ route('attendance.show', $employee) }}">Open register</a>
@@ -209,7 +212,7 @@
                 <section class="card ef-sec">
                     <header>
                         <div>
-                            <h3>Movement history</h3>
+                            <h3>{{ __('Movement history') }}</h3>
                             <p>Transfers and status changes</p>
                         </div>
                     </header>
@@ -237,7 +240,7 @@
                 <section class="card ef-sec" id="documents">
                     <header>
                         <div>
-                            <h3>Documents</h3>
+                            <h3>{{ __('Documents') }}</h3>
                             <p>Files linked to this person</p>
                         </div>
                         @permission('employee_documents.create')
@@ -279,7 +282,7 @@
                                             </button>
                                             <a class="ib" href="{{ route('employees.documents.download', [$employee, $document]) }}" title="Download" aria-label="Download"><x-i name="dl" :size="14" /></a>
                                             @permission('employee_documents.delete')
-                                                <form method="post" action="{{ route('employees.documents.destroy', [$employee, $document]) }}" data-confirm="Delete this document?">
+                                                <form method="post" action="{{ route('employees.documents.destroy', [$employee, $document]) }}" data-confirm="{{ __('Delete this document?') }}">
                                                     @csrf @method('delete')
                                                     <button class="ib er" type="submit" title="Delete" aria-label="Delete"><x-i name="trash" :size="14" /></button>
                                                 </form>
@@ -299,8 +302,8 @@
                 <section class="card ef-sec" id="bank">
                     <header>
                         <div>
-                            <h3>Bank accounts</h3>
-                            <p>Payroll payout details</p>
+                            <h3>{{ __('Bank accounts') }}</h3>
+                            <p>Used when a salary payment file is prepared</p>
                         </div>
                         @if($canManageBank ?? false)
                             @if($activeBank)
@@ -339,7 +342,7 @@
                 <section class="card ef-sec">
                     <header>
                         <div>
-                            <h3>Exit</h3>
+                            <h3>{{ __('Exit') }}</h3>
                             <p>Resignation and final working dates</p>
                         </div>
                         @if($employee->latestExit)
@@ -384,7 +387,7 @@
                     <x-text-field name="document" label="File" type="file" required />
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn" data-bs-dismiss="modal">{{ __('Cancel') }}</button>
                     <button class="btn pr" type="submit">Upload</button>
                 </div>
             </form>
@@ -437,7 +440,7 @@
                     <x-text-field name="effective_from" label="Effective from" type="date" :value="optional($activeBank?->effective_from)->toDateString() ?: now()->toDateString()" required />
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn" data-bs-dismiss="modal">{{ __('Cancel') }}</button>
                     <button class="btn pr" type="submit">{{ $activeBank ? 'Save changes' : 'Save account' }}</button>
                 </div>
             </form>
@@ -473,7 +476,7 @@
                     <x-text-field name="notes" label="Notes" type="textarea" :value="$employee->latestExit?->notes" />
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn" data-bs-dismiss="modal">{{ __('Cancel') }}</button>
                     <button class="btn pr" type="submit">Save exit</button>
                 </div>
             </form>
@@ -490,16 +493,18 @@
         var box = root.querySelector('[data-sunday]');
         if (!box) return;
         var on = box.checked;
+        var night = root.querySelector('[data-kind]:checked') && root.querySelector('[data-kind]:checked').value === 'night';
         root.querySelectorAll('[data-sunday-times]').forEach(function (el) { el.hidden = !on; });
         root.querySelectorAll('[data-sunday-off]').forEach(function (el) { el.hidden = on; });
         root.querySelectorAll('[data-sunday-times] input').forEach(function (input) {
-            input.required = on && input.name.indexOf('break') === -1;
+            input.required = on && (night || input.name.indexOf('break') === -1);
         });
         var label = root.querySelector('.et-switch-txt');
         if (label) label.textContent = on ? 'On' : 'Off';
     }
     paintSunday(document.getElementById('empTimes'));
     function applyKind(root) {
+        if (!root) return;
         var picked = root.querySelector('[data-kind]:checked');
         var hold = root.querySelector('[data-kind-clocks]');
         if (!picked || !hold) return;
@@ -522,6 +527,9 @@
             badge.classList.toggle('is-night', night);
             badge.classList.toggle('is-day', !night);
         }
+        var title = root.querySelector('[data-sunday-title]');
+        if (title) title.textContent = night ? 'Sunday night' : 'Sunday';
+        paintSunday(root);
     }
     document.addEventListener('change', function (event) {
         var root = event.target.closest('#empTimes');
@@ -544,6 +552,7 @@
             var card = document.getElementById('empTimes');
             if (card) card.outerHTML = body.html;
             paintSunday(document.getElementById('empTimes'));
+            applyKind(document.getElementById('empTimes'));
             window.toast(body.message);
         }).fail(function (xhr) {
             var errors = xhr.responseJSON && xhr.responseJSON.errors;
@@ -553,6 +562,7 @@
     });
 })(jQuery);
 </script>
+
 <script>
 (function () {
     const viewModal = document.getElementById('docViewModal');

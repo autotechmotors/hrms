@@ -129,14 +129,14 @@
     @if($canDecide || $usable)
         <div class="page-actions-bar {{ $canDecide ? 'pass-bar-decide' : 'pass-bar-usable' }}">
             @if($canDecide)
-                <form method="post" action="{{ route('gate-passes.approve', $gatePass) }}" data-confirm="Approve this Gate Pass?">
+                <form method="post" action="{{ route('gate-passes.approve', $gatePass) }}" data-confirm="{{ __('Approve this Gate Pass?') }}">
                     @csrf
                     <button class="act-btn act-btn-success" type="submit">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
                         Approve
                     </button>
                 </form>
-                <form method="post" action="{{ route('gate-passes.reject', $gatePass) }}" data-confirm="Reject this Gate Pass? The employee is notified and the OUT machine stays closed.">
+                <form method="post" action="{{ route('gate-passes.reject', $gatePass) }}" data-confirm="{{ __('Reject this Gate Pass? The employee is notified and the OUT machine stays closed.') }}">
                     @csrf
                     <input type="text" name="decision_note" class="pass-reject-note" required minlength="3" maxlength="500" placeholder="Reject reason" value="{{ old('decision_note') }}">
                     <button class="act-btn act-btn-light act-btn-danger-text" type="submit">

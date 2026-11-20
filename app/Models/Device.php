@@ -15,7 +15,13 @@ class Device extends Model
 
     public const KIND_GATE = 'gate';
 
-    protected $fillable = ['company_id', 'name', 'model', 'serial', 'register_id', 'ip_address', 'username', 'password', 'port', 'place', 'gate_kind', 'status', 'last_checked_at'];
+    public const ROLE_IN = 'in';
+
+    public const ROLE_OUT = 'out';
+
+    public const ROLE_BOTH = 'both';
+
+    protected $fillable = ['company_id', 'name', 'model', 'serial', 'register_id', 'ip_address', 'username', 'password', 'port', 'place', 'gate_kind', 'punch_role', 'status', 'last_checked_at'];
 
     protected $hidden = ['password'];
 
@@ -89,5 +95,15 @@ class Device extends Model
     public function isAttendance(): bool
     {
         return ! $this->isGate();
+    }
+
+    public function readsIn(): bool
+    {
+        return $this->punch_role !== self::ROLE_OUT;
+    }
+
+    public function readsOut(): bool
+    {
+        return $this->punch_role !== self::ROLE_IN;
     }
 }

@@ -1,6 +1,6 @@
 # Shifts and rosters
 
-Shift definitions, single-day roster assignment, and bulk roster assignment stay. Do not change how a shift feeds attendance calculation.
+Shift definitions, single-day roster assignment, and bulk roster assignment stay. A roster night shift replaces the clock only on a Monday–Saturday date that has no saved day or night span. A saved span wins. See `docs/shifts/SCHEDULE.md`. Do not delete the shift or roster code.
 
 ## Code
 

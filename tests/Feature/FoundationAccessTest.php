@@ -28,7 +28,7 @@ class FoundationAccessTest extends TestCase
         $org = $this->makeCompany('NAV');
         $user = $this->makeUser('manager', $org['company']);
 
-        $this->actingAsScoped($user)->get(route('payroll.index'))->assertForbidden();
+        $this->actingAsScoped($user)->get(route('hours-pay.index'))->assertForbidden();
         $this->actingAsScoped($user)->get(route('devices.index'))->assertForbidden();
         $this->actingAsScoped($user)->get(route('attendance.index'))
             ->assertOk()

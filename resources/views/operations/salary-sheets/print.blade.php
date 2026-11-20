@@ -34,13 +34,13 @@
         <tr>
             <th class="left">Code</th>
             <th class="left">Name</th>
-            <th>Attended h</th>
-            <th>Leave</th>
-            <th>Absence</th>
-            <th>Earned</th>
-            <th>Advance</th>
-            <th>Deductions</th>
-            <th>Net</th>
+            <th>{{ __('Attended h') }}</th>
+            <th>{{ __('Leave') }}</th>
+            <th>{{ __('Absence') }}</th>
+            <th>{{ __('Earned') }}</th>
+            <th>{{ __('Advance') }}</th>
+            <th>{{ __('Deductions') }}</th>
+            <th>{{ __('Net') }}</th>
         </tr>
         </thead>
         <tbody>
@@ -82,7 +82,7 @@
                 </tr>
                 </thead>
                 <tbody>
-                @foreach(['in' => 'Check-In', 'out' => 'Check-Out', 'late' => 'Late', 'ot' => 'OT', 'early' => 'Early Leave', 'break' => 'Break', 'attended' => 'Attended', 'status' => 'Status'] as $key => $label)
+                @foreach(['in' => 'Check-In', 'out' => 'Check-Out', 'late' => 'Late', 'ot' => 'OT', 'early' => 'Early Leave', 'break' => 'Break', 'attended' => 'Attended', 'status' => 'Status', 'holiday' => 'Company holiday', 'leave' => 'Leave', 'gate' => 'Gate pass'] as $key => $label)
                     <tr>
                         <th class="left">{{ $label }}</th>
                         @foreach($dates as $date)

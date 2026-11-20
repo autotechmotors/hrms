@@ -1,38 +1,49 @@
 @extends('layouts.app')
 @section('title', 'Companies')
-@section('crumb', 'Companies')
 @section('content')
-    <div class="d-flex justify-content-between mb-3">
-        <h1 class="h3">Companies</h1>
-        @permission('companies.create')<a class="btn btn-primary" href="{{ route('companies.create') }}">Add company</a>@endpermission
+    <div class="ph">
+        <div>
+            <h1>{{ __('Companies') }}</h1>
+            <p>Companies this login can open.</p>
+        </div>
+        <div class="ac">
+            @permission('companies.create')
+                <a class="btn pr" href="{{ route('companies.create') }}"><x-i name="plus" :size="14" />Add company</a>
+            @endpermission
+        </div>
     </div>
-    <form class="row g-2 mb-3" method="get">
-        <div class="col-md-4"><input class="form-control" name="q" value="{{ request('q') }}" placeholder="Search"></div>
-        <div class="col-auto"><button class="btn btn-outline-secondary">Filter</button></div>
-    </form>
-    <div class="card"><div class="table-responsive"><table class="table mb-0">
-        <thead><tr><th>Code</th><th>Name</th><th>City</th><th>Active</th><th></th></tr></thead>
-        <tbody>
-        @forelse($companies as $company)
-            <tr>
-                <td>{{ $company->code }}</td>
-                <td>{{ $company->name }}</td>
-                <td>{{ $company->city }}</td>
-                <td>{{ $company->is_active ? 'Yes' : 'No' }}</td>
-                <td class="text-end">
-                    @permission('companies.edit')<a href="{{ route('companies.edit', $company) }}">Edit</a>@endpermission
-                    @permission('companies.delete')
-                        <form class="d-inline" method="post" action="{{ route('companies.destroy', $company) }}" data-confirm="Delete {{ $company->name }}?">
-                            @csrf @method('delete')
-                            <button class="btn btn-link text-danger p-0">Delete</button>
-                        </form>
-                    @endpermission
-                </td>
-            </tr>
-        @empty
-            <tr><td colspan="5" class="empty-state">No companies yet.</td></tr>
-        @endforelse
-        </tbody>
-    </table></div></div>
-    <div class="mt-3">{{ $companies->links() }}</div>
+    <section class="card">
+        <form class="tbar plain-bar" method="get">
+            <input class="in" name="q" value="{{ request('q') }}" placeholder="Search" autocomplete="off">
+        </form>
+        <div data-live-list="companies" data-page="{{ $companies->currentPage() }}" data-last="{{ $companies->lastPage() }}">
+        <div class="tw">
+            <table>
+                <thead><tr><th>{{ __('Code') }}</th><th>{{ __('Name') }}</th><th>{{ __('City') }}</th><th>{{ __('Active') }}</th><th></th></tr></thead>
+                <tbody data-list-rows>
+                @forelse($companies as $company)
+                    <tr>
+                        <td>{{ $company->code }}</td>
+                        <td>{{ $company->name }}</td>
+                        <td>{{ $company->city }}</td>
+                        <td><span class="b {{ $company->is_active ? 'ok' : '' }}">{{ $company->is_active ? 'Active' : 'Off' }}</span></td>
+                        <td class="org-act">
+                            @permission('companies.edit')<a class="btn sm" href="{{ route('companies.edit', $company) }}">{{ __('Edit') }}</a>@endpermission
+                            @permission('companies.delete')
+                                <form method="post" action="{{ route('companies.destroy', $company) }}" data-confirm="{{ __('Delete :name?', ['name' => $company->name]) }}">
+                                    @csrf @method('delete')
+                                    <button class="btn sm org-del" type="submit">{{ __('Delete') }}</button>
+                                </form>
+                            @endpermission
+                        </td>
+                    </tr>
+                @empty
+                    <tr data-list-empty><td colspan="5" style="text-align:center;color:var(--mu);padding:32px">No companies yet.</td></tr>
+                @endforelse
+                </tbody>
+            </table>
+        </div>
+        @include('partials.list-footer', ['paginator' => $companies])
+        </div>
+    </section>
 @endsection

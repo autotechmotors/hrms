@@ -1,11 +1,19 @@
 @extends('layouts.app')
-@section('title', $title)
-@section('crumb', $title)
+@php
+    $heading = $title;
+    if (is_string($title) && str_starts_with($title, 'New ')) {
+        $heading = __('New :item', ['item' => __(substr($title, 4))]);
+    } elseif (is_string($title) && str_starts_with($title, 'Edit ')) {
+        $heading = __('Edit :name', ['name' => substr($title, 5)]);
+    }
+@endphp
+@section('title', $heading)
+@section('crumb', $heading)
 @section('content')
     <div class="ph">
         <div>
-            <x-back :href="$listUrl" :label="$listLabel" />
-            <h1>{{ $title }}</h1>
+            <x-back :href="$listUrl" :label="__($listLabel)" />
+            <h1>{{ $heading }}</h1>
         </div>
     </div>
     <form class="card card-body org-form" method="post" action="{{ $action }}">
@@ -31,8 +39,8 @@
         @endif
         <x-check-field name="is_active" label="Active" :checked="$record->is_active ?? true" />
         <div class="org-form-actions">
-            <button class="btn pr" type="submit">Save</button>
-            <a class="btn" href="{{ $listUrl }}">Cancel</a>
+            <a class="btn" href="{{ $listUrl }}">{{ __('Cancel') }}</a>
+            <button class="btn pr" type="submit">{{ __('Save') }}</button>
         </div>
     </form>
 @endsection

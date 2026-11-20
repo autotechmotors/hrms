@@ -4,7 +4,7 @@
     <div class="ph">
         <div>
             <x-back :href="route('employees.index')" label="Employees" />
-            <h1>Import employees</h1>
+            <h1>{{ __('Import employees') }}</h1>
             <p><a href="{{ route('employees.import.template') }}">Download the template</a>. Codes must already exist for department, designation, and status. Invalid rows stop the whole file.</p>
         </div>
     </div>

@@ -1,6 +1,6 @@
 # Work calendars
 
-An active work calendar treats Monday through Sunday as working. If a company has no calendar, every weekday is working. A public holiday is the only company-wide non-working day. Do not turn Saturday or Sunday off inside a visual pass.
+An active work calendar treats Monday through Sunday as working. If a company has no calendar, every weekday is working. A public holiday and a cutoff holiday are company-wide non-working days. Do not turn Saturday or Sunday off inside a visual pass.
 
 ## Code
 

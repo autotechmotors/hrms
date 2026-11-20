@@ -7,3 +7,6 @@
 @if(!empty($filters['leave_type_id']))
     <input type="hidden" name="retain_type" value="{{ $filters['leave_type_id'] }}">
 @endif
+@if(!empty($filters['department_id']))
+    <input type="hidden" name="retain_department" value="{{ $filters['department_id'] }}">
+@endif

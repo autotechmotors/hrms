@@ -4,7 +4,7 @@
     <div class="ph">
         <div>
             <x-back :href="route('gate-passes.index')" label="Gate Pass" />
-            <h1>New Gate Pass</h1>
+            <h1>{{ __('New Gate Pass') }}</h1>
             <p>Date is today only. Choose work type, then coming back or early leave.</p>
         </div>
         <div class="ac">
@@ -22,7 +22,7 @@
                 <section class="card ef-sec">
                     <header>
                         <div>
-                            <h3>Employee</h3>
+                            <h3>{{ __('Employee') }}</h3>
                             <p>Who is going out</p>
                         </div>
                     </header>
@@ -42,7 +42,7 @@
                 <section class="card ef-sec">
                     <header>
                         <div>
-                            <h3>When</h3>
+                            <h3>{{ __('When') }}</h3>
                             <p>Out time is required. Date stays today.</p>
                         </div>
                     </header>
@@ -57,7 +57,7 @@
                 <section class="card ef-sec">
                     <header>
                         <div>
-                            <h3>Type</h3>
+                            <h3>{{ __('Type') }}</h3>
                             <p>Personal or office work, then return or early leave.</p>
                         </div>
                     </header>
@@ -101,7 +101,7 @@
                 <section class="card ef-sec">
                     <header>
                         <div>
-                            <h3>Reason</h3>
+                            <h3>{{ __('Reason') }}</h3>
                             <p>Why this Gate Pass is needed</p>
                         </div>
                     </header>
@@ -113,7 +113,7 @@
         </div>
 
         <div class="ef-bar">
-            <a class="btn" href="{{ route('gate-passes.index') }}">Cancel</a>
+            <a class="btn" href="{{ route('gate-passes.index') }}">{{ __('Cancel') }}</a>
             <button class="btn pr" type="submit">Submit Gate Pass</button>
         </div>
     </form>

@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Services\Employees\InactivePunchBlocker;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Cache;
 
 class BlockInactiveEmployeesCommand extends Command
 {
@@ -13,7 +14,15 @@ class BlockInactiveEmployeesCommand extends Command
 
     public function handle(InactivePunchBlocker $blocker): int
     {
+        $key = 'hrms.block-inactive.'.now()->toDateString();
+        if (Cache::has($key)) {
+            $this->comment('Already checked today.');
+
+            return self::SUCCESS;
+        }
+
         $count = $blocker->apply();
+        Cache::put($key, $count, now()->endOfDay());
         $this->info("Blocked {$count} inactive employee(s).");
 
         return self::SUCCESS;

@@ -144,6 +144,9 @@ class SalarySheetExporter
             9 => 'Break',
             10 => 'Attended',
             11 => 'Status',
+            12 => 'Company holiday',
+            13 => 'Leave',
+            14 => 'Gate pass',
         ];
         foreach ($labels as $row => $label) {
             $tab->setCellValue('A'.$row, $label);
@@ -161,19 +164,22 @@ class SalarySheetExporter
             $tab->setCellValue([$column, 9], (int) ($cell['break'] ?? 0));
             $tab->setCellValue([$column, 10], (int) ($cell['attended'] ?? 0));
             $tab->setCellValue([$column, 11], $cell['status'] ?? '—');
+            $tab->setCellValue([$column, 12], ($cell['holiday'] ?? '') !== '' ? $cell['holiday'] : '—');
+            $tab->setCellValue([$column, 13], ($cell['leave'] ?? '') !== '' ? $cell['leave'] : '—');
+            $tab->setCellValue([$column, 14], ($cell['gate'] ?? '') !== '' ? $cell['gate'] : '—');
         }
 
         $last = $this->column(count($dates) + 1);
         $tab->getStyle('A3:'.$last.'3')->applyFromArray($this->headStyle());
-        $tab->getStyle('A11:'.$last.'11')->getFont()->setBold(true);
-        $tab->getStyle('A3:'.$last.'11')->applyFromArray([
+        $tab->getStyle('A11:'.$last.'14')->getFont()->setBold(true);
+        $tab->getStyle('A3:'.$last.'14')->applyFromArray([
             'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['rgb' => 'E4E4EE']]],
             'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
         ]);
-        $tab->getStyle('A3:A11')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
+        $tab->getStyle('A3:A14')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
 
-        $tab->setCellValue('A13', 'Summary');
-        $tab->getStyle('A13')->getFont()->setBold(true);
+        $tab->setCellValue('A16', 'Summary');
+        $tab->getStyle('A16')->getFont()->setBold(true);
         $pairs = [
             ['Attended', $this->hours($line->attended_minutes)],
             ['Paid hours', $this->hours($line->paid_minutes)],
@@ -194,14 +200,14 @@ class SalarySheetExporter
             ['Net pay', (float) $line->net],
         ];
         foreach ($pairs as $index => $pair) {
-            $row = 14 + $index;
+            $row = 17 + $index;
             $tab->setCellValue('A'.$row, $pair[0]);
             $tab->setCellValue('B'.$row, $pair[1]);
         }
-        $tab->getStyle('A'.(13 + count($pairs)))->getFont()->setBold(true);
-        $tab->getStyle('B'.(13 + count($pairs)))->getFont()->setBold(true);
+        $tab->getStyle('A'.(16 + count($pairs)))->getFont()->setBold(true);
+        $tab->getStyle('B'.(16 + count($pairs)))->getFont()->setBold(true);
 
-        $row = 14 + count($pairs) + 1;
+        $row = 17 + count($pairs) + 1;
         foreach ($line->breakdown['deductions'] ?? [] as $item) {
             $tab->setCellValue('A'.$row, $item['name']);
             $tab->setCellValue('B'.$row, (float) $item['amount']);
@@ -230,7 +236,7 @@ class SalarySheetExporter
                 $tab->setCellValue('D'.$row, $cut['out'] ?: '—');
                 $tab->setCellValue('E'.$row, (int) $cut['minutes']);
                 $tab->setCellValue('F'.$row, (float) $cut['rupees']);
-                $tab->setCellValue('G'.$row, $cut['reason']);
+                $tab->setCellValue('G'.$row, trim(($cut['reason'] ?? '').(! empty($cut['detail']) ? ' · '.$cut['detail'] : '')));
             }
         }
 

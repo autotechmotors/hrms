@@ -49,8 +49,8 @@
 
     <div class="ph">
         <div>
-            <h1>Attendance</h1>
-            <p>Daily punches and calculated status from shift, leave, holidays, and rules.</p>
+            <h1>{{ __('Attendance') }}</h1>
+            <p>A is a machine punch. M is a time saved by HR Admin or Super Admin. A manual day stays if the terminal was off.</p>
         </div>
         <div class="ac">
             <div class="att-nav">
@@ -167,6 +167,7 @@
                     </div>
                     <div class="modal-body att-modal-body">
                         <p class="att-modal-date">{{ $date->format('l, d M Y') }}</p>
+                        <p class="form-text">This save is marked M. Use it when the terminal was off. Delete the day later if the machine record should be used instead.</p>
                         <input type="hidden" name="employee_id" id="attEmployeeHidden" value="">
                         <label class="form-label">Employee *</label>
                         <select class="in w-100" id="attEmployee" required>
@@ -189,7 +190,7 @@
                         <input class="in w-100" name="remarks" id="attRemarks" maxlength="255" placeholder="Optional note">
                     </div>
                     <div class="modal-footer">
-                        <button type="button" class="btn" data-bs-dismiss="modal">Cancel</button>
+                        <button type="button" class="btn" data-bs-dismiss="modal">{{ __('Cancel') }}</button>
                         <button type="submit" class="btn pr">Save punch</button>
                     </div>
                 </form>
@@ -230,7 +231,7 @@
                         </label>
                     </div>
                     <div class="modal-footer">
-                        <button type="button" class="btn" data-bs-dismiss="modal">Cancel</button>
+                        <button type="button" class="btn" data-bs-dismiss="modal">{{ __('Cancel') }}</button>
                         <button type="submit" class="btn pr">Save rules</button>
                     </div>
                 </form>
@@ -239,7 +240,7 @@
     @endif
 
     <div id="attView" class="att-view" hidden>
-        <button type="button" class="att-view-x btn" data-close>Close</button>
+        <button type="button" class="att-view-x btn" data-close>{{ __('Close') }}</button>
         <img id="attViewImg" alt="Attendance photo">
     </div>
 @endsection
@@ -319,6 +320,13 @@
                     if (status) {
                         status.textContent = item.status;
                         status.className = 'b js-status ' + (item.status_class || '');
+                    }
+                    const mark = row.querySelector('.js-mark');
+                    if (mark) {
+                        mark.textContent = item.mark || '';
+                        mark.className = 'att-mark js-mark ' + (item.mark === 'M' ? 'is-m' : 'is-a');
+                        mark.title = item.mark === 'M' ? 'Manual' : 'Machine';
+                        mark.hidden = !item.mark;
                     }
                     const edit = row.querySelector('[data-punch-in]');
                     if (edit) {
@@ -431,22 +439,7 @@
             if (req !== current) return;
             loadingMore = false;
             req = null;
-            if (phone()) requestAnimationFrame(maybeMore);
         });
-    }
-
-    function maybeMore() {
-        if (!phone() || loadingMore || req) return;
-        const host = document.getElementById('attendanceResults');
-        if (!host) return;
-        const page = Number(host.dataset.page || 1);
-        const last = Number(host.dataset.last || 1);
-        if (page >= last) return;
-        const cards = host.querySelector('.att-cards');
-        if (!cards) return;
-        if (cards.getBoundingClientRect().bottom > window.innerHeight + 420) return;
-        loadingMore = true;
-        load({ page: page + 1 }, true);
     }
 
     function placeSheet() {
@@ -508,15 +501,12 @@
         closeSheet(false);
         load();
     });
-    window.addEventListener('scroll', maybeMore, { passive: true });
     window.addEventListener('resize', function () {
         placeSheet();
-        maybeMore();
     });
     placeSheet();
     const firstResults = document.getElementById('attendanceResults');
     if (firstResults) paintStats(firstResults);
-    requestAnimationFrame(maybeMore);
 
     const punchModal = document.getElementById('attPunchModal');
     if (punchModal) {

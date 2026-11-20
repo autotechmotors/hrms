@@ -1,6 +1,6 @@
 # Custom fields
 
-Company custom fields and the values stored on an employee stay. The profile section already renders them. The form already edits them.
+Company custom fields and the values stored on an employee stay. The profile section already renders them. The form already edits them. A field that already has a value on an employee cannot be deleted.
 
 ## Code
 

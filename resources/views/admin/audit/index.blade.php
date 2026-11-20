@@ -1,28 +1,39 @@
 @extends('layouts.app')
 @section('title', 'Audit logs')
 @section('content')
-    <h1 class="h3 mb-3">Audit logs</h1>
-    <form class="row g-2 mb-3" method="get">
-        <div class="col-md-3"><input class="form-control" name="event" value="{{ request('event') }}" placeholder="Event"></div>
-        <div class="col-md-2"><input class="form-control" type="date" name="from" value="{{ request('from') }}"></div>
-        <div class="col-md-2"><input class="form-control" type="date" name="to" value="{{ request('to') }}"></div>
-        <div class="col-auto"><button class="btn btn-outline-secondary">Filter</button></div>
-    </form>
-    <div class="card"><div class="table-responsive"><table class="table mb-0">
-        <thead><tr><th>When</th><th>User</th><th>Event</th><th>Record</th><th>Changes</th></tr></thead>
-        <tbody>
-        @forelse($logs as $log)
-            <tr>
-                <td>{{ \App\Support\Clock::dateTime($log->created_at) }}</td>
-                <td>{{ $log->user?->name ?? 'System' }}</td>
-                <td>{{ $log->event }}</td>
-                <td>{{ class_basename((string) $log->auditable_type) }} {{ $log->auditable_id }}</td>
-                <td class="small">{{ \Illuminate\Support\Str::limit(json_encode($log->new_values), 120) }}</td>
-            </tr>
-        @empty
-            <tr><td colspan="5" class="empty-state">No audit records for this filter.</td></tr>
-        @endforelse
-        </tbody>
-    </table></div></div>
-    <div class="mt-3">{{ $logs->links() }}</div>
+    <div class="ph">
+        <div>
+            <h1>{{ __('Audit logs') }}</h1>
+            <p>Changes recorded for records you can see.</p>
+        </div>
+    </div>
+    <section class="card">
+        <form class="tbar plain-bar" method="get">
+            <input class="in" name="event" value="{{ request('event') }}" placeholder="Event">
+            <input class="in" type="date" name="from" value="{{ request('from') }}" aria-label="From">
+            <input class="in" type="date" name="to" value="{{ request('to') }}" aria-label="To">
+            <button class="btn" type="submit">{{ __('Filter') }}</button>
+        </form>
+        <div data-live-list="audit" data-page="{{ $logs->currentPage() }}" data-last="{{ $logs->lastPage() }}">
+        <div class="tw">
+            <table>
+                <thead><tr><th>{{ __('When') }}</th><th>{{ __('User') }}</th><th>{{ __('Event') }}</th><th>{{ __('Record') }}</th><th>{{ __('Changes') }}</th></tr></thead>
+                <tbody data-list-rows>
+                @forelse($logs as $log)
+                    <tr>
+                        <td>{{ \App\Support\Clock::dateTime($log->created_at) }}</td>
+                        <td>{{ $log->user?->name ?? 'System' }}</td>
+                        <td>{{ $log->event }}</td>
+                        <td>{{ class_basename((string) $log->auditable_type) }} {{ $log->auditable_id }}</td>
+                        <td>{{ \Illuminate\Support\Str::limit(json_encode($log->new_values), 120) }}</td>
+                    </tr>
+                @empty
+                    <tr data-list-empty><td colspan="5" style="text-align:center;color:var(--mu);padding:32px">No audit records for this filter.</td></tr>
+                @endforelse
+                </tbody>
+            </table>
+        </div>
+        @include('partials.list-footer', ['paginator' => $logs])
+        </div>
+    </section>
 @endsection

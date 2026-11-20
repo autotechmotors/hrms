@@ -53,7 +53,7 @@
             <section class="card ef-sec">
                 <header>
                     <div>
-                        <h3>People on this device</h3>
+                        <h3>{{ __('People on this device') }}</h3>
                         <p>{{ $device->terminalUsers->count() }} {{ \Illuminate\Support\Str::plural('person', $device->terminalUsers->count()) }} saved from the terminal or queued from HRMS</p>
                     </div>
                 </header>
@@ -61,10 +61,10 @@
                     <table>
                         <thead>
                             <tr>
-                                <th>User ID</th>
-                                <th>Name</th>
-                                <th>HRMS employee</th>
-                                <th>On device</th>
+                                <th>{{ __('User ID') }}</th>
+                                <th>{{ __('Name') }}</th>
+                                <th>{{ __('HRMS employee') }}</th>
+                                <th>{{ __('On device') }}</th>
                                 @if ($canEdit)
                                     <th class="el-act">Actions</th>
                                 @endif
@@ -100,7 +100,7 @@
                                                     data-name="{{ $person->name }}">
                                                     <x-i name="pen" :size="15" />
                                                 </button>
-                                                <form method="post" action="{{ route('devices.terminal.destroy', $person) }}" data-confirm="Remove {{ $person->user_id }} from this device?">
+                                                <form method="post" action="{{ route('devices.terminal.destroy', $person) }}" data-confirm="{{ __('Remove :name from this device?', ['name' => $person->user_id]) }}">
                                                     @csrf
                                                     @method('delete')
                                                     <button class="ib er" type="submit" title="Delete"><x-i name="trash" :size="15" /></button>
@@ -124,7 +124,7 @@
             <section class="card ef-sec">
                 <header>
                     <div>
-                        <h3>Connection</h3>
+                        <h3>{{ __('Connection') }}</h3>
                         <p>Hikvision ISAPI on this terminal</p>
                     </div>
                 </header>
@@ -151,7 +151,7 @@
                 <section class="card ef-sec">
                     <header>
                         <div>
-                            <h3>Enroll employee</h3>
+                            <h3>{{ __('Enroll employee') }}</h3>
                             <p>The device user id is the employee code</p>
                         </div>
                     </header>
@@ -177,7 +177,7 @@
                 <section class="card ef-sec">
                     <header>
                         <div>
-                            <h3>Actions</h3>
+                            <h3>{{ __('Actions') }}</h3>
                             <p>Change this device or remove it</p>
                         </div>
                     </header>
@@ -185,7 +185,7 @@
                         <button class="btn" type="button" data-bs-toggle="modal" data-bs-target="#editDeviceModal">
                             <x-i name="pen" :size="14" />Edit device
                         </button>
-                        <form method="post" action="{{ route('devices.destroy', $device) }}" data-confirm="Remove {{ $device->name }}? People enrolled on it are removed from this list.">
+                        <form method="post" action="{{ route('devices.destroy', $device) }}" data-confirm="{{ __('Remove :name? People enrolled on it are removed from this list.', ['name' => $device->name]) }}">
                             @csrf
                             @method('delete')
                             <button class="btn dv-danger" type="submit"><x-i name="trash" :size="14" />Delete device</button>
@@ -211,7 +211,7 @@
                         @include('operations.devices._fields', ['device' => $device, 'bindOld' => $errors->any()])
                     </div>
                     <div class="modal-footer">
-                        <button type="button" class="btn" data-bs-dismiss="modal">Cancel</button>
+                        <button type="button" class="btn" data-bs-dismiss="modal">{{ __('Cancel') }}</button>
                         <button class="btn pr" type="submit">Save changes</button>
                     </div>
                 </form>
@@ -250,8 +250,8 @@
                         </label>
                     </div>
                     <div class="modal-footer">
-                        <button type="button" class="btn" data-bs-dismiss="modal">Cancel</button>
-                        <button class="btn pr" type="submit">Save</button>
+                        <button type="button" class="btn" data-bs-dismiss="modal">{{ __('Cancel') }}</button>
+                        <button class="btn pr" type="submit">{{ __('Save') }}</button>
                     </div>
                 </form>
             </div>

@@ -11,15 +11,17 @@ class Holiday extends Model
     use AuditsChanges, BelongsToCompany;
 
     public const KINDS = [
-        'public' => 'Public holiday',
-        'restricted' => 'Restricted holiday',
-        'optional' => 'Optional holiday',
+        'public' => 'Public',
+        'cutoff' => 'Cutoff',
+        'restricted' => 'Restricted',
+        'optional' => 'Optional',
     ];
 
     public const KIND_HELP = [
         'public' => 'Paid day for everyone. No punch needed.',
-        'restricted' => 'Shown on the calendar. Leave types decide if it is counted.',
-        'optional' => 'Optional for employees. Follows leave settings.',
+        'cutoff' => 'This day is cut from everyone’s salary. No punch needed.',
+        'restricted' => 'Shown on the calendar. It does not pay or cut a day by itself.',
+        'optional' => 'Shown on the calendar. It does not pay or cut a day by itself.',
     ];
 
     protected $fillable = ['company_id', 'holiday_date', 'name', 'kind'];
@@ -43,9 +45,15 @@ class Holiday extends Model
     {
         return match ($this->kind) {
             'public' => 'ok',
+            'cutoff' => 'er',
             'restricted' => 'wn',
             default => 'ac',
         };
+    }
+
+    public function closesTheCompany(): bool
+    {
+        return in_array($this->kind, ['public', 'cutoff'], true);
     }
 
     public function longDate(): string

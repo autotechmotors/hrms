@@ -9,7 +9,7 @@
         <div class="ph">
             <div>
                 <x-back :href="route('more')" label="More" />
-                <h1>Notifications</h1>
+                <h1>{{ __('Notifications') }}</h1>
                 <p>{{ $unread ? $unread.' unread · Gate Pass requests and decisions' : 'Gate Pass requests and decisions' }}</p>
             </div>
             <div class="ac">
@@ -42,7 +42,8 @@
             </div>
         </div>
 
-        <div class="nt-list">
+        <div data-live-list="notifications" data-page="{{ $notifications->currentPage() }}" data-last="{{ $notifications->lastPage() }}">
+        <div class="nt-list" data-list-rows>
             @forelse($notifications as $notification)
                 @php
                     $data = $notification->data ?? [];
@@ -114,13 +115,14 @@
                     </div>
                 </form>
             @empty
-                <div class="card cb empty-state">
-                    <h3>You're all caught up</h3>
+                <div class="card cb empty-state" data-list-empty>
+                    <h3>{{ __('You\'re all caught up') }}</h3>
                     <p>No notifications to show.</p>
                 </div>
             @endforelse
         </div>
 
-        <div class="pgn nt-pgn">{{ $notifications->links() }}</div>
+        @include('partials.list-footer', ['paginator' => $notifications])
+        </div>
     </div>
 @endsection

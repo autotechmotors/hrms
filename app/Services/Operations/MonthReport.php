@@ -10,7 +10,6 @@ use App\Models\EmployeeHoliday;
 use App\Models\EmployeeSalary;
 use App\Models\Holiday;
 use App\Models\LeaveRequest;
-use App\Models\PayrollRun;
 use App\Models\ShiftRoster;
 use App\Models\User;
 use Carbon\Carbon;
@@ -58,6 +57,15 @@ class MonthReport
         $public = Holiday::query()
             ->where('company_id', $companyId)
             ->where('kind', 'public')
+            ->whereDate('holiday_date', '>=', $start)
+            ->whereDate('holiday_date', '<=', $end)
+            ->pluck('holiday_date')
+            ->map(fn ($date) => Carbon::parse($date)->toDateString())
+            ->all();
+
+        $cutoffHolidays = Holiday::query()
+            ->where('company_id', $companyId)
+            ->where('kind', 'cutoff')
             ->whereDate('holiday_date', '>=', $start)
             ->whereDate('holiday_date', '<=', $end)
             ->pluck('holiday_date')
@@ -124,6 +132,8 @@ class MonthReport
                 $kind = 'working';
                 if (in_array($key, $public, true) || $personal->has($employee->id.'|'.$key)) {
                     $kind = 'holiday';
+                } elseif (in_array($key, $cutoffHolidays, true)) {
+                    $kind = 'holiday_cutoff';
                 } elseif ($leave) {
                     $kind = $leave->leaveType?->is_paid ? 'paid_leave' : 'unpaid_leave';
                     $type = $leave->leaveType?->name ?? 'Leave';
@@ -198,21 +208,6 @@ class MonthReport
         $departments = collect($departments)->sortBy('name')->values()->all();
         usort($people, fn (array $left, array $right) => $right['cutoff'] <=> $left['cutoff']);
 
-        $payroll = PayrollRun::query()
-            ->visibleTo($user)
-            ->where('company_id', $companyId)
-            ->where('period_year', $start->year)
-            ->where('period_month', $start->month)
-            ->with(['items' => fn ($query) => $query->whereIn('employee_id', $ids)])
-            ->first();
-
-        $payrollCutoff = 0.0;
-        if ($payroll) {
-            foreach ($payroll->items as $item) {
-                $payrollCutoff += $item->cutoffTotal();
-            }
-        }
-
         return [
             'people' => $employees->count(),
             'calendar_days' => $daysInMonth,
@@ -231,9 +226,6 @@ class MonthReport
             'departments' => $departments,
             'attention' => array_slice($people, 0, 20),
             'leave' => collect($leaveTypes)->sortDesc(),
-            'payroll' => $payroll,
-            'payroll_cutoff' => round($payrollCutoff, 2),
-            'payroll_net' => $payroll ? round((float) $payroll->items->sum('net'), 2) : 0.0,
         ];
     }
 

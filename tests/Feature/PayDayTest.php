@@ -10,7 +10,6 @@ use App\Models\EmployeeSalary;
 use App\Models\EmployeeWorkHour;
 use App\Models\Holiday;
 use App\Models\LeaveRequest;
-use App\Models\PayrollRun;
 use App\Models\SalaryHead;
 use App\Models\SalaryStructure;
 use App\Models\SalaryStructureLine;
@@ -20,7 +19,6 @@ use App\Models\WorkCalendar;
 use App\Models\WorkCalendarDay;
 use App\Services\Operations\AttendanceCalculator;
 use App\Services\Operations\PayDayMath;
-use App\Services\Operations\PayrollRunner;
 use App\Services\Operations\WorkCalendarResolver;
 use App\Services\Operations\WorkWindowDefaults;
 use Carbon\Carbon;
@@ -115,19 +113,17 @@ class PayDayTest extends TestCase
         $this->fillMonth($employee, 2026, 5);
         $this->fillMonth($employee, 2028, 2);
 
-        $runner = app(PayrollRunner::class);
-        $april = $runner->compute($this->makeRun($org, 2026, 4));
-        $may = $runner->compute($this->makeRun($org, 2026, 5));
-        $february = $runner->compute($this->makeRun($org, 2028, 2));
-
-        $this->assertSame(30, (int) $april->working_days);
-        $this->assertSame(31, (int) $may->working_days);
-        $this->assertSame(29, (int) $february->working_days);
-        $this->assertSame('25000.00', $april->items()->where('employee_id', $employee->id)->value('net'));
-        $this->assertSame('25000.00', $may->items()->where('employee_id', $employee->id)->value('net'));
-        $this->assertSame('25000.00', $february->items()->where('employee_id', $employee->id)->value('net'));
-
         $math = app(PayDayMath::class);
+        $april = $math->range($employee, Carbon::parse('2026-04-01'), Carbon::parse('2026-04-30'));
+        $may = $math->range($employee, Carbon::parse('2026-05-01'), Carbon::parse('2026-05-31'));
+        $february = $math->range($employee, Carbon::parse('2028-02-01'), Carbon::parse('2028-02-29'));
+
+        $this->assertCount(30, $april['days']);
+        $this->assertCount(31, $may['days']);
+        $this->assertCount(29, $february['days']);
+        $this->assertEqualsWithDelta(25000, $april['earned'], 0.02);
+        $this->assertEqualsWithDelta(25000, $may['earned'], 0.02);
+        $this->assertEqualsWithDelta(25000, $february['earned'], 0.02);
         AttendanceDay::query()->updateOrCreate(
             ['employee_id' => $employee->id, 'work_date' => '2026-11-01'],
             ['punch_in' => '08:30:00', 'punch_out' => '13:00:00', 'status' => 'present', 'source' => 'manual']
@@ -151,6 +147,51 @@ class PayDayTest extends TestCase
         $this->assertSame('absent', $absent['cuts'][0]['reason']);
         $this->assertEqualsWithDelta(25000 / 30, $absent['cuts'][0]['rupees'], 0.02);
         $this->assertSame(0.0, $absent['earned']);
+    }
+
+    public function test_a_cutoff_holiday_cuts_everyones_pay_and_a_personal_range_pays_one_person(): void
+    {
+        $org = $this->makeCompany('CUT');
+        $one = $this->makeEmployee($org, 'C1');
+        $two = $this->makeEmployee($org, 'C2');
+        $structure = $this->structure($org);
+        $this->paySalary($one, $structure, 31000);
+        $this->paySalary($two, $structure, 31000);
+        $hr = $this->makeUser('hr-admin', $org['company']);
+
+        $this->actingAsScoped($hr)->postJson(route('holidays.store'), [
+            'holiday_date' => '2026-05-31',
+            'name' => 'Year end',
+            'kind' => 'restricted',
+        ])->assertStatus(422);
+
+        $this->actingAsScoped($hr)->postJson(route('holidays.store'), [
+            'holiday_date' => '2026-05-31',
+            'name' => 'Year end',
+            'kind' => 'cutoff',
+        ])->assertOk();
+
+        $math = app(PayDayMath::class);
+        $cut = $math->range($one, Carbon::parse('2026-05-31'), Carbon::parse('2026-05-31'));
+        $this->assertSame('holiday cutoff', $cut['cuts'][0]['reason']);
+        $this->assertEqualsWithDelta(31000 / 31, $cut['cutoff'], 0.02);
+        $this->assertSame('Company holiday · Year end · cutoff', $cut['days']['2026-05-31']['holiday']);
+        $also = $math->range($two, Carbon::parse('2026-05-31'), Carbon::parse('2026-05-31'));
+        $this->assertSame('holiday cutoff', $also['cuts'][0]['reason']);
+        $this->assertSame('holiday', AttendanceDay::query()->where('employee_id', $one->id)->whereDate('work_date', '2026-05-31')->value('status'));
+
+        $this->actingAsScoped($hr)->postJson(route('employee-holidays.store'), [
+            'employee_id' => $one->id,
+            'starts_on' => '2026-06-01',
+            'ends_on' => '2026-06-03',
+            'name' => 'Family',
+        ])->assertOk();
+
+        $this->assertSame(3, EmployeeHoliday::query()->where('employee_id', $one->id)->count());
+        $paid = $math->range($one, Carbon::parse('2026-06-02'), Carbon::parse('2026-06-02'));
+        $stillWorks = $math->range($two, Carbon::parse('2026-06-02'), Carbon::parse('2026-06-02'));
+        $this->assertSame('paid holiday', $paid['cuts'][0]['reason']);
+        $this->assertSame('absent', $stillWorks['cuts'][0]['reason']);
     }
 
     public function test_a_company_holiday_pays_everyone_and_a_person_holiday_pays_only_that_person(): void
@@ -388,16 +429,6 @@ class PayDayTest extends TestCase
             'salary_structure_id' => $structure->id,
             'gross_monthly' => $amount,
             'effective_from' => '2026-01-01',
-        ]);
-    }
-
-    private function makeRun(array $org, int $year, int $month): PayrollRun
-    {
-        return PayrollRun::query()->create([
-            'company_id' => $org['company']->id,
-            'period_year' => $year,
-            'period_month' => $month,
-            'status' => 'draft',
         ]);
     }
 

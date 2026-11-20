@@ -9,7 +9,7 @@
 
     <div class="ph">
         <div>
-            <h1>Devices</h1>
+            <h1>{{ __('Devices') }}</h1>
             <p>Register Hikvision terminals, enroll people, and keep attendance punches in HRMS.</p>
         </div>
         @if ($canEdit)
@@ -32,7 +32,7 @@
                         <div class="dv-overview-badges">
                             <span class="b ac">Hikvision</span>
                         </div>
-                        <h2>Attendance device hub</h2>
+                        <h2>{{ __('Attendance device hub') }}</h2>
                         <p>{{ $devices->count() }} {{ \Illuminate\Support\Str::plural('terminal', $devices->count()) }} · Register ID {{ config('devices.register_id') }}</p>
                     </div>
                 </div>
@@ -54,7 +54,7 @@
                 <div class="dv-pc-head">
                     <div>
                         <div class="dv-pc-title">
-                            <h3>Local PC server</h3>
+                            <h3>{{ __('Local PC server') }}</h3>
                             <span class="b {{ $autoOn ? 'ok' : 'er' }}">{{ $autoOn ? 'Auto-start ON' : 'Auto-start OFF' }}</span>
                         </div>
                         <p>Background MySQL check and HRMS web — no daily CMD.</p>
@@ -66,7 +66,7 @@
                                 <button class="btn pr" type="submit"><x-i name="set" :size="14" />Enable auto-start</button>
                             </form>
                         @else
-                            <form method="post" action="{{ route('devices.local-pc.disable') }}" data-confirm="Turn off PC login auto-start?">
+                            <form method="post" action="{{ route('devices.local-pc.disable') }}" data-confirm="{{ __('Turn off PC login auto-start?') }}">
                                 @csrf
                                 <button class="btn" type="submit"><x-i name="minus" :size="14" />Disable auto-start</button>
                             </form>
@@ -75,7 +75,7 @@
                             @csrf
                             <button class="btn" type="submit"><x-i name="play" :size="14" />Start now</button>
                         </form>
-                        <form method="post" action="{{ route('devices.local-pc.stop') }}" data-confirm="Stop the scheduler now?">
+                        <form method="post" action="{{ route('devices.local-pc.stop') }}" data-confirm="{{ __('Stop the scheduler now?') }}">
                             @csrf
                             <button class="btn dv-danger" type="submit"><x-i name="stop" :size="14" />Stop now</button>
                         </form>
@@ -112,7 +112,7 @@
         <section class="card ef-sec dv-list-card">
             <header>
                 <div>
-                    <h3>All devices</h3>
+                    <h3>{{ __('All devices') }}</h3>
                     <p>{{ $devices->count() }} {{ \Illuminate\Support\Str::plural('terminal', $devices->count()) }} · open one to enroll employees</p>
                 </div>
             </header>
@@ -157,7 +157,7 @@
                                     <button class="ib" type="button" title="Edit" data-bs-toggle="modal" data-bs-target="#editDevice{{ $device->id }}">
                                         <x-i name="pen" :size="15" />
                                     </button>
-                                    <form method="post" action="{{ route('devices.destroy', $device) }}" data-confirm="Remove {{ $device->name }}? People enrolled on it are removed from this list.">
+                                    <form method="post" action="{{ route('devices.destroy', $device) }}" data-confirm="{{ __('Remove :name? People enrolled on it are removed from this list.', ['name' => $device->name]) }}">
                                         @csrf
                                         @method('delete')
                                         <button class="ib er" type="submit" title="Delete"><x-i name="trash" :size="15" /></button>
@@ -184,7 +184,7 @@
                         @include('operations.devices._fields', ['device' => null, 'bindOld' => $errors->any() && ! old('_method')])
                     </div>
                     <div class="modal-footer">
-                        <button type="button" class="btn" data-bs-dismiss="modal">Cancel</button>
+                        <button type="button" class="btn" data-bs-dismiss="modal">{{ __('Cancel') }}</button>
                         <button class="btn pr" type="submit">Add device</button>
                     </div>
                 </form>
@@ -205,7 +205,7 @@
                             @include('operations.devices._fields', ['device' => $device, 'bindOld' => false])
                         </div>
                         <div class="modal-footer">
-                            <button type="button" class="btn" data-bs-dismiss="modal">Cancel</button>
+                            <button type="button" class="btn" data-bs-dismiss="modal">{{ __('Cancel') }}</button>
                             <button class="btn pr" type="submit">Save changes</button>
                         </div>
                     </form>

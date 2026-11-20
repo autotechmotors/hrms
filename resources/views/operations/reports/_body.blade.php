@@ -44,7 +44,7 @@
     <section class="card ef-sec">
         <header>
             <div>
-                <h3>By department</h3>
+                <h3>{{ __('By department') }}</h3>
                 <p>Person-days and cutoff for {{ $month->format('F') }}.</p>
             </div>
         </header>
@@ -53,13 +53,13 @@
                 <table class="rp-table">
                     <thead>
                     <tr>
-                        <th>Department</th>
-                        <th>People</th>
-                        <th>Present</th>
-                        <th>Absent</th>
-                        <th>Late</th>
-                        <th>Early</th>
-                        <th>Cutoff</th>
+                        <th>{{ __('Department') }}</th>
+                        <th>{{ __('People') }}</th>
+                        <th>{{ __('Present') }}</th>
+                        <th>{{ __('Absent') }}</th>
+                        <th>{{ __('Late') }}</th>
+                        <th>{{ __('Early') }}</th>
+                        <th>{{ __('Cutoff') }}</th>
                     </tr>
                     </thead>
                     <tbody>
@@ -85,7 +85,7 @@
     <section class="card ef-sec">
         <header>
             <div>
-                <h3>Needs a look</h3>
+                <h3>{{ __('Needs a look') }}</h3>
                 <p>The largest salary cuts this month. Up to 20 people.</p>
             </div>
         </header>
@@ -94,12 +94,12 @@
                 <table class="rp-table">
                     <thead>
                     <tr>
-                        <th>Person</th>
-                        <th>Shift</th>
-                        <th>Absent</th>
-                        <th>Late</th>
-                        <th>Early</th>
-                        <th>Cutoff</th>
+                        <th>{{ __('Person') }}</th>
+                        <th>{{ __('Shift') }}</th>
+                        <th>{{ __('Absent') }}</th>
+                        <th>{{ __('Late') }}</th>
+                        <th>{{ __('Early') }}</th>
+                        <th>{{ __('Cutoff') }}</th>
                     </tr>
                     </thead>
                     <tbody>
@@ -129,14 +129,14 @@
     <section class="card ef-sec">
         <header>
             <div>
-                <h3>Approved leave</h3>
+                <h3>{{ __('Approved leave') }}</h3>
                 <p>Days that fall inside {{ $month->format('F Y') }}.</p>
             </div>
         </header>
         <div class="cb">
             <div class="tw">
                 <table class="rp-table">
-                    <thead><tr><th>Type</th><th>Days</th></tr></thead>
+                    <thead><tr><th>{{ __('Type') }}</th><th>{{ __('Days') }}</th></tr></thead>
                     <tbody>
                     @forelse($report['leave'] as $name => $days)
                         <tr><td>{{ $name }}</td><td>{{ number_format($days) }}</td></tr>
@@ -149,21 +149,4 @@
         </div>
     </section>
 
-    <section class="card ef-sec">
-        <header>
-            <div>
-                <h3>Payroll</h3>
-                <p>The saved payroll run for this month. Counts above follow attendance now.</p>
-            </div>
-        </header>
-        <div class="cb rp-pay">
-            @if($report['payroll'])
-                <p><span class="b {{ $report['payroll']->statusBadgeClass() }}">{{ $report['payroll']->statusLabel() }}</span></p>
-                <p>Take-home {{ $inr($report['payroll_net']) }} · salary cutoff on the run {{ $inr($report['payroll_cutoff']) }}</p>
-                <a class="btn" href="{{ route('payroll.show', $report['payroll']) }}">Open payroll</a>
-            @else
-                <p class="rp-empty">No payroll run for {{ $month->format('F Y') }}.</p>
-            @endif
-        </div>
-    </section>
 </div>

@@ -1,14 +1,14 @@
 @extends('layouts.app')
-@section('title', 'Work calendar')
+@section('title', $calendar ? __('Edit work calendar') : __('New work calendar'))
 @section('content')
     @php $days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']; @endphp
     <div class="ph">
         <div>
             <x-back :href="route('work-calendars.index')" label="Work calendars" />
-            <h1>{{ $calendar ? 'Edit work calendar' : 'New work calendar' }}</h1>
+            <h1>{{ $calendar ? __('Edit work calendar') : __('New work calendar') }}</h1>
         </div>
     </div>
-    <form class="card card-body" method="post" action="{{ $calendar ? route('work-calendars.update', $calendar) : route('work-calendars.store') }}">
+    <form class="card card-body org-form" method="post" action="{{ $calendar ? route('work-calendars.update', $calendar) : route('work-calendars.store') }}">
         @csrf @if($calendar) @method('put') @endif
         @include('partials.workspace-ids', ['companyId' => $calendar->company_id ?? null])
         <x-text-field name="name" label="Name" :value="$calendar->name ?? ''" required />
@@ -25,6 +25,9 @@
             @error('working_days')<div class="text-danger small">{{ $message }}</div>@enderror
         </div>
         <x-check-field name="is_active" label="Active" :checked="$calendar->is_active ?? true" />
-        <button class="btn btn-primary">Save</button>
+        <div class="org-form-actions">
+            <a class="btn" href="{{ route('work-calendars.index') }}">{{ __('Cancel') }}</a>
+            <button class="btn pr" type="submit">Save calendar</button>
+        </div>
     </form>
 @endsection

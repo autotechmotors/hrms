@@ -3,14 +3,14 @@
 @section('content')
     <div class="ph">
         <div>
-            <h1>Holidays</h1>
-            <p>A public holiday is a paid day for everyone. No punch needed. One person’s day off pays only that person.</p>
+            <h1>{{ __('Holidays') }}</h1>
+            <p>This month’s dates. Public pays everyone. Cutoff takes that day off everyone’s salary.</p>
         </div>
         <div class="ac">
-            <a class="btn" href="{{ route('holidays.index', ['year' => $year - 1]) }}"><x-i name="back" :size="14" />{{ $year - 1 }}</a>
-            <span class="hc-year-label">{{ $year }}</span>
-            <a class="btn" href="{{ route('holidays.index', ['year' => $year + 1]) }}">{{ $year + 1 }} →</a>
             @if($canEdit)
+                <button class="btn" type="button" data-bs-toggle="modal" data-bs-target="#personHolidayModal">
+                    <x-i name="plus" :size="14" />One person’s paid day
+                </button>
                 <button class="btn pr" type="button" data-bs-toggle="modal" data-bs-target="#holidayModal" data-date="{{ now()->toDateString() }}">
                     <x-i name="plus" :size="14" />Add holiday
                 </button>
@@ -39,14 +39,45 @@
                         <x-text-field name="name" label="Holiday name" :value="old('name')" required placeholder="e.g. Republic Day" />
                         <x-select-field name="kind" label="Kind" required>
                             <option value="public" @selected(old('kind', 'public') === 'public')>Public — paid day for everyone</option>
-                            <option value="restricted" @selected(old('kind') === 'restricted')>Restricted</option>
-                            <option value="optional" @selected(old('kind') === 'optional')>Optional</option>
+                            <option value="cutoff" @selected(old('kind') === 'cutoff')>Cutoff — cut this day from everyone’s salary</option>
                         </x-select-field>
-                        <p class="hc-paid-note">Paid day for everyone. No punch needed.</p>
+                        <p class="hc-paid-note" data-public="Paid day for everyone. No punch needed." data-cutoff="This day is cut from everyone’s salary. No punch needed.">Paid day for everyone. No punch needed.</p>
                     </div>
                     <div class="modal-footer">
-                        <button type="button" class="btn" data-bs-dismiss="modal">Cancel</button>
+                        <button type="button" class="btn" data-bs-dismiss="modal">{{ __('Cancel') }}</button>
                         <button class="btn pr" type="submit">Save holiday</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        <div class="modal fade" id="personHolidayModal" tabindex="-1" aria-hidden="true" data-bs-focus="false">
+            <div class="modal-dialog">
+                <form id="personHolidayForm" class="modal-content" method="post" action="{{ route('employee-holidays.store') }}">
+                    @csrf
+                    <div class="modal-header">
+                        <h5 class="modal-title">One person’s paid day</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <x-select-field name="employee_id" label="Person" required>
+                            <option value="">Select</option>
+                            @foreach($employees as $person)
+                                <option value="{{ $person->id }}">{{ $person->employee_code }} · {{ $person->full_name }}</option>
+                            @endforeach
+                        </x-select-field>
+                        <div class="hc-range">
+                            <x-text-field name="starts_on" label="From" type="date" required />
+                            <x-text-field name="ends_on" label="To" type="date" required />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label" for="person_reason">Reason <span class="text-danger">*</span></label>
+                            <input class="form-control" id="person_reason" name="name" maxlength="120" required placeholder="e.g. Sunday off">
+                        </div>
+                        <p class="hc-paid-note">Pays only this person for each day in the range. Everyone else still works.</p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn" data-bs-dismiss="modal">{{ __('Cancel') }}</button>
+                        <button class="btn pr" type="submit">{{ __('Save') }}</button>
                     </div>
                 </form>
             </div>
@@ -62,19 +93,20 @@
                 </div>
                 <div class="modal-body">
                     <div class="hc-view">
-                        <span class="b" id="holidayViewKind">public</span>
+                        <span class="b" id="holidayViewKind">Public</span>
                         <b id="holidayViewName">—</b>
                         <small id="holidayViewDate">—</small>
+                        <p class="hc-paid-note" id="holidayViewHelp"></p>
                     </div>
                 </div>
                 <div class="modal-footer">
                     @if($canEdit)
                         <form id="holidayDeleteForm" method="post" action="#">
                             @csrf @method('delete')
-                            <button class="btn" type="submit" style="color:var(--er);border-color:#f0c9cf">Remove</button>
+                            <button class="btn" type="submit" style="color:var(--er);border-color:#f0c9cf">{{ __('Remove') }}</button>
                         </form>
                     @endif
-                    <button type="button" class="btn pr" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn pr" data-bs-dismiss="modal">{{ __('Close') }}</button>
                 </div>
             </div>
         </div>
@@ -131,7 +163,23 @@
             }
             markSelected(addModal.dataset.selectedDate || '');
             setHolidayDate(addModal.querySelector('[name="holiday_date"]'), addModal.dataset.selectedDate || '');
+            const kind = addModal.querySelector('[name="kind"]');
+            if (kind) {
+                kind.value = 'public';
+                if (window.jQuery && jQuery(kind).data('select2')) {
+                    jQuery(kind).val('public').trigger('change.select2');
+                }
+            }
+            paintKind();
         };
+
+        const paintKind = function () {
+            const kind = addModal.querySelector('[name="kind"]');
+            const note = addModal.querySelector('.hc-paid-note');
+            if (!kind || !note) return;
+            note.textContent = kind.value === 'cutoff' ? note.getAttribute('data-cutoff') : note.getAttribute('data-public');
+        };
+        addModal.querySelector('[name="kind"]')?.addEventListener('change', paintKind);
 
         addModal.addEventListener('show.bs.modal', applyFromModal);
         addModal.addEventListener('shown.bs.modal', function () {
@@ -154,8 +202,10 @@
         document.getElementById('holidayViewDate').textContent = trigger.getAttribute('data-date') || '—';
         const kind = trigger.getAttribute('data-kind') || 'public';
         const kindEl = document.getElementById('holidayViewKind');
-        kindEl.textContent = kind;
-        kindEl.className = 'b ' + (kind === 'public' ? 'ok' : 'wn');
+        kindEl.textContent = trigger.getAttribute('data-kind-label') || kind;
+        kindEl.className = 'b ' + (kind === 'cutoff' ? 'er' : kind === 'public' ? 'ok' : 'wn');
+        const help = document.getElementById('holidayViewHelp');
+        if (help) help.textContent = trigger.getAttribute('data-kind-help') || '';
 
         const form = document.getElementById('holidayDeleteForm');
         if (form) {
@@ -170,17 +220,32 @@
     });
 
     const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
-    const year = @json($year);
 
-    function reloadHolidays() {
+    function viewedMonth() {
+        const bar = document.querySelector('[data-hc-year]');
+        return {
+            year: bar ? bar.getAttribute('data-hc-year') : @json($year),
+            month: bar ? bar.getAttribute('data-hc-month') : @json($month)
+        };
+    }
+
+    function reloadHolidays(year, month) {
         if (!window.jQuery) return;
+        const current = viewedMonth();
+        year = year || current.year;
+        month = month || current.month;
         window.jQuery.ajax({
             url: @json(route('holidays.index')),
-            data: { year: year, partial: 1 },
+            data: { year: year, month: month, partial: 1 },
             headers: { 'X-Requested-With': 'XMLHttpRequest' }
         }).done(function (html) {
             const body = document.getElementById('hcBody');
             if (body) body.innerHTML = html;
+            const next = new URL(window.location.href);
+            next.searchParams.set('year', year);
+            next.searchParams.set('month', month);
+            next.searchParams.delete('partial');
+            window.history.replaceState({}, '', next.pathname + '?' + next.searchParams.toString());
         });
     }
 
@@ -196,7 +261,7 @@
             const modal = form.closest('.modal');
             if (modal && window.bootstrap) window.bootstrap.Modal.getInstance(modal)?.hide();
             window.toast(body.message || 'Saved');
-            reloadHolidays();
+            reloadHolidays(body.year, body.month);
         }).fail(function (xhr) {
             const errors = xhr.responseJSON && xhr.responseJSON.errors;
             const message = errors ? Object.values(errors)[0][0] : 'Could not save';
@@ -219,7 +284,7 @@
         deleteForm.addEventListener('submit', function (event) {
             event.preventDefault();
             if (!deleteForm.action || deleteForm.action.endsWith('#')) return;
-            window.askConfirm('Remove this holiday? That day becomes a working day again.', { label: 'Remove', danger: true }).then(function (ok) {
+            window.askConfirm(@json(__('Remove this holiday? That day becomes a working day again.')), { label: @json(__('Remove')), danger: true }).then(function (ok) {
                 if (!ok) return;
                 const button = deleteForm.querySelector('button');
                 if (button) button.disabled = true;
@@ -241,17 +306,38 @@
         });
     }
 
-    document.addEventListener('submit', function (event) {
-        const form = event.target.closest('#hcPersonForm');
-        if (!form) return;
+    const personForm = document.getElementById('personHolidayForm');
+    if (personForm) {
+        personForm.addEventListener('submit', function (event) {
+            event.preventDefault();
+            postForm(personForm, 'POST');
+        });
+    }
+
+    const personSelect = document.querySelector('#personHolidayModal select[name="employee_id"]');
+    if (personSelect && window.jQuery && jQuery.fn.select2) {
+        const field = jQuery(personSelect);
+        if (field.data('select2')) field.select2('destroy');
+        field.select2({
+            width: '100%',
+            dropdownParent: jQuery('#personHolidayModal'),
+            placeholder: 'Select',
+            minimumResultsForSearch: field.find('option').length > 8 ? 0 : Infinity
+        });
+    }
+
+    document.addEventListener('click', function (event) {
+        const link = event.target.closest('a.hc-month-nav');
+        if (!link) return;
         event.preventDefault();
-        postForm(form, 'POST');
+        const url = new URL(link.href, window.location.origin);
+        reloadHolidays(url.searchParams.get('year'), url.searchParams.get('month'));
     });
 
     document.addEventListener('click', function (event) {
         const button = event.target.closest('.hc-person-remove');
         if (!button) return;
-        window.askConfirm('Remove this paid day? That person works that day again.', { label: 'Remove', danger: true }).then(function (ok) {
+        window.askConfirm(@json(__('Remove this paid day? That person works that day again.')), { label: @json(__('Remove')), danger: true }).then(function (ok) {
             if (!ok) return;
             window.jQuery.ajax({
                 url: button.getAttribute('data-url'),

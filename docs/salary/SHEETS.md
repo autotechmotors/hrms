@@ -1,6 +1,6 @@
 # Salary sheets
 
-Generate pay for one department, for the people you tick, and for a date range of up to 31 days.
+Generate pay for one department, for the people you tick, and for a date range of up to 31 days. Generate uses `salary.manage` or `payroll.process`. The people must belong to that department and be people the user can already see. Approve and reject use `salary.decide`. Reject needs a reason of at least 3 characters. A sheet that is already decided cannot be decided again.
 
 Open **Payroll → Salary sheets**.
 
@@ -21,19 +21,24 @@ Completing the Sunday window pays the same day amount as completing the Monday t
 
 Cutoff uses the clock window from Hours & pay, not the shift. Late minutes are the clock in minus the window start, minus the company grace. Early minutes are the window end minus the clock out. The minute rate is the day pay divided by the Monday–Saturday window (540 minutes for 09:00–18:00), including on Sunday. The cut is never more than that day’s pay.
 
+- A day before the joining date pays nothing. A person with no monthly salary yet pays nothing for that day.
+- Sunday off, when that date’s shift does not work Sunday, pays the full day and shows N. No punch is required.
+- Office work that is still outside counts the clock end as the out, so those minutes are not early leave. Personal minutes outside the break are added to early leave.
 - No punch on a working day cuts the whole day and is shown as absent.
-- A public holiday, a person’s own paid day, and approved paid leave pay the full day with no cutoff.
-- Unpaid leave pays nothing.
-- Each cut is listed with the date, window, in, out, minutes, rupees, and the reason: late, left early, absent, or paid holiday.
-- An active advance whose date falls inside the range is deducted in full, once. Closing an advance, or a later payroll run that already took it, leaves it off the next sheet.
-- Other deductions come from the person’s salary structure and are calculated on the earned pay, not on the full month.
+- A public holiday, a person’s own paid day, and approved leave with no cutoff pay the full day with no cutoff. The day grid names a company holiday with the reason that was saved.
+- A cutoff holiday pays nothing for that day, for every role. The day grid says `Company holiday · {name} · cutoff`.
+- Approved leave with salary cutoff pays nothing for those days. The day grid says which leave it was.
+- A granted gate pass shows on that day with its type and duration, in the sheet, the Excel file, and the PDF.
+- Each cut is listed with the date, window, in, out, minutes, rupees, and the reason: late, left early, absent, paid holiday, or holiday cutoff.
+- An active advance whose given date falls inside the range is deducted in full, once. Approving the sheet sets that advance to completed and its balance to zero. Closing an advance sets it closed and leaves it off the sheet. A completed or closed advance is not deducted again.
+- Advances are the only extra deduction. They come off the earned pay, not off a salary structure.
 
-Payroll runs use this same day pay and cutoff. See `docs/prompts/HRMS-PAY-DAYS.md`.
+See `docs/prompts/HRMS-PAY-DAYS.md`.
 
 The numbers on a saved sheet do not change if attendance is edited later. Generate again to pick up new punches, leave, or advances.
 
-This screen does not approve or lock a payroll run. Payroll runs stay on **Payroll**.
+Approving a sheet marks the advances inside its dates as deducted. There is no separate payroll run.
 
 ## Demo
 
-`SalarySheetDemoSeeder` adds eight people in the department **Seat Cover**, codes SG01 to SG08. Each has a monthly salary of 21,000 and a 9-hour day. Attendance, one paid leave, one unpaid leave, one half day, two absences, one overtime day, one late day, and one advance of 2,000 are stored for 2–6 Nov 2026. A sheet for that week is saved in History.
+`PlantTreeSeeder` keeps one Plant department and 24 people: Director, two Heads, four Managers, and the people under those managers. September, October, and 1–20 November have attendance. The cases cover day, night, a month that changes shift, late, early leave, a missing out, absence, paid leave, cutoff leave, a personal gate pass, factory work, a company cutoff day, and advances. September is approved, so that advance is completed. October and November stay pending.

@@ -3,10 +3,8 @@
 namespace Tests\Feature;
 
 use App\Models\AttendanceDay;
+use App\Models\AttendanceRule;
 use App\Models\Holiday;
-use App\Models\PayrollRun;
-use App\Models\SalaryHead;
-use App\Models\SalaryStructure;
 use App\Models\Shift;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\Concerns\BuildsOrganization;
@@ -53,41 +51,10 @@ class OperationsModulesTest extends TestCase
             'punch_out' => '18:00',
         ])->assertRedirect()->assertSessionHas('success');
 
-        $this->assertSame('present', AttendanceDay::query()->where('employee_id', $employee->id)->value('status'));
+        $this->assertSame('present', AttendanceDay::query()->where('employee_id', $employee->id)->whereDate('work_date', '2026-10-16')->value('status'));
+        $this->assertSame('holiday', AttendanceDay::query()->where('employee_id', $employee->id)->whereDate('work_date', '2026-10-02')->value('status'));
 
-        $this->post(route('salary.heads.store'), [
-            'name' => 'Basic',
-            'code' => 'BASIC',
-            'category' => 'earning',
-            'method' => 'percent_gross',
-            'value' => 100,
-        ])->assertRedirect();
-
-        $this->post(route('salary.structures.store'), [
-            'name' => 'Standard',
-            'code' => 'STD',
-            'head_ids' => [SalaryHead::query()->value('id')],
-        ])->assertRedirect();
-
-        $this->post(route('salary.assign'), [
-            'employee_id' => $employee->id,
-            'salary_structure_id' => SalaryStructure::query()->value('id'),
-            'gross_monthly' => 30000,
-            'effective_from' => '2026-04-01',
-        ])->assertRedirect();
-
-        $this->post(route('payroll.store'), [
-            'period_year' => 2026,
-            'period_month' => 10,
-        ])->assertRedirect();
-
-        $run = PayrollRun::query()->firstOrFail();
-        $this->post(route('payroll.compute', $run))->assertRedirect()->assertSessionHas('success');
-        $run->refresh();
-        $this->assertSame('computed', $run->status);
-        $this->assertTrue($run->items()->where('employee_id', $employee->id)->where('net', '>', 0)->exists());
-
-        foreach (['attendance.index', 'shifts.index', 'leave.index', 'holidays.index', 'salary.index', 'payroll.index', 'advances.index', 'devices.index', 'reports.index', 'bank.index'] as $route) {
+        foreach (['attendance.index', 'shifts.index', 'leave.index', 'holidays.index', 'hours-pay.index', 'salary-sheets.index', 'advances.index', 'devices.index', 'reports.index', 'bank.index'] as $route) {
             $this->get(route($route))->assertOk();
         }
     }
@@ -110,7 +77,7 @@ class OperationsModulesTest extends TestCase
             'mark_absent_without_punch' => 1,
         ])->assertRedirect();
 
-        $this->assertFalse((bool) \App\Models\AttendanceRule::query()->where('company_id', $org['company']->id)->value('store_selfie'));
+        $this->assertFalse((bool) AttendanceRule::query()->where('company_id', $org['company']->id)->value('store_selfie'));
     }
 
     public function test_holiday_calendar_exposes_clicked_and_outside_dates(): void
@@ -119,11 +86,13 @@ class OperationsModulesTest extends TestCase
         $hr = $this->makeUser('hr-admin', $org['company']);
 
         $this->actingAsScoped($hr)
-            ->get(route('holidays.index', ['year' => 2026]))
+            ->get(route('holidays.index', ['year' => 2026, 'month' => 10]))
             ->assertOk()
+            ->assertSee('October 2026', false)
+            ->assertSee('data-days="31"', false)
             ->assertSee('data-date="2026-10-17"', false)
             ->assertSee('data-iso="2026-10-17"', false)
-            ->assertSee('data-date="2025-12-29"', false)
+            ->assertDontSee('data-iso="2025-12-29"', false)
             ->assertSee('data-bs-target="#holidayModal"', false);
     }
 

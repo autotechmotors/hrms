@@ -24,29 +24,29 @@ class RoleAndPermissionSeeder extends Seeder
             $this->role('Payroll Admin', 'payroll-admin', true, true, $all->only([
                 'dashboard.view', 'employees.view', 'employees.export', 'bank_accounts.view', 'bank.view', 'audit_logs.view',
                 'payroll.view', 'payroll.process', 'payroll.approve', 'payroll.lock', 'payroll.reopen',
-                'advances.view', 'advances.manage',
+                'advances.view', 'advances.manage', 'holidays.view',
             ])->values()->all());
             $this->role('Accounts', 'accounts', true, true, $all->only([
                 'dashboard.view', 'employees.view', 'bank.view', 'bank_accounts.view', 'bank_accounts.manage', 'payments.release', 'audit_logs.view',
-                'salary.view', 'salary.decide',
+                'salary.view', 'salary.decide', 'holidays.view',
             ])->values()->all());
             $this->role('Manager', 'manager', true, false, $all->only([
                 'dashboard.view', 'employees.view', 'departments.view',
                 'attendance.view', 'shifts.view', 'leave.view', 'holidays.view',
-                'gate_passes.view', 'gate_passes.create', 'gate_passes.decide',
+                'gate_passes.view', 'gate_passes.create',
             ])->values()->all(), true, true);
             $this->role('Head', 'head', true, false, $all->only([
                 'dashboard.view', 'employees.view', 'departments.view',
                 'attendance.view', 'shifts.view', 'leave.view', 'holidays.view',
-                'gate_passes.view', 'gate_passes.create', 'gate_passes.decide',
+                'gate_passes.view', 'gate_passes.create',
             ])->values()->all(), true, true);
             $this->role('Director', 'director', true, false, $all->only([
                 'dashboard.view', 'employees.view', 'departments.view', 'audit_logs.view',
-                'attendance.view', 'reports.view',
-                'gate_passes.view', 'gate_passes.create', 'gate_passes.decide',
+                'attendance.view', 'reports.view', 'leave.view', 'holidays.view',
+                'gate_passes.view', 'gate_passes.create',
             ])->values()->all(), false, true);
             $this->role('Device Administrator', 'device-administrator', true, false, $all->only([
-                'dashboard.view', 'devices.manage', 'employees.view',
+                'dashboard.view', 'devices.manage', 'employees.view', 'holidays.view',
             ])->values()->all());
             $this->role('Employee', 'employee', true, false, $all->only([
                 'dashboard.view', 'employees.view', 'attendance.view',

@@ -12,6 +12,7 @@ use App\Models\EmploymentStatus;
 use App\Models\FinancialYear;
 use App\Models\User;
 use App\Models\WorkCalendar;
+use App\Services\AccessScope;
 use App\Services\Workspace;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
@@ -28,7 +29,8 @@ class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        //
+        $this->app->singleton(AccessScope::class);
+        $this->app->singleton(Workspace::class);
     }
 
     public function boot(): void

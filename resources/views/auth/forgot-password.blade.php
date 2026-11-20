@@ -6,7 +6,7 @@
     <form method="post" action="{{ route('password.email') }}">
         @csrf
         <x-text-field name="email" label="Email" type="email" required autofocus />
-        <button class="btn pr w-100" type="submit">Send reset link</button>
+        <button class="btn pr w-100" type="submit">{{ __('Send reset link') }}</button>
     </form>
-    <a class="guest-link" href="{{ route('login') }}">Back to sign in</a>
+    <a class="guest-link" href="{{ route('login') }}">{{ __('Back to sign in') }}</a>
 @endsection

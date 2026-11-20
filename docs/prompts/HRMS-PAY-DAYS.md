@@ -10,12 +10,12 @@ Do not build a second attendance engine. These files already own the rules.
 
 | Rule | Where |
 |---|---|
-| With no work calendar, Monday–Sunday are working. A public holiday is not | `WorkCalendarResolver::isWorkingDay` |
-| A public holiday or an `employee_holidays` row sets attendance status `holiday` | `AttendanceCalculator` |
-| Company holidays stay one date per company. Kinds stay `public`, `restricted`, `optional` | `holidays` |
-| One person’s paid day is `employee_holidays`, unique on employee + date. Not leave | `HolidayController` |
+| With no work calendar, Monday–Sunday are working. A public or cutoff holiday is not | `WorkCalendarResolver::isWorkingDay` |
+| A public holiday, a cutoff holiday, or an `employee_holidays` row sets attendance status `holiday` | `AttendanceCalculator` |
+| Company holidays stay one date per company. The form offers `public` and `cutoff`. Public is the default | `holidays` |
+| One person’s paid day is `employee_holidays`, unique on employee + date, saved as a date range. Not leave | `HolidayController` |
 | Hours & pay stores the four clock times next to `hours_per_day` | `department_work_hours`, `employee_work_hours`, `WorkHourResolver` |
-| Salary sheet and payroll both use calendar-day pay and the window cutoff | `PayDayMath`, `SalarySheetBuilder`, `PayrollRunner` |
+| Salary sheets use calendar-day pay and the window cutoff. There is no payroll run | `PayDayMath`, `SalarySheetBuilder` |
 | Shift clock times stay the roster shift | `shifts`, `shift_rosters` |
 | Employee Sunday switch. Off pays that Sunday. On uses the Sunday clock. Empty keeps night off and day on | `employee_work_hours.works_sunday`, employee detail and edit |
 
@@ -25,7 +25,7 @@ Every calendar day is a working day. No Saturday off. No Sunday off. No holiday 
 
 Sunday is still a working day. Its clock window is shorter. It is not `weekly_off`, not `half_day`, and not leave.
 
-Set the active work calendar so Monday through Sunday are `is_working`. `WorkCalendarDay.weekday` uses Carbon: 0 Sunday … 6 Saturday. If a company has no calendar, `isWorkingDay` must return true for every weekday, including Saturday and Sunday. A public holiday remains the only company-wide non-working day.
+Set the active work calendar so Monday through Sunday are `is_working`. `WorkCalendarDay.weekday` uses Carbon: 0 Sunday … 6 Saturday. If a company has no calendar, `isWorkingDay` must return true for every weekday, including Saturday and Sunday. A public holiday and a cutoff holiday are company-wide non-working days.
 
 ## Clock windows
 
@@ -38,13 +38,13 @@ Department window, used by everyone in that department:
 
 An employee may keep the department windows, or set their own Mon–Sat pair and Sunday pair. Store the four times on `department_work_hours` and `employee_work_hours` next to the existing `hours_per_day` and `uses_department` columns. Keep `hours_per_day` equal to the Monday–Saturday length (9.00 for 09:00–18:00) so older screens still read a day length. Pay cutoff reads the clock windows, not `hours_per_day`.
 
-Each person is Day or Night (`employee_work_hours.shift_kind`). Night uses the department night clocks Monday–Saturday, 21:00–06:00 unless that person has their own night clocks. Sunday is not a night duty. A night-shift person is paid that Sunday in full, with no punch and no cutoff. A roster row whose shift ends at or before it starts is a night shift for a Monday–Saturday date and its start and end replace the window. Day roster rows do not replace the Sunday 08:00–13:00 window. The minute rate stays the day Monday–Saturday length, including on a night shift.
+Each date is Day or Night. A saved span in `employee_shift_spans` chooses that date. Dates with no span still use `employee_work_hours.shift_kind`. Night uses the department night clocks Monday–Saturday, 21:00–06:00 unless that person has their own night clocks. Sunday night is a department switch, `department_work_hours.night_works_sunday`. Off pays that Sunday for every night person in the department, with no punch and no cutoff. On uses that department’s Sunday night start, end, and break. A person’s own Sunday switch does not change Sunday night. A roster row whose shift ends at or before it starts is a night shift for a Monday–Saturday date and its start and end replace the window only when that date has no saved span. It does not replace Sunday night. Day roster rows do not replace the Sunday 08:00–13:00 window. The minute rate stays the day Monday–Saturday length, including on a night shift.
 
 On Hours & pay, show two time rows: “Monday to Saturday” and “Sunday”. Department first. On the employee page, a switch: use the department times, or this person’s own times. Save with the existing jQuery ajax on that page. Do not reload the layout.
 
 Write these defaults now for every active department in the company. Point employees at the department windows (`uses_department` true) unless they already have their own hours. If they already have their own hours, set their four times to the same defaults without deleting their salary.
 
-Sunday on or off is not a department flag. On the employee detail and edit pages, that person has a Sunday switch. Off pays the day with no punch and no cutoff. On stores the Sunday clock. A night person with no switch is still off on Sunday. A holiday can still pay a day for someone whose Sunday is on.
+Day Sunday on or off stays on the person. On the employee detail and edit pages, a day person has a Sunday switch. Off pays the day with no punch and no cutoff. On stores the Sunday clock. A night person’s Sunday is the department Night · Sunday switch, not this personal switch. A holiday can still pay a day for someone whose Sunday is on.
 
 ## Holidays are paid
 
@@ -52,25 +52,26 @@ A holiday is not leave. Do not create a `leave_requests` row for it.
 
 Company holiday, from `/holidays`, Super Admin or HR Admin, permission `holidays.manage`:
 
-- Kind stays `public`
-- Attendance status stays `holiday`
-- Every employee is paid that calendar day’s full pay
+- Kind is `public` or `cutoff`. Public is selected when the form opens
+- Attendance status stays `holiday` for both
+- Public pays every employee that calendar day’s full pay. No late or early cutoff
+- Cutoff takes that day’s full pay from every employee. A personal paid day on the same date still pays that one person
 - No punch is required
-- No late or early cutoff
 - The day still counts in the month length. It is not removed before dividing
 
-Copy on the holiday form: “Paid day for everyone. No punch needed.” Restricted and optional kinds stay on the form and do not pay a day by themselves.
+Copy on the public option: “Paid day for everyone. No punch needed.” Copy on the cutoff option: “This day is cut from everyone’s salary. No punch needed.”
 
-One employee’s Sunday off, also Super Admin or HR Admin:
+One employee’s paid days, also Super Admin or HR Admin:
 
-- New table `employee_holidays`: `employee_id`, `holiday_date`, `name`
+- Table `employee_holidays`: `employee_id`, `holiday_date`, `name`
 - Unique on employee + date
-- Not a company `holidays` row, because that date must stay a working Sunday for everyone else
+- The popup takes a person, a from date, a to date, and a reason. Each date in the range is one row
+- Not a company `holidays` row, because that date must stay a working day for everyone else
 - Attendance for that employee on that date is `holiday`
 - That employee is paid the full day. No punch. No cutoff
-- Other employees keep the Sunday window
+- Other employees keep their normal day
 
-Put this on the Holidays page as a second card: pick the employee, the date, and a name. Stay on the page (ajax). The employee list is `visibleTo`. Do not add it under Leave.
+The button sits at the top of Holidays. The list of saved days stays under the calendar. Stay on the page (ajax). The employee list is `visibleTo`. Do not add it under Leave.
 
 Deleting either holiday puts that day back to a normal working day. Recalculate attendance for that date with `AttendanceCalculator`. Do not hand-edit `attendance_days.status`.
 
@@ -86,7 +87,9 @@ Example: 25000 in a 30-day month is 833.33 a day. The same 25000 in a 31-day mon
 
 Sunday’s shorter window does not make Sunday a half-pay day. Completing 08:00–13:00 pays the same day pay as completing 09:00–18:00.
 
-The salary is `employee_salaries.gross_monthly` already effective on the pay date. Hours & pay remains the place that writes it. Payroll and the salary sheet both read it. Do not invent a second salary column.
+The salary is `employee_salaries.gross_monthly` already effective on that calendar date. Each saved amount keeps its start date. A later amount does not replace the earlier days. Example: 25000 from 1 Nov and 30000 from 15 Nov, in a 30-day month with no cutoff, pays 14 days at 25000/30 and 16 days at 30000/30. A full month that uses one amount and has no cutoff pays that amount exactly. A day before joining pays nothing. A person with no salary row pays nothing. Hours & pay remains the place that writes it. The salary sheet reads each day. The month report uses only the latest amount effective on or before the last day of that month. Do not invent a second salary column.
+
+Office work that is still outside, on an approved or expired pass, uses the clock end as the out, so those minutes are not cut. Personal minutes outside the scheduled break are added to early leave. Sunday off for that date’s shift pays the full day with no punch.
 
 ## Cutoff
 
@@ -118,7 +121,7 @@ No clock in and no clock out on a working day, and the day is not a holiday and 
 
 Approved paid leave pays the full day pay with no cutoff. Unpaid leave and absence pay nothing. Do not change leave approval.
 
-Gate-pass minutes already stored on `attendance_days` stay. Personal minutes out of the office count as short minutes. Office-credit minutes do not. Do not change gate-pass approval.
+Gate-pass minutes already stored on `attendance_days` stay. Personal minutes outside the scheduled break count as short minutes. Time inside the break does not. Office-work minutes do not. A personal pass that ends with no return is early leave. Do not change gate-pass approval.
 
 Never cut more than that day’s pay. Never pay more than that day’s pay for attendance. Structure deductions and advances stay as they are and apply after the earned total.
 
@@ -133,7 +136,7 @@ On the salary sheet day grid, and in the payroll item breakdown, every cutoff is
 - Rupees cut
 - Reason: late, left early, absent, or holiday (paid, no cut)
 
-The month total has a “Salary cutoff” figure. Net uses the earned days after cutoff, then the structure deductions and advances that already exist.
+The month total has a “Salary cutoff” figure. Net uses the earned days after cutoff, then the advances that fall in the sheet.
 
 Salary sheet and payroll run must use this same day pay and cutoff. Today they do not: the sheet pays minutes worked, and the run divides by working days. Change both. Update `docs/salary/SHEETS.md` and `docs/payroll/RUNS.md` in the same change. `docs/prompts/HRMS-FREEZE.md` may say payroll math must not change; this prompt is the exception, and the freeze note must mention this file after the change.
 

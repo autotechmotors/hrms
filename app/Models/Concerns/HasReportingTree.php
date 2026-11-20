@@ -7,6 +7,8 @@ use Illuminate\Support\Collection;
 
 trait HasReportingTree
 {
+    private ?Collection $familyMemberIdCache = null;
+
     public function ancestorChain(): Collection
     {
         $ancestors = collect();
@@ -53,7 +55,7 @@ trait HasReportingTree
 
     public function familyMemberIds(): Collection
     {
-        return $this->managedEmployeeIds()->push($this->id)->unique()->values();
+        return $this->familyMemberIdCache ??= $this->managedEmployeeIds()->push($this->id)->unique()->values();
     }
 
     public function manages(Employee $employee): bool

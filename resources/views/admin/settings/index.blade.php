@@ -4,7 +4,7 @@
     <div class="st-page">
         <div class="ph">
             <div>
-                <h1>Settings</h1>
+                <h1>{{ __('Settings') }}</h1>
                 <p>Attendance block rule for this company. Super Admin and HR Admin are never blocked.</p>
             </div>
             <div class="ac">
@@ -20,7 +20,7 @@
                 @method('put')
                 <header>
                     <div>
-                        <h3>Auto-block without in / out</h3>
+                        <h3>{{ __('Auto-block without in / out') }}</h3>
                         <p>Anyone else with no punch for the set days is marked Blocked.</p>
                     </div>
                 </header>
@@ -42,8 +42,8 @@
                         <p class="form-text">Full days with no in and no out. Unblock later from Employees.</p>
                     </div>
                     <ul class="st-notes">
-                        <li>The count starts from the last punch, or from the joining date when there is none.</li>
-                        <li>Saving while the rule is on blocks everyone already over the limit.</li>
+                        <li>The count starts from the last punch, or from the joining date when there is none. Today is not counted until it is over.</li>
+                        <li>Saving while the rule is on blocks everyone already over the limit. The scheduled job does the same once each day.</li>
                         <li>Super Admin and HR Admin stay active even when they have no punches.</li>
                     </ul>
                 </div>
@@ -58,7 +58,7 @@
                 <section class="card st-stat">
                     <small>Overdue now</small>
                     <b>{{ $overdueTotal }}</b>
-                    <span>{{ $setting->block_inactive_enabled ? 'These people are blocked when you save.' : 'Shown for review. The rule is off.' }}</span>
+                    <span>{{ $setting->block_inactive_enabled ? 'Blocked on save, and once each day by the scheduled job.' : 'Shown for review. The rule is off.' }}</span>
                 </section>
             </aside>
         </div>
@@ -66,10 +66,10 @@
         <section class="card ef-sec st-idle" id="stIdle" data-idle-count="{{ $overdueTotal }}">
             <header>
                 <div>
-                    <h3>Currently overdue</h3>
+                    <h3>{{ __('Currently overdue') }}</h3>
                     <p>
                         @if($setting->block_inactive_enabled)
-                            Already past {{ $setting->block_inactive_days }} days. Saving blocks them.
+                            Already past {{ $setting->block_inactive_days }} days. Saving blocks them. The daily job does the same.
                         @else
                             Turn the rule on and save to start blocking.
                         @endif
@@ -79,7 +79,7 @@
             </header>
             <div class="cb">
                 @if($setting->block_inactive_enabled && $overdueTotal > 0)
-                    <p class="st-alert"><b>{{ $overdueTotal }} people</b> are past {{ $setting->block_inactive_days }} days. Save blocks them. Super Admin and HR Admin stay active.</p>
+                    <p class="st-alert"><b>{{ $overdueTotal }} people</b> are past {{ $setting->block_inactive_days }} days. Save blocks them now. The daily job blocks anyone who crosses the limit later. Super Admin and HR Admin stay active.</p>
                 @endif
                 <form id="stFind" class="st-find" method="get" action="{{ route('settings.edit') }}">
                     <label for="stOverdue">Search overdue</label>
@@ -160,8 +160,8 @@
                 if (!toggle || !toggle.checked || form.dataset.confirmed === '1') return;
                 event.preventDefault();
                 window.askConfirm(
-                    'Saving with the rule on blocks everyone already over the days you set. Super Admin and HR Admin stay active.',
-                    {label: 'Save and block', danger: true}
+                    @json(__('Saving with the rule on blocks everyone already over the days you set. Super Admin and HR Admin stay active.')),
+                    {label: @json(__('Save and block')), danger: true}
                 ).then((ok) => {
                     if (!ok) return;
                     form.dataset.confirmed = '1';

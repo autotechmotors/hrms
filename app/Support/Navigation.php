@@ -23,8 +23,6 @@ class Navigation
                 self::link('Holidays', 'holidays.index', ['holidays.*'], 'sun', ['holidays.view'], 'holidays'),
             ],
             'Payroll' => [
-                self::link('Payroll', 'payroll.index', ['payroll.*'], 'wallet', ['payroll.view', 'payroll.process', 'payroll.approve', 'payroll.lock', 'payroll.reopen'], 'payroll'),
-                self::link('Salary Structures', 'salary.index', ['salary.*'], 'layers', ['salary.view'], 'salary structures'),
                 self::link('Hours & pay', 'hours-pay.index', ['hours-pay.*'], 'clock', ['salary.view'], 'hours & pay'),
                 self::link('Salary sheets', 'salary-sheets.index', ['salary-sheets.*'], 'wallet', ['salary.view', 'salary.decide', 'payroll.process'], 'salary sheets'),
                 self::link('Advances & Deductions', 'advances.index', ['advances.*'], 'minus', ['advances.view', 'advances.manage', 'payroll.process'], 'advances & deductions'),
@@ -77,30 +75,9 @@ class Navigation
             }
         }
 
-        $preferred = ['dashboard', 'employees.index', 'attendance.index'];
-        $ordered = [];
-        $seen = [];
-        foreach ($preferred as $route) {
-            foreach ($flat as $link) {
-                if ($link['route'] === $route) {
-                    $ordered[] = $link;
-                    $seen[$route] = true;
-                }
-            }
-        }
-        foreach ($flat as $link) {
-            if (! isset($seen[$link['route']])) {
-                $ordered[] = $link;
-            }
-        }
-
-        if (count($ordered) <= 4) {
-            return ['primary' => $ordered, 'more' => []];
-        }
-
         return [
-            'primary' => array_slice($ordered, 0, 4),
-            'more' => array_slice($ordered, 4),
+            'primary' => array_slice($flat, 0, 3),
+            'more' => array_slice($flat, 3),
         ];
     }
 

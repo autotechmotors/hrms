@@ -69,7 +69,7 @@ class AdvanceController extends Controller
             'status' => 'active',
         ]);
 
-        $message = 'Advance recorded for '.$given->format('F Y').'. The full amount is deducted from that month’s salary when payroll is calculated.';
+        $message = 'Advance recorded for '.$given->format('F Y').'. The full amount is deducted when a salary sheet covering this date is approved.';
         if ($request->ajax()) {
             return response()->json(['message' => $message]);
         }

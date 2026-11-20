@@ -34,8 +34,8 @@
     $formatTime = fn ($time) => \App\Support\Clock::time($time);
     $formatInput = fn ($time) => \App\Support\Clock::input($time);
 @endphp
-<div id="attendanceResults" data-page="{{ $employees->currentPage() }}" data-last="{{ $employees->lastPage() }}" data-total="{{ $employees->total() }}" data-working="{{ $stats['working'] }}" data-late="{{ $stats['late'] }}" data-half="{{ $stats['half_day'] }}" data-absent="{{ $stats['absent'] }}" data-leave="{{ $stats['on_leave'] }}" data-holiday="{{ $stats['holiday'] }}" data-off="{{ $stats['weekly_off'] }}" data-pending="{{ $stats['pending'] }}" data-unmarked="{{ $stats['unmarked'] }}">
-        <div class="att-cards">
+<div id="attendanceResults" data-live-list="attendance" data-page="{{ $employees->currentPage() }}" data-last="{{ $employees->lastPage() }}" data-total="{{ $employees->total() }}" data-working="{{ $stats['working'] }}" data-late="{{ $stats['late'] }}" data-half="{{ $stats['half_day'] }}" data-absent="{{ $stats['absent'] }}" data-leave="{{ $stats['on_leave'] }}" data-holiday="{{ $stats['holiday'] }}" data-off="{{ $stats['weekly_off'] }}" data-pending="{{ $stats['pending'] }}" data-unmarked="{{ $stats['unmarked'] }}">
+        <div class="att-cards" data-list-rows>
             @forelse($employees as $employee)
                 @php
                     $day = $days->get($employee->id);
@@ -90,6 +90,9 @@
                         </div>
                         <div>
                             <span class="b {{ $badge }} js-status">{{ $label }}</span>
+                            @if($day?->punch_in || $day?->punch_out)
+                                <span class="att-mark js-mark {{ $day->source === 'manual' ? 'is-m' : 'is-a' }}" title="{{ $day->source === 'manual' ? 'Manual' : 'Machine' }}">{{ $day->source === 'manual' ? 'M' : 'A' }}</span>
+                            @endif
                         </div>
                     </div>
                     @if($canEdit)
@@ -103,11 +106,11 @@
                             data-punch-in="{{ $formatInput($day?->punch_in) }}"
                             data-punch-out="{{ $formatInput($day?->punch_out) }}"
                             data-remarks="{{ $day?->remarks }}"
-                        >Edit</button>
+                        >{{ __('Edit') }}</button>
                     @endif
                 </article>
             @empty
-                <p class="att-empty">No employees match this day and filters.</p>
+                <p class="att-empty" data-list-empty>No employees match this day and filters.</p>
             @endforelse
         </div>
 
@@ -115,17 +118,17 @@
             <table>
                 <thead>
                     <tr>
-                        <th>Employee</th>
-                        <th>Department</th>
-                        <th>Phone</th>
-                        <th>In</th>
-                        <th>Out</th>
-                        <th>Worked</th>
-                        <th>Status</th>
+                        <th>{{ __('Employee') }}</th>
+                        <th>{{ __('Department') }}</th>
+                        <th>{{ __('Phone') }}</th>
+                        <th>{{ __('In') }}</th>
+                        <th>{{ __('Out') }}</th>
+                        <th>{{ __('Worked') }}</th>
+                        <th>{{ __('Status') }}</th>
                         @if($canEdit)<th></th>@endif
                     </tr>
                 </thead>
-                <tbody>
+                <tbody data-list-rows>
                 @forelse($employees as $employee)
                     @php
                         $day = $days->get($employee->id);
@@ -181,6 +184,9 @@
                         <td class="att-mins js-worked">{{ $formatMinutes($day?->minutes_worked) }}</td>
                         <td>
                             <span class="b {{ $badge }} js-status">{{ $label }}</span>
+                            @if($day?->punch_in || $day?->punch_out)
+                                <span class="att-mark js-mark {{ $day->source === 'manual' ? 'is-m' : 'is-a' }}" title="{{ $day->source === 'manual' ? 'Manual' : 'Machine' }}">{{ $day->source === 'manual' ? 'M' : 'A' }}</span>
+                            @endif
                             @if($day?->remarks)
                                 <small class="att-note" title="{{ $day->remarks }}">{{ \Illuminate\Support\Str::limit($day->remarks, 28) }}</small>
                             @endif
@@ -205,7 +211,7 @@
                         @endif
                     </tr>
                 @empty
-                    <tr>
+                    <tr data-list-empty>
                         <td colspan="{{ $canEdit ? 8 : 7 }}" class="att-empty">
                             No employees match this day and filters.
                         </td>
@@ -214,8 +220,5 @@
                 </tbody>
             </table>
         </div>
-        <div class="pgn">
-            <span>{{ $employees->firstItem() ?? 0 }}–{{ $employees->lastItem() ?? 0 }} of {{ $employees->total() }}</span>
-            <div>{{ $employees->links() }}</div>
-        </div>
+        @include('partials.list-footer', ['paginator' => $employees])
 </div>

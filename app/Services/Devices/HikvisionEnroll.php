@@ -3,7 +3,6 @@
 namespace App\Services\Devices;
 
 use App\Models\Device;
-use App\Models\DeviceTerminalUser;
 use App\Models\Employee;
 use App\Models\EmployeeCredential;
 use App\Support\StoredImage;
@@ -26,12 +25,11 @@ class HikvisionEnroll
 
         if ($kind === 'password') {
             $this->ensureUser($device, $userId, $name, $password);
-        } elseif (! $this->onTerminal($device, $userId)) {
-            $this->ensureUser($device, $userId, $name, null, false);
-        }
-        if ($kind === 'password') {
+
             return;
         }
+
+        $this->ensureUser($device, $userId, $name, null, false);
         if ($kind === 'face') {
             $jpeg = $this->takenFace($device, $userId, $name);
             $next = 0;
@@ -200,15 +198,6 @@ class HikvisionEnroll
         if (! $this->ok($updated)) {
             throw new RuntimeException($this->problem($updated));
         }
-    }
-
-    private function onTerminal(Device $device, string $userId): bool
-    {
-        return DeviceTerminalUser::query()
-            ->where('device_id', $device->id)
-            ->where('user_id', $userId)
-            ->whereNull('dismissed_at')
-            ->exists();
     }
 
     private function captureFace(Device $device, string $userId): string

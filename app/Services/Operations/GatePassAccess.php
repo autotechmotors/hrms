@@ -10,10 +10,15 @@ use App\Models\Employee;
 use App\Models\GatePass;
 use App\Services\Devices\EmployeePush;
 use Carbon\Carbon;
+use Illuminate\Support\Collection;
 use RuntimeException;
 
 class GatePassAccess
 {
+    public const OUT_LEAD_MINUTES = 10;
+
+    public function __construct(private readonly WorkHourResolver $hours) {}
+
     public function grant(GatePass $pass): GatePass
     {
         $pass->loadMissing('employee');
@@ -110,6 +115,42 @@ class GatePassAccess
     }
 
     /**
+     * An OUT punch is stored only after an IN, and only for an approved pass,
+     * an early leave, or the last 10 minutes of the shift.
+     */
+    public function outAllowed(Employee $employee, Carbon $at): bool
+    {
+        $at = $at->copy()->timezone('Asia/Kolkata');
+        $employee->loadMissing('workHour');
+        $workDate = $at->copy()->startOfDay();
+        if (($employee->workHour?->shift_kind ?? 'day') === 'night' && (int) $at->format('G') < 12) {
+            $workDate->subDay();
+        }
+        $span = $this->hours->attendanceSpan($employee, $workDate);
+        $hasIn = AttendancePunch::query()
+            ->where('employee_id', $employee->id)
+            ->where('direction', 'in')
+            ->where('punched_at', '>=', $span['from'])
+            ->where('punched_at', '<', $at)
+            ->exists();
+        if (! $hasIn) {
+            return false;
+        }
+        if ($this->authorized($employee, $at)) {
+            return true;
+        }
+
+        $window = $this->hours->windowFor($employee, $workDate);
+        $start = Carbon::parse($workDate->toDateString().' '.$window['start'], 'Asia/Kolkata');
+        $end = Carbon::parse($workDate->toDateString().' '.$window['end'], 'Asia/Kolkata');
+        if ($window['overnight'] && $end->lessThanOrEqualTo($start)) {
+            $end->addDay();
+        }
+
+        return $at->greaterThanOrEqualTo($end->copy()->subMinutes(self::OUT_LEAD_MINUTES));
+    }
+
+    /**
      * Tag a punch as gate out/return. Returns false when a gate terminal punch is not allowed.
      */
     public function attachPunch(Employee $employee, AttendancePunch $punch, ?Device $device = null): bool
@@ -149,7 +190,7 @@ class GatePassAccess
     }
 
     /**
-     * @return \Illuminate\Support\Collection<int, Device>
+     * @return Collection<int, Device>
      */
     public function gateDevices(int $companyId)
     {

@@ -35,9 +35,15 @@
         <input class="in" name="place" value="{{ $field('place') }}" maxlength="120">
     </label>
     <label>Machine role
+        @php
+            $machineRole = ($current?->gate_kind ?? 'attendance') === 'gate'
+                ? 'gate'
+                : (in_array($current?->punch_role, ['in', 'out'], true) ? $current->punch_role : 'attendance');
+            $machineRole = $bindOld ? old('gate_kind', $machineRole) : $machineRole;
+        @endphp
         <select class="in" name="gate_kind" data-native required>
-            @foreach (['attendance' => 'Attendance IN / OUT', 'gate' => 'Gate OUT (pass only)'] as $kind => $label)
-                <option value="{{ $kind }}" @selected($field('gate_kind', 'attendance') === $kind)>{{ $label }}</option>
+            @foreach (['attendance' => 'Attendance, either door', 'in' => 'IN machine', 'out' => 'OUT machine', 'gate' => 'Gate OUT (pass only)'] as $kind => $label)
+                <option value="{{ $kind }}" @selected($machineRole === $kind)>{{ $label }}</option>
             @endforeach
         </select>
     </label>

@@ -21,6 +21,7 @@ class DepartmentWorkHour extends Model
         'night_weekday_end',
         'night_sunday_start',
         'night_sunday_end',
+        'night_works_sunday',
         'weekday_break_start',
         'weekday_break_end',
         'sunday_break_start',
@@ -33,7 +34,10 @@ class DepartmentWorkHour extends Model
 
     protected function casts(): array
     {
-        return ['hours_per_day' => 'decimal:2'];
+        return [
+            'hours_per_day' => 'decimal:2',
+            'night_works_sunday' => 'boolean',
+        ];
     }
 
     public function department(): BelongsTo

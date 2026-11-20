@@ -63,7 +63,7 @@
             <section class="card ef-sec">
                 <header>
                     <div>
-                        <h3>Attendance record</h3>
+                        <h3>{{ __('Attendance record') }}</h3>
                         <p>First face of the day is clock in. Another face within 2 minutes is the same visit. The next face is clock out.</p>
                     </div>
                 </header>
@@ -71,12 +71,12 @@
                     <table>
                         <thead>
                             <tr>
-                                <th>Date</th>
-                                <th>In</th>
-                                <th>Out</th>
-                                <th>Worked</th>
-                                <th>Status</th>
-                                @if($canEdit)<th>Action</th>@endif
+                                <th>{{ __('Date') }}</th>
+                                <th>{{ __('In') }}</th>
+                                <th>{{ __('Out') }}</th>
+                                <th>{{ __('Worked') }}</th>
+                                <th>{{ __('Status') }}</th>
+                                @if($canEdit)<th>{{ __('Action') }}</th>@endif
                             </tr>
                         </thead>
                         <tbody id="attDays">
@@ -86,13 +86,18 @@
                                     <td class="att-time js-in">{{ $day['in'] ?: '—' }}</td>
                                     <td class="att-time js-out">{{ $day['out'] ?: '—' }}</td>
                                     <td class="js-worked">{{ $day['worked'] }}</td>
-                                    <td><span class="b {{ $day['status_class'] }} js-status">{{ $day['status'] }}</span></td>
+                                    <td>
+                                        <span class="b {{ $day['status_class'] }} js-status">{{ $day['status'] }}</span>
+                                        @if(($day['mark'] ?? '') !== '')
+                                            <span class="att-mark {{ $day['mark'] === 'M' ? 'is-m' : 'is-a' }}" title="{{ $day['mark'] === 'M' ? 'Manual' : 'Machine' }}">{{ $day['mark'] }}</span>
+                                        @endif
+                                    </td>
                                     @if($canEdit)
                                         <td class="att-act">
                                             <button type="button" class="ib" title="Edit" data-edit-day data-date="{{ $day['date'] }}" data-label="{{ $day['label'] }}" data-in="{{ $day['in_input'] }}" data-out="{{ $day['out_input'] }}">
                                                 <x-i name="pen" :size="14" />
                                             </button>
-                                            <form method="post" action="{{ route('attendance.day.destroy', $employee) }}" data-confirm="Delete attendance for {{ $day['label'] }}?">
+                                            <form method="post" action="{{ route('attendance.day.destroy', $employee) }}" data-confirm="{{ __('Delete attendance for :day?', ['day' => $day['label']]) }}">
                                                 @csrf
                                                 @method('DELETE')
                                                 <input type="hidden" name="work_date" value="{{ $day['date'] }}">
@@ -179,8 +184,8 @@
                         </div>
                     </div>
                     <div class="modal-footer">
-                        <button type="button" class="btn" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" class="btn pr">Save</button>
+                        <button type="button" class="btn" data-bs-dismiss="modal">{{ __('Cancel') }}</button>
+                        <button type="submit" class="btn pr">{{ __('Save') }}</button>
                     </div>
                 </form>
             </div>
@@ -188,7 +193,7 @@
     @endif
 
     <div id="attView" class="att-view" hidden>
-        <button type="button" class="att-view-x" data-close aria-label="Close">Close</button>
+        <button type="button" class="att-view-x" data-close aria-label="Close">{{ __('Close') }}</button>
         <img id="attViewImg" alt="Attendance photo">
     </div>
 @endsection
@@ -198,6 +203,7 @@
 (function ($) {
     const root = document.getElementById('attRecord');
     if (!root) return;
+    const deleteConfirm = @json(__('Delete attendance for :day?'));
 
     const state = {
         month: root.getAttribute('data-month'),
@@ -214,7 +220,7 @@
     function actions(day) {
         if (root.getAttribute('data-can-edit') !== '1') return '';
         return '<button type="button" class="ib" title="Edit" data-edit-day data-date="' + day.date + '" data-label="' + day.label + '" data-in="' + (day.in_input || '') + '" data-out="' + (day.out_input || '') + '"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></button>'
-            + '<form method="post" action="' + root.getAttribute('data-delete') + '" data-confirm="Delete attendance for ' + day.label + '?">'
+            + '<form method="post" action="' + root.getAttribute('data-delete') + '" data-confirm="' + deleteConfirm.replace(':day', day.label).replace(/"/g, '&quot;') + '">'
             + '<input type="hidden" name="_token" value="' + root.getAttribute('data-csrf') + '">'
             + '<input type="hidden" name="_method" value="DELETE">'
             + '<input type="hidden" name="work_date" value="' + day.date + '">'
@@ -290,6 +296,20 @@
             if (status) {
                 status.textContent = day.status;
                 status.className = 'b js-status ' + (day.status_class || '');
+            }
+            const mark = row.querySelector('.att-mark');
+            if (day.mark) {
+                if (!mark) {
+                    status?.insertAdjacentHTML('afterend', '<span class="att-mark"></span>');
+                }
+                const badge = row.querySelector('.att-mark');
+                if (badge) {
+                    badge.textContent = day.mark;
+                    badge.className = 'att-mark ' + (day.mark === 'M' ? 'is-m' : 'is-a');
+                    badge.title = day.mark === 'M' ? 'Manual' : 'Machine';
+                }
+            } else if (mark) {
+                mark.remove();
             }
         });
         document.getElementById('attDayCount').textContent = String(state.days.length);

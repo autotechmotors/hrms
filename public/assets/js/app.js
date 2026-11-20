@@ -222,10 +222,10 @@ document.addEventListener('DOMContentLoaded', () => {
             pendingForm = null;
             pendingResolve = resolve;
             if (confirmButton) {
-                confirmButton.textContent = settings.label || 'Continue';
+                confirmButton.textContent = settings.label || confirmButton.getAttribute('data-default') || 'Continue';
                 confirmButton.classList.toggle('is-danger', Boolean(settings.danger));
             }
-            showConfirm(message || 'Please confirm');
+            showConfirm(message || (confirmText && confirmText.getAttribute('data-empty')) || 'Please confirm');
         });
     };
 
@@ -237,7 +237,7 @@ document.addEventListener('DOMContentLoaded', () => {
             event.preventDefault();
             pendingResolve = null;
             pendingForm = form;
-            showConfirm(form.dataset.confirm || 'Please confirm');
+            showConfirm(form.dataset.confirm || (confirmText && confirmText.getAttribute('data-empty')) || 'Please confirm');
         });
     });
 
@@ -265,7 +265,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     confirmModal?.addEventListener('hidden.bs.modal', () => {
         if (confirmButton) {
-            confirmButton.textContent = 'Continue';
+            confirmButton.textContent = confirmButton.getAttribute('data-default') || 'Continue';
             confirmButton.classList.remove('is-danger');
         }
         if (pendingResolve) {
@@ -382,9 +382,10 @@ document.addEventListener('DOMContentLoaded', () => {
     search?.addEventListener('input', () => {
         const term = search.value.trim().toLowerCase();
         const pages = [...document.querySelectorAll('.nv .ni')];
-        const matches = pages.filter((link) => (link.dataset.page || link.textContent).toLowerCase().includes(term));
+        const matches = pages.filter((link) => ((link.dataset.page || '') + ' ' + (link.textContent || '')).toLowerCase().includes(term));
+        const none = (window.__I18N && window.__I18N.none) || 'No results';
         results.innerHTML = term
-            ? (matches.map((link) => `<a href="${link.getAttribute('href')}">${link.querySelector('.lb')?.textContent || ''}</a>`).join('') || '<div class="nt"><small>No results</small></div>')
+            ? (matches.map((link) => `<a href="${link.getAttribute('href')}">${link.querySelector('.lb')?.textContent || ''}</a>`).join('') || `<div class="nt"><small>${none}</small></div>`)
             : '';
         search.closest('.dw')?.classList.toggle('open', term.length > 0);
     });
@@ -396,7 +397,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     document.querySelectorAll('input[type="date"]').forEach((input) => {
-        if (input.dataset.picked || typeof flatpickr !== 'function') {
+        if (input.dataset.picked || input.closest('#empShift') || typeof flatpickr !== 'function') {
             return;
         }
         input.dataset.picked = '1';
@@ -417,6 +418,9 @@ document.addEventListener('DOMContentLoaded', () => {
             ignoreReadonly: true,
         });
     });
+    if (window.bindShiftDates) {
+        window.bindShiftDates(document.getElementById('empShift'));
+    }
 
     document.querySelectorAll('input[type="time"]').forEach((input) => {
         if (input.dataset.picked || typeof flatpickr !== 'function') {
@@ -540,3 +544,115 @@ document.addEventListener('DOMContentLoaded', () => {
         window.setInterval(refreshNotifications, 45000);
     }
 });
+
+(function () {
+    const phone = () => window.matchMedia('(max-width: 700px)').matches;
+    const loads = new WeakMap();
+
+    function listNode(html, key) {
+        const doc = new DOMParser().parseFromString(html, 'text/html');
+        const safe = (window.CSS && CSS.escape) ? CSS.escape(key) : key.replace(/["\\]/g, '');
+        return doc.querySelector('[data-live-list="' + safe + '"]');
+    }
+
+    function paintRange(pager, from) {
+        if (!pager || !from) return;
+        pager.dataset.from = from;
+        const range = pager.querySelector('.el-range');
+        const text = window.__I18N && window.__I18N.range;
+        if (!range || !text || !pager.dataset.total || pager.dataset.total === '0') return;
+        range.textContent = text
+            .replace(':from', from)
+            .replace(':to', pager.dataset.to || from)
+            .replace(':total', pager.dataset.total);
+    }
+
+    function finish(host, url, append) {
+        const clean = new URL(url, window.location.origin);
+        clean.searchParams.delete('partial');
+        if (!append && window.history && window.history.replaceState) {
+            window.history.replaceState({}, '', clean.pathname + clean.search);
+        }
+        host.classList.remove('is-loading-more');
+        host.dispatchEvent(new CustomEvent('hrms:list-updated', { bubbles: true }));
+        window.requestAnimationFrame(scanLists);
+    }
+
+    function loadList(host, url, append) {
+        if (!host || loads.get(host)) return;
+        const key = host.getAttribute('data-live-list');
+        if (!key) return;
+        const target = new URL(url, window.location.origin);
+        target.searchParams.set('partial', '1');
+        loads.set(host, true);
+        host.classList.add('is-loading-more');
+        const from = host.querySelector('.pgn')?.dataset.from;
+        $.ajax({
+            url: target.toString(),
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        }).done(function (html) {
+            const next = listNode(String(html), key);
+            if (!next) return;
+            if (!append) {
+                const node = document.importNode(next, true);
+                host.replaceWith(node);
+                finish(node, target.toString(), false);
+                return;
+            }
+            const boxes = host.querySelectorAll('[data-list-rows]');
+            const incoming = next.querySelectorAll('[data-list-rows]');
+            boxes.forEach(function (box, index) {
+                const source = incoming[index];
+                if (!source) return;
+                Array.from(source.children).forEach(function (child) {
+                    if (child.hasAttribute('data-list-empty')) return;
+                    box.appendChild(document.importNode(child, true));
+                });
+            });
+            host.dataset.page = next.dataset.page || host.dataset.page;
+            host.dataset.last = next.dataset.last || host.dataset.last;
+            const pager = host.querySelector('.pgn');
+            const nextPager = next.querySelector('.pgn');
+            if (pager && nextPager) {
+                const node = document.importNode(nextPager, true);
+                paintRange(node, from || node.dataset.from);
+                pager.replaceWith(node);
+            }
+            finish(host, target.toString(), true);
+        }).fail(function (xhr) {
+            if (xhr.statusText === 'abort') return;
+            host.classList.remove('is-loading-more');
+            if (window.toast) window.toast((window.__I18N && window.__I18N.pageFail) || 'Could not load the next page.', 'er');
+        }).always(function () {
+            loads.delete(host);
+        });
+    }
+
+    document.addEventListener('click', function (event) {
+        const link = event.target.closest('[data-live-list] .pgn a');
+        if (!link) return;
+        const host = link.closest('[data-live-list]');
+        if (!host) return;
+        event.preventDefault();
+        event.stopPropagation();
+        loadList(host, link.href, false);
+    }, true);
+
+    function scanLists() {
+        if (!phone()) return;
+        document.querySelectorAll('[data-live-list]').forEach(function (host) {
+            if (loads.get(host)) return;
+            const page = Number(host.dataset.page || 1);
+            const last = Number(host.dataset.last || 1);
+            if (page >= last) return;
+            if (host.getBoundingClientRect().bottom > window.innerHeight + 480) return;
+            const next = host.querySelector('.pgn a[rel="next"]');
+            if (!next) return;
+            loadList(host, next.href, true);
+        });
+    }
+
+    window.addEventListener('scroll', scanLists, { passive: true });
+    window.addEventListener('resize', scanLists);
+    window.requestAnimationFrame(scanLists);
+})();

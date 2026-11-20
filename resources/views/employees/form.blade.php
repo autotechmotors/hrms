@@ -1,14 +1,14 @@
 @extends('layouts.app')
-@section('title', $employee ? 'Edit employee' : 'New employee')
+@section('title', $employee ? __('Edit employee') : __('New employee'))
 @section('content')
     <div class="ph">
         <div>
             <x-back :href="route('employees.index')" label="Employees" />
-            <h1>{{ $employee ? 'Edit employee' : 'New employee' }}</h1>
+            <h1>{{ $employee ? __('Edit employee') : __('New employee') }}</h1>
             <p>{{ $employee ? $employee->full_name.' · '.$employee->employee_code : 'Add someone to your company roster' }}</p>
         </div>
         <div class="ac">
-            <a class="btn" href="{{ $employee ? route('employees.show', $employee) : route('employees.index') }}">Cancel</a>
+            <a class="btn" href="{{ $employee ? route('employees.show', $employee) : route('employees.index') }}">{{ __('Cancel') }}</a>
             <button class="btn pr" type="submit" form="employeeForm">{{ $employee ? 'Save changes' : 'Save employee' }}</button>
         </div>
     </div>
@@ -22,7 +22,7 @@
                 <section class="card ef-sec">
                     <header>
                         <div>
-                            <h3>Identity</h3>
+                            <h3>{{ __('Identity') }}</h3>
                             <p>Name and how they appear on the roster</p>
                         </div>
                     </header>
@@ -54,7 +54,7 @@
                 <section class="card ef-sec">
                     <header>
                         <div>
-                            <h3>Contact</h3>
+                            <h3>{{ __('Contact') }}</h3>
                             <p>How you reach them at work</p>
                         </div>
                     </header>
@@ -70,7 +70,7 @@
                 <section class="card ef-sec">
                     <header>
                         <div>
-                            <h3>Address</h3>
+                            <h3>{{ __('Address') }}</h3>
                             <p>Where they live</p>
                         </div>
                     </header>
@@ -87,7 +87,7 @@
                 <section class="card ef-sec">
                     <header>
                         <div>
-                            <h3>Placement</h3>
+                            <h3>{{ __('Placement') }}</h3>
                             <p>Where they sit in the organisation</p>
                         </div>
                     </header>
@@ -174,7 +174,7 @@
                 <section class="card ef-sec">
                     <header>
                         <div>
-                            <h3>Employment terms</h3>
+                            <h3>{{ __('Employment terms') }}</h3>
                             <p>Joining, probation, and notice</p>
                         </div>
                     </header>
@@ -200,7 +200,7 @@
                     <section class="card ef-sec">
                         <header>
                             <div>
-                                <h3>Custom fields</h3>
+                                <h3>{{ __('Custom fields') }}</h3>
                                 <p>Extra details for this company</p>
                             </div>
                         </header>
@@ -231,7 +231,7 @@
                 <section class="card ef-sec ef-photo">
                     <header>
                         <div>
-                            <h3>Photograph</h3>
+                            <h3>{{ __('Photograph') }}</h3>
                             <p>Used on the attendance list and sent to the terminal</p>
                         </div>
                     </header>
@@ -259,7 +259,7 @@
                 <section class="card ef-sec ef-help">
                     <header>
                         <div>
-                            <h3>Before you save</h3>
+                            <h3>{{ __('Before you save') }}</h3>
                         </div>
                     </header>
                     <div class="cb">
@@ -275,12 +275,12 @@
         </div>
 
         <div id="attView" class="att-view" hidden>
-            <button type="button" class="att-view-x btn" data-close>Close</button>
+            <button type="button" class="att-view-x btn" data-close>{{ __('Close') }}</button>
             <img id="attViewImg" alt="Employee photo">
         </div>
 
         <div class="ef-bar">
-            <a class="btn" href="{{ $employee ? route('employees.show', $employee) : route('employees.index') }}">Cancel</a>
+            <a class="btn" href="{{ $employee ? route('employees.show', $employee) : route('employees.index') }}">{{ __('Cancel') }}</a>
             <button class="btn pr" type="submit">{{ $employee ? 'Save changes' : 'Save employee' }}</button>
         </div>
     </form>
@@ -294,15 +294,17 @@
         var box = root.querySelector('[data-sunday]');
         if (!box) return;
         var on = box.checked;
+        var night = root.querySelector('[data-kind]:checked') && root.querySelector('[data-kind]:checked').value === 'night';
         root.querySelectorAll('[data-sunday-times]').forEach(function (el) { el.hidden = !on; });
         root.querySelectorAll('[data-sunday-off]').forEach(function (el) { el.hidden = on; });
         root.querySelectorAll('[data-sunday-times] input').forEach(function (input) {
-            input.required = on && input.name.indexOf('break') === -1;
+            input.required = on && (night || input.name.indexOf('break') === -1);
         });
         var label = root.querySelector('.et-switch-txt');
         if (label) label.textContent = on ? 'On' : 'Off';
     }
     function applyKind(root) {
+        if (!root) return;
         var picked = root.querySelector('[data-kind]:checked');
         var hold = root.querySelector('[data-kind-clocks]');
         if (!picked || !hold) return;
@@ -325,6 +327,9 @@
             badge.classList.toggle('is-night', night);
             badge.classList.toggle('is-day', !night);
         }
+        var title = root.querySelector('[data-sunday-title]');
+        if (title) title.textContent = night ? 'Sunday night' : 'Sunday';
+        paintSunday(root);
     }
     paintSunday(document.getElementById('empTimes'));
     document.addEventListener('change', function (event) {

@@ -173,7 +173,7 @@ class GatePassWorkflowTest extends TestCase
             ->get(route('gate-passes.index'))
             ->assertOk()
             ->assertSee($arif->employee_code)
-            ->assertSee("Today's pending passes", false)
+            ->assertSee("Today's pending passes")
             ->assertDontSee('No pending Gate Pass from people under you today.');
     }
 

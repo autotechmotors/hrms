@@ -18,8 +18,8 @@
 <section class="card ef-sec" id="empTimes">
     <header>
         <div>
-            <h3>Working times</h3>
-            <p>Choose Day or Night, then set this person’s clocks. Sunday applies only when it is on.</p>
+            <h3>{{ __('Working times') }}</h3>
+            <p>Work, then break. Sunday uses the switch. Night uses this person’s Sunday night.</p>
         </div>
         <span class="et-badge {{ $kind === 'night' ? 'is-night' : 'is-day' }}" data-kind-badge>{{ $kind === 'night' ? 'Night' : 'Day' }}</span>
     </header>
@@ -56,59 +56,51 @@
                         <span><b>Night</b><small>Monday to Saturday night clock</small></span>
                     </label>
                 </div>
-                <label class="et-clock">
-                    <span>Monday to Saturday</span>
-                    <div>
-                        <input class="form-control" type="time" name="weekday_start" value="{{ $weekStart }}" required aria-label="Monday to Saturday start">
-                        <em>to</em>
-                        <input class="form-control" type="time" name="weekday_end" value="{{ $weekEnd }}" required aria-label="Monday to Saturday end">
-                    </div>
-                </label>
-                <div class="et-clock et-break">
-                    <span>Monday to Saturday break</span>
-                    <div>
-                        <input class="form-control" type="time" name="weekday_break_start" value="{{ $weekBreakStart }}" aria-label="Monday to Saturday break start">
-                        <em>to</em>
-                        <input class="form-control" type="time" name="weekday_break_end" value="{{ $weekBreakEnd }}" aria-label="Monday to Saturday break end">
-                    </div>
-                    <small>Inside this clock. 13:00 to 14:00 is 60 minutes. Leave blank for no break.</small>
-                </div>
-                @error('weekday_start')<p class="et-error">{{ $message }}</p>@enderror
-                @error('weekday_end')<p class="et-error">{{ $message }}</p>@enderror
-                <div class="et-sunday">
-                    <div class="et-sunday-top">
-                        <div>
-                            <b>Sunday</b>
-                            <small>On sets the Sunday clock. Off pays the day, with no punch and no cutoff.</small>
+                <div class="et-board">
+                    <div class="et-clock">
+                        <span>Monday to Saturday</span>
+                        <div class="hp-line">
+                            <b>{{ __('Work') }}</b>
+                            <input class="form-control" type="time" name="weekday_start" value="{{ $weekStart }}" required aria-label="Monday to Saturday start">
+                            <em>to</em>
+                            <input class="form-control" type="time" name="weekday_end" value="{{ $weekEnd }}" required aria-label="Monday to Saturday end">
                         </div>
-                        <input type="hidden" name="works_sunday" value="0">
-                        <label class="et-switch">
-                            <input type="checkbox" name="works_sunday" value="1" data-sunday @checked($worksSunday)>
-                            <span class="rl-ui" aria-hidden="true"></span>
-                            <span class="et-switch-txt">{{ $worksSunday ? 'On' : 'Off' }}</span>
-                        </label>
+                        <div class="hp-line">
+                            <b>{{ __('Break') }}</b>
+                            <input class="form-control" type="time" name="weekday_break_start" value="{{ $weekBreakStart }}" aria-label="Monday to Saturday break start">
+                            <em>to</em>
+                            <input class="form-control" type="time" name="weekday_break_end" value="{{ $weekBreakEnd }}" aria-label="Monday to Saturday break end">
+                        </div>
                     </div>
-                    <label class="et-clock" data-sunday-times @unless($worksSunday) hidden @endunless>
-                        <span>Sunday time</span>
-                        <div>
+                    <div class="et-sunday">
+                        <div class="et-sunday-top">
+                            <b data-sunday-title>{{ $kind === 'night' ? 'Sunday night' : 'Sunday' }}</b>
+                            <input type="hidden" name="works_sunday" value="0">
+                            <label class="et-switch">
+                                <input type="checkbox" name="works_sunday" value="1" data-sunday @checked($worksSunday)>
+                                <span class="rl-ui" aria-hidden="true"></span>
+                                <span class="et-switch-txt">{{ $worksSunday ? 'On' : 'Off' }}</span>
+                            </label>
+                        </div>
+                        <div class="hp-line" data-sunday-times @unless($worksSunday) hidden @endunless>
+                            <b>{{ __('Work') }}</b>
                             <input class="form-control" type="time" name="sunday_start" value="{{ $sunStart }}" @if($worksSunday) required @endif aria-label="Sunday start">
                             <em>to</em>
                             <input class="form-control" type="time" name="sunday_end" value="{{ $sunEnd }}" @if($worksSunday) required @endif aria-label="Sunday end">
                         </div>
-                    </label>
-                    <div class="et-clock et-break" data-sunday-times @unless($worksSunday) hidden @endunless>
-                        <span>Sunday break</span>
-                        <div>
+                        <div class="hp-line" data-sunday-times @unless($worksSunday) hidden @endunless>
+                            <b>{{ __('Break') }}</b>
                             <input class="form-control" type="time" name="sunday_break_start" value="{{ $sunBreakStart }}" aria-label="Sunday break start">
                             <em>to</em>
                             <input class="form-control" type="time" name="sunday_break_end" value="{{ $sunBreakEnd }}" aria-label="Sunday break end">
                         </div>
-                        <small>Inside the Sunday clock. Leave blank for no break.</small>
+                        <p class="et-off" data-sunday-off @if($worksSunday) hidden @endif>Off. Paid day, no punch and no cutoff.</p>
                     </div>
-                    <p class="et-off" data-sunday-off @if($worksSunday) hidden @endif>Sunday is off. This person is paid that day. No punch and no cutoff.</p>
-                    @error('sunday_start')<p class="et-error">{{ $message }}</p>@enderror
-                    @error('sunday_end')<p class="et-error">{{ $message }}</p>@enderror
                 </div>
+                @error('weekday_start')<p class="et-error">{{ $message }}</p>@enderror
+                @error('weekday_end')<p class="et-error">{{ $message }}</p>@enderror
+                @error('sunday_start')<p class="et-error">{{ $message }}</p>@enderror
+                @error('sunday_end')<p class="et-error">{{ $message }}</p>@enderror
                 @if($standalone)
                     <div class="et-save">
                         <button class="btn pr sm" type="submit">Save times</button>
@@ -121,16 +113,19 @@
         @else
             <div class="et-read">
                 <div>
-                    <span>Shift</span>
-                    <b><span class="et-badge {{ $kind === 'night' ? 'is-night' : 'is-day' }}">{{ $kind === 'night' ? 'Night' : 'Day' }}</span></b>
-                </div>
-                <div>
                     <span>Monday to Saturday</span>
-                    <b>{{ $times['weekday_start'] }}–{{ $times['weekday_end'] }}@if(($times['weekday_break_start'] ?? '') !== '')<small>Break {{ $times['weekday_break_start'] }}–{{ $times['weekday_break_end'] }}</small>@endif</b>
+                    <b>Work {{ $times['weekday_start'] }}–{{ $times['weekday_end'] }}</b>
+                    <small>{{ ($times['weekday_break_start'] ?? '') !== '' ? 'Break '.$times['weekday_break_start'].'–'.$times['weekday_break_end'] : 'No break' }}</small>
                 </div>
                 <div>
-                    <span>Sunday</span>
-                    <b>{{ $times['works_sunday'] ? $times['sunday_start'].'–'.$times['sunday_end'] : 'Off · paid, no cutoff' }}@if($times['works_sunday'] && ($times['sunday_break_start'] ?? '') !== '')<small>Break {{ $times['sunday_break_start'] }}–{{ $times['sunday_break_end'] }}</small>@endif</b>
+                    <span>{{ $kind === 'night' ? 'Sunday night' : 'Sunday' }}</span>
+                    @if($kind === 'night')
+                        <b>{{ ($times['works_sunday'] ?? false) ? 'Work '.$times['sunday_start'].'–'.$times['sunday_end'] : 'Off' }}</b>
+                        <small>{{ ($times['works_sunday'] ?? false) && ($times['sunday_break_start'] ?? '') !== '' ? 'Break '.$times['sunday_break_start'].'–'.$times['sunday_break_end'] : 'Paid, no cutoff' }}</small>
+                    @else
+                        <b>{{ $times['works_sunday'] ? 'Work '.$times['sunday_start'].'–'.$times['sunday_end'] : 'Off' }}</b>
+                        <small>{{ $times['works_sunday'] && ($times['sunday_break_start'] ?? '') !== '' ? 'Break '.$times['sunday_break_start'].'–'.$times['sunday_break_end'] : 'Paid, no cutoff' }}</small>
+                    @endif
                 </div>
             </div>
         @endif

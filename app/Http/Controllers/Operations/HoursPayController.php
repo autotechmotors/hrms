@@ -9,7 +9,6 @@ use App\Models\DepartmentWorkHour;
 use App\Models\Employee;
 use App\Models\EmployeeSalary;
 use App\Models\EmployeeWorkHour;
-use App\Models\SalaryStructure;
 use App\Services\Operations\WorkHourResolver;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -78,6 +77,9 @@ class HoursPayController extends Controller
                     'night_weekday_break_end' => $this->hours->clockOrEmpty($window?->night_weekday_break_end),
                     'night_sunday_start' => $this->hours->clock($window?->night_sunday_start, '21:00'),
                     'night_sunday_end' => $this->hours->clock($window?->night_sunday_end, '02:00'),
+                    'night_sunday_break_start' => $this->hours->clockOrEmpty($window?->night_sunday_break_start) ?: '01:00',
+                    'night_sunday_break_end' => $this->hours->clockOrEmpty($window?->night_sunday_break_end) ?: '02:00',
+                    'night_works_sunday' => (bool) $window?->night_works_sunday,
                 ];
             });
 
@@ -105,7 +107,7 @@ class HoursPayController extends Controller
             404
         );
 
-        $data = $this->windowInput($request);
+        $data = $this->windowInput($request) + $this->nightSundayInput($request);
         $hours = $this->hours->hoursFromWindow($data['weekday_start'], $data['weekday_end']);
 
         $row = DepartmentWorkHour::query()->updateOrCreate(
@@ -140,6 +142,14 @@ class HoursPayController extends Controller
                 'shift_kind' => $kind,
                 'hours_per_day' => $this->hours->hoursFromWindow($times['weekday_start'], $times['weekday_end']),
             ];
+            if ($kind === 'night') {
+                $sunday = $this->nightSundayInput($request);
+                unset($sunday['night_works_sunday']);
+                $payload['works_sunday'] = $request->boolean('works_sunday');
+                if ($payload['works_sunday']) {
+                    $payload = $sunday + $payload;
+                }
+            }
         }
 
         EmployeeWorkHour::query()->updateOrCreate(
@@ -160,30 +170,21 @@ class HoursPayController extends Controller
         $this->authorizeAny('salary.manage');
         $employee = $this->visibleEmployee($request, $employee);
         $data = $request->validate([
-            'salary_structure_id' => ['required', 'integer'],
             'gross_monthly' => ['required', 'numeric', 'min:0'],
             'effective_from' => ['required', 'date'],
         ], [
-            'salary_structure_id.required' => 'Choose a salary structure.',
             'gross_monthly.required' => 'Enter the monthly salary.',
             'effective_from.required' => 'Choose the date this salary starts.',
         ]);
 
-        SalaryStructure::query()
-            ->visibleTo($request->user())
-            ->where('company_id', $this->companyId())
-            ->where('is_active', true)
-            ->findOrFail($data['salary_structure_id']);
-
         EmployeeSalary::query()->create([
             'employee_id' => $employee->id,
-            'salary_structure_id' => $data['salary_structure_id'],
             'gross_monthly' => $data['gross_monthly'],
             'effective_from' => $data['effective_from'],
         ]);
 
         return response()->json([
-            'message' => 'Monthly salary saved. Payroll uses the amount that is already effective in the pay month.',
+            'message' => 'Monthly salary saved. Salary sheets use the amount that is already effective on the pay date.',
             'html' => view('operations.hours-pay._detail', $this->detail($request, $employee))->render(),
         ]);
     }
@@ -194,9 +195,7 @@ class HoursPayController extends Controller
     private function people(Request $request, array $filters)
     {
         return $this->peopleQuery()
-            ->with(['department.workHour', 'workHour', 'salaries' => function ($query): void {
-                $query->whereDate('effective_from', '<=', today())->with('structure')->orderByDesc('effective_from');
-            }])
+            ->with(['department.workHour', 'workHour', 'currentSalary'])
             ->when($filters['department_id'] !== '', fn (Builder $query) => $query->where('department_id', (int) $filters['department_id']))
             ->when($filters['q'] !== '', function (Builder $query) use ($filters): void {
                 $like = '%'.$filters['q'].'%';
@@ -213,7 +212,7 @@ class HoursPayController extends Controller
             ->appends($request->except(['page', 'partial']))
             ->through(function (Employee $employee) {
                 $resolved = $this->hours->resolve($employee->department?->workHour, $employee->workHour);
-                $salary = $employee->salaries->first();
+                $salary = $employee->currentSalary;
 
                 return [
                     'url' => route('hours-pay.show', $employee),
@@ -279,12 +278,6 @@ class HoursPayController extends Controller
             'sentence' => $sentence,
             'current' => $current,
             'history' => $history,
-            'structures' => SalaryStructure::query()
-                ->visibleTo($request->user())
-                ->where('company_id', $this->companyId())
-                ->where('is_active', true)
-                ->orderBy('name')
-                ->get(),
             'canEdit' => $request->user()->hasPermission('salary.manage'),
             'mode' => $employee->workHour && ! $employee->workHour->uses_department ? 'own' : 'department',
             'ownHours' => $employee->workHour && ! $employee->workHour->uses_department
@@ -343,6 +336,41 @@ class HoursPayController extends Controller
     }
 
     /**
+     * Sunday night on/off belongs to the department. Off leaves the stored clock alone.
+     *
+     * @return array<string, bool|string|null>
+     */
+    private function nightSundayInput(Request $request): array
+    {
+        if (! $request->boolean('night_works_sunday')) {
+            return ['night_works_sunday' => false];
+        }
+
+        $data = $request->validate([
+            'night_sunday_start' => ['required', 'regex:/^\d{2}:\d{2}(:\d{2})?$/'],
+            'night_sunday_end' => ['required', 'regex:/^\d{2}:\d{2}(:\d{2})?$/'],
+            'night_sunday_break_start' => ['required', 'regex:/^\d{2}:\d{2}(:\d{2})?$/'],
+            'night_sunday_break_end' => ['required', 'regex:/^\d{2}:\d{2}(:\d{2})?$/'],
+        ], [
+            'night_sunday_start.required' => 'Enter the Sunday night start.',
+            'night_sunday_end.required' => 'Enter the Sunday night end.',
+            'night_sunday_break_start.required' => 'Enter the Sunday night break start.',
+            'night_sunday_break_end.required' => 'Enter the Sunday night break end.',
+        ]);
+
+        $start = $this->hours->clock($data['night_sunday_start'], '21:00');
+        $end = $this->hours->clock($data['night_sunday_end'], '02:00');
+        $this->assertWindow($start, $end, 'night_sunday_end', 'Sunday night');
+        $break = $this->breakPair($request, 'night_sunday_break_start', 'night_sunday_break_end', $start, $end, 'night_sunday_break_end', 'Sunday night break');
+
+        return [
+            'night_works_sunday' => true,
+            'night_sunday_start' => $start,
+            'night_sunday_end' => $end,
+        ] + $break;
+    }
+
+    /**
      * @return array<string, ?string>
      */
     private function breakPair(Request $request, string $startKey, string $endKey, string $windowStart, string $windowEnd, string $field, string $label): array
@@ -379,8 +407,11 @@ class HoursPayController extends Controller
 
         $week = $this->hours->clock($row->weekday_start, '09:00').'–'.$this->hours->clock($row->weekday_end, '18:00');
         $night = $this->hours->clock($row->night_weekday_start, '21:00').'–'.$this->hours->clock($row->night_weekday_end, '06:00');
+        $sunday = $row->night_works_sunday
+            ? ' · Sunday night '.$this->hours->clock($row->night_sunday_start, '21:00').'–'.$this->hours->clock($row->night_sunday_end, '02:00')
+            : '';
 
-        return 'Day '.$week.' · Night '.$night;
+        return 'Day '.$week.' · Night '.$night.$sunday;
     }
 
     /**
@@ -407,6 +438,9 @@ class HoursPayController extends Controller
             'night_weekday_end' => $this->hours->clock($source?->night_weekday_end ?? null, '06:00'),
             'night_sunday_start' => $this->hours->clock($source?->night_sunday_start ?? null, '21:00'),
             'night_sunday_end' => $this->hours->clock($source?->night_sunday_end ?? null, '02:00'),
+            'night_works_sunday' => (bool) ($source?->night_works_sunday ?? false),
+            'night_sunday_break_start' => $this->hours->clockOrEmpty($source?->night_sunday_break_start ?? null),
+            'night_sunday_break_end' => $this->hours->clockOrEmpty($source?->night_sunday_break_end ?? null),
             'weekday_break_start' => $this->hours->clockOrEmpty($source?->weekday_break_start ?? null),
             'weekday_break_end' => $this->hours->clockOrEmpty($source?->weekday_break_end ?? null),
             'sunday_break_start' => $this->hours->clockOrEmpty($source?->sunday_break_start ?? null),

@@ -1,5 +1,9 @@
 <?php
 
+use App\Http\Middleware\EnsureMfaPassed;
+use App\Http\Middleware\EnsurePermission;
+use App\Http\Middleware\LogDeviceApi;
+use App\Http\Middleware\SetLocale;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -20,10 +24,13 @@ return Application::configure(basePath: dirname(__DIR__))
             'device-events',
             'hikvision-events/*',
         ]);
+        $middleware->web(append: [
+            SetLocale::class,
+        ]);
         $middleware->alias([
-            'mfa' => \App\Http\Middleware\EnsureMfaPassed::class,
-            'permission' => \App\Http\Middleware\EnsurePermission::class,
-            'device.log' => \App\Http\Middleware\LogDeviceApi::class,
+            'mfa' => EnsureMfaPassed::class,
+            'permission' => EnsurePermission::class,
+            'device.log' => LogDeviceApi::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

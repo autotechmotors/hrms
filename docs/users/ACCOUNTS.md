@@ -1,17 +1,18 @@
 # User accounts
 
-User create, edit, and delete stay on the current policies. A user's department and company scope still decide which employees they see. Do not put data scope on the role alone.
+There is no Users item in the menu. `/users` redirects to Employees. A login is created from the employee form when that person has an email and a staff role. The employee role can sign in for their own row. A user with no role on the employee does not get a new login.
+
+Company and department scope still decide which employees that login can see. Do not put data scope on the role alone. Only a Super Admin can assign or remove the Super Admin role.
 
 ## Code
 
-- `app/Http/Controllers/Admin/UserController.php`
-- `app/Http/Requests/UserRequest.php`
+- `app/Services/Employees/EmployeeService.php` creates or updates the login from the employee role
 - `app/Services/AccessScope.php`
-- Routes: `users.*` resource except show
+- `routes/web.php` redirects `users` and `users/{any}` to `/employees`
 
 ## Menu
 
-`users.view`, `users.create`, `users.edit`, `users.delete` stay. Super Admin and HR Admin both have `users.delete`. Only a Super Admin can assign or remove the Super Admin role. Map: `docs/roles/NAV-PERMISSIONS.md`.
+Map: `docs/roles/NAV-PERMISSIONS.md`. Do not add a second user screen.
 
 ## Visual
 

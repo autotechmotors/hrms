@@ -1,17 +1,17 @@
-<div class="sg-history">
+<div class="sg-history" data-live-list="salary-sheets" data-page="{{ $sheets->currentPage() }}" data-last="{{ $sheets->lastPage() }}">
     <div class="tw">
         <table class="sg-table">
             <thead>
             <tr>
-                <th>Sheet</th>
-                <th>Dates</th>
-                <th>People</th>
-                <th>Net</th>
-                <th>Status</th>
+                <th>{{ __('Sheet') }}</th>
+                <th>{{ __('Dates') }}</th>
+                <th>{{ __('People') }}</th>
+                <th>{{ __('Net') }}</th>
+                <th>{{ __('Status') }}</th>
                 <th></th>
             </tr>
             </thead>
-            <tbody>
+            <tbody data-list-rows>
             @forelse($sheets as $row)
                 <tr>
                     @php
@@ -48,15 +48,12 @@
                     </td>
                 </tr>
             @empty
-                <tr>
+                <tr data-list-empty>
                     <td colspan="6" class="sg-empty">No salary request matches this list.</td>
                 </tr>
             @endforelse
             </tbody>
         </table>
     </div>
-    <div class="pgn">
-        <span>{{ $sheets->firstItem() ?? 0 }}–{{ $sheets->lastItem() ?? 0 }} of {{ $sheets->total() }}</span>
-        <div>{{ $sheets->links() }}</div>
-    </div>
+    @include('partials.list-footer', ['paginator' => $sheets])
 </div>

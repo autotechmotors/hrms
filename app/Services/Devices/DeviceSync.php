@@ -10,10 +10,11 @@ use App\Models\Device;
 use App\Models\DeviceTerminalUser;
 use App\Models\DeviceUser;
 use App\Models\Employee;
-use Illuminate\Support\Collection;
 use App\Services\Operations\AttendanceCalculator;
+use App\Services\Operations\GatePassAccess;
 use App\Services\Operations\WorkHourResolver;
 use Carbon\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 
 class DeviceSync
@@ -201,7 +202,11 @@ class DeviceSync
             }
 
             $at = Carbon::createFromTimestampUTC($utc)->timezone('Asia/Kolkata');
-            $direction = $this->direction((string) ($row['Type'] ?? 'Entry'));
+            $direction = match ($device->punch_role) {
+                Device::ROLE_IN => 'in',
+                Device::ROLE_OUT => 'out',
+                default => $this->direction((string) ($row['Type'] ?? 'Entry')),
+            };
             $key = $device->register_id.'|'.$seq.'|'.$userId.'|'.$utc.'|'.$direction;
             if (AttendancePunchSkip::query()->where('external_key', $key)->exists()) {
                 continue;
@@ -217,7 +222,18 @@ class DeviceSync
                 ],
             );
             if ($punch->wasRecentlyCreated) {
-                $allowed = app(\App\Services\Operations\GatePassAccess::class)->attachPunch($employee, $punch, $device);
+                $access = app(GatePassAccess::class);
+                if ($direction === 'out' && ! $device->isGate() && ! $access->outAllowed($employee, $at)) {
+                    $punch->delete();
+                    DeviceLog::moment('out denied '.$employee->employee_code, [
+                        'device' => $device->register_id,
+                        'employee_id' => $employee->id,
+                        'at' => $at->toDateTimeString(),
+                    ]);
+
+                    continue;
+                }
+                $allowed = $access->attachPunch($employee, $punch, $device);
                 if (! $allowed) {
                     $punch->delete();
                     DeviceLog::moment('gate denied '.$employee->employee_code, [
@@ -225,6 +241,7 @@ class DeviceSync
                         'employee_id' => $employee->id,
                         'at' => $at->toDateTimeString(),
                     ]);
+
                     continue;
                 }
                 $saved++;
@@ -268,6 +285,7 @@ class DeviceSync
             if ($last >= 0 && ($at->getTimestamp() - $clusters[$last]['end']->getTimestamp()) < self::SAME_VISIT_SECONDS) {
                 $clusters[$last]['punches'][] = $punch;
                 $clusters[$last]['end'] = $at;
+
                 continue;
             }
             $clusters[] = ['start' => $at->copy(), 'end' => $at->copy(), 'punches' => [$punch]];
@@ -310,9 +328,19 @@ class DeviceSync
     private function applyDay($employee, Carbon $date): void
     {
         $start = $date->copy()->timezone('Asia/Kolkata')->startOfDay();
+        $kept = AttendanceDay::query()
+            ->where('employee_id', $employee->id)
+            ->whereDate('work_date', $start->toDateString())
+            ->first();
+        if ($kept?->source === 'manual') {
+            $this->calculator->recalculate($employee, $date);
+
+            return;
+        }
         $span = $this->hours->attendanceSpan($employee, $start);
         $punches = AttendancePunch::query()
-            ->select(['id', 'employee_id', 'punched_at', 'direction', 'gate_pass_id'])
+            ->with('device:id,punch_role')
+            ->select(['id', 'employee_id', 'device_id', 'punched_at', 'direction', 'gate_pass_id'])
             ->where('employee_id', $employee->id)
             ->whereNull('gate_pass_id')
             ->where('punched_at', '>=', $span['from'])
@@ -325,6 +353,9 @@ class DeviceSync
         foreach ($clusters as $index => $cluster) {
             $direction = $index % 2 === 0 ? 'in' : 'out';
             foreach ($cluster['punches'] as $punch) {
+                if (in_array($punch->device?->punch_role, [Device::ROLE_IN, Device::ROLE_OUT], true)) {
+                    continue;
+                }
                 if ($punch->direction !== $direction) {
                     $punch->update(['direction' => $direction]);
                 }

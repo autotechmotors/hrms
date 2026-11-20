@@ -1,5 +1,5 @@
 @extends('layouts.app')
-@section('title', $role ? 'Edit role' : 'New role')
+@section('title', $role ? __('Edit :name', ['name' => $role->name]) : __('New role'))
 @section('content')
     @php
         $selected = old('permissions', $role ? $role->permissions->pluck('id')->all() : []);
@@ -9,11 +9,11 @@
     <div class="ph">
         <div>
             <x-back :href="route('roles.index')" label="Roles" />
-            <h1>{{ $role ? 'Edit '.$role->name : 'New role' }}</h1>
+            <h1>{{ $role ? __('Edit :name', ['name' => $role->name]) : __('New role') }}</h1>
             <p>Name the role, then set parent / child rules and what it can open.</p>
         </div>
         <div class="ac">
-            <a class="btn" href="{{ route('roles.index') }}">Cancel</a>
+            <a class="btn" href="{{ route('roles.index') }}">{{ __('Cancel') }}</a>
             <button class="btn pr" type="submit" form="roleForm">Save role</button>
         </div>
     </div>
@@ -27,7 +27,7 @@
                 <section class="card ef-sec">
                     <header>
                         <div>
-                            <h3>Role</h3>
+                            <h3>{{ __('Role') }}</h3>
                             <p>How this role is named in Users and Employees</p>
                         </div>
                     </header>
@@ -43,7 +43,7 @@
                 <section class="card ef-sec">
                     <header>
                         <div>
-                            <h3>Hierarchy</h3>
+                            <h3>{{ __('Hierarchy') }}</h3>
                             <p>Parent required on employee form, children in the manager list</p>
                         </div>
                     </header>
@@ -80,7 +80,7 @@
                 <section class="card ef-sec">
                     <header>
                         <div>
-                            <h3>Permissions</h3>
+                            <h3>{{ __('Permissions') }}</h3>
                             <p>{{ $isSuper ? 'Super Admin always has every permission' : 'What this role can open in HRMS' }}</p>
                         </div>
                     </header>
@@ -112,7 +112,7 @@
                 <section class="card ef-sec">
                     <header>
                         <div>
-                            <h3>How flags work</h3>
+                            <h3>{{ __('How flags work') }}</h3>
                         </div>
                     </header>
                     <div class="cb">
@@ -128,7 +128,7 @@
         </div>
 
         <div class="ef-bar">
-            <a class="btn" href="{{ route('roles.index') }}">Cancel</a>
+            <a class="btn" href="{{ route('roles.index') }}">{{ __('Cancel') }}</a>
             <button class="btn pr" type="submit">Save role</button>
         </div>
     </form>

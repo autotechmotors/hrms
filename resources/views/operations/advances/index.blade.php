@@ -3,7 +3,7 @@
 @section('content')
     <div class="ph">
         <div>
-            <h1>Advances & Deductions</h1>
+            <h1>{{ __('Advances & Deductions') }}</h1>
             <p>An advance is deducted in full from the salary of the month it is given.</p>
         </div>
     </div>
@@ -32,8 +32,8 @@
         <section class="card ad-form-card">
             <header>
                 <div>
-                    <h3>New advance</h3>
-                    <p>The full amount is deducted from this month’s salary when payroll is calculated.</p>
+                    <h3>{{ __('New advance') }}</h3>
+                    <p>The full amount is deducted when a salary sheet covering this date is approved.</p>
                 </div>
             </header>
             <form id="advanceForm" class="ad-form" method="post" action="{{ route('advances.store') }}">
@@ -163,21 +163,7 @@
             if (req !== current) return;
             loadingMore = false;
             req = null;
-            if (phone()) requestAnimationFrame(maybeMore);
         });
-    }
-
-    function maybeMore() {
-        if (!phone() || loadingMore || req) return;
-        const host = document.querySelector('#advanceResults .ad-body');
-        if (!host) return;
-        const page = Number(host.dataset.page || 1);
-        const last = Number(host.dataset.last || 1);
-        if (page >= last) return;
-        const cards = host.querySelector('.ad-cards');
-        if (!cards || cards.getBoundingClientRect().bottom > window.innerHeight + 420) return;
-        loadingMore = true;
-        load({ page: page + 1 }, true);
     }
 
     function failMessage(xhr, fallback) {
@@ -221,7 +207,7 @@
             });
         };
         if (window.askConfirm) {
-            window.askConfirm('Close this advance? It will not be deducted from salary.', { label: 'Close', danger: true }).then(function (ok) {
+            window.askConfirm(@json(__('Close this advance? It will not be deducted from salary.')), { label: @json(__('Close')), danger: true }).then(function (ok) {
                 if (ok) go();
             });
             return;
@@ -248,8 +234,6 @@
         });
     }
 
-    window.addEventListener('scroll', maybeMore, { passive: true });
-    requestAnimationFrame(maybeMore);
 })(jQuery);
 </script>
 @endpush

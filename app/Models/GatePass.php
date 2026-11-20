@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\AuditsChanges;
+use App\Services\Operations\GatePassService;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -134,9 +135,7 @@ class GatePass extends Model
             return 0;
         }
 
-        $away = $this->outingMinutes();
-
-        return $this->isEarlyLeave() ? $away : min($away, max(0, (int) $this->duration_minutes));
+        return $this->outingMinutes();
     }
 
     public function personalCutMinutes(): int
@@ -285,6 +284,6 @@ class GatePass extends Model
 
     public static function expireStale(): int
     {
-        return app(\App\Services\Operations\GatePassService::class)->expireDue();
+        return app(GatePassService::class)->expireDue();
     }
 }

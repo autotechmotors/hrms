@@ -1,13 +1,13 @@
 @extends('layouts.app')
-@section('title', $company ? 'Edit company' : 'New company')
+@section('title', $company ? __('Edit company') : __('New company'))
 @section('content')
     <div class="ph">
         <div>
             <x-back :href="route('companies.index')" label="Companies" />
-            <h1>{{ $company ? 'Edit company' : 'New company' }}</h1>
+            <h1>{{ $company ? __('Edit company') : __('New company') }}</h1>
         </div>
     </div>
-    <form class="card card-body" method="post" action="{{ $company ? route('companies.update', $company) : route('companies.store') }}" enctype="multipart/form-data">
+    <form class="card card-body org-form" method="post" action="{{ $company ? route('companies.update', $company) : route('companies.store') }}" enctype="multipart/form-data">
         @csrf
         @if($company) @method('put') @endif
         <div class="row">
@@ -27,6 +27,9 @@
             <div class="col-md-6"><x-text-field name="logo" label="Logo" type="file" /></div>
         </div>
         <x-check-field name="is_active" label="Active" :checked="$company->is_active ?? true" />
-        <button class="btn btn-primary" type="submit">Save</button>
+        <div class="org-form-actions">
+            <a class="btn" href="{{ route('companies.index') }}">{{ __('Cancel') }}</a>
+            <button class="btn pr" type="submit">Save company</button>
+        </div>
     </form>
 @endsection

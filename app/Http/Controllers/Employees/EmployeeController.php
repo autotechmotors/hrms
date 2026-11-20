@@ -55,6 +55,7 @@ class EmployeeController extends Controller
         $canEdit = $request->user()->hasPermission('employees.edit');
         $canDelete = $request->user()->hasPermission('employees.delete');
         $canBlock = $canEdit;
+        $canSalary = $request->user()->hasPermission('salary.view');
         $credentialCounts = $this->credentialCounts($employees->getCollection());
         $credentialSlots = $this->credentialSlots($employees->getCollection());
 
@@ -64,6 +65,7 @@ class EmployeeController extends Controller
                 'canEdit' => $canEdit,
                 'canDelete' => $canDelete,
                 'canBlock' => $canBlock,
+                'canSalary' => $canSalary,
                 'credentialCounts' => $credentialCounts,
                 'credentialSlots' => $credentialSlots,
             ]);
@@ -74,6 +76,7 @@ class EmployeeController extends Controller
             'canEdit' => $canEdit,
             'canDelete' => $canDelete,
             'canBlock' => $canBlock,
+            'canSalary' => $canSalary,
             'perPage' => $this->pageSize($request),
             'departments' => Department::query()->visibleTo($request->user())->orderBy('name')->get(),
             'statuses' => EmploymentStatus::query()->visibleTo($request->user())->orderBy('name')->get(),
@@ -477,7 +480,7 @@ class EmployeeController extends Controller
     private function filteredEmployees(Request $request): LengthAwarePaginator
     {
         return Employee::query()
-            ->with(['department', 'designation', 'employmentStatus', 'workHour'])
+            ->with(['department', 'designation', 'employmentStatus', 'workHour', 'shiftSpans'])
             ->withCount([
                 'documents',
                 'activeBankAccount as active_bank_accounts_count',
@@ -543,7 +546,12 @@ class EmployeeController extends Controller
                     'sunday_end' => 'Sunday must cover at least 30 minutes.',
                 ]);
             }
-            $sunBreak = $this->checkedBreak($request, 'sunday_break_start', 'sunday_break_end', $sunStart, $sunEnd, 'sunday_break_end', 'Sunday break');
+            $sunBreak = $this->checkedBreak($request, 'sunday_break_start', 'sunday_break_end', $sunStart, $sunEnd, 'sunday_break_end', $night ? 'Sunday night break' : 'Sunday break');
+            if ($night && ($sunBreak['start'] === null || $sunBreak['end'] === null)) {
+                throw ValidationException::withMessages([
+                    'sunday_break_end' => 'Enter the Sunday night break.',
+                ]);
+            }
         }
 
         return [
@@ -658,6 +666,12 @@ class EmployeeController extends Controller
                     'day_sunday_break_end' => '',
                     'night_sunday_break_start' => '',
                     'night_sunday_break_end' => '',
+                    'night_works_sunday' => false,
+                    'department_name' => 'this department',
+                    'department_night_sunday_start' => '21:00',
+                    'department_night_sunday_end' => '02:00',
+                    'department_night_sunday_break_start' => '',
+                    'department_night_sunday_break_end' => '',
                 ],
             'terminals' => $employee
                 ? Device::query()

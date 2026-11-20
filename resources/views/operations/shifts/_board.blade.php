@@ -16,6 +16,9 @@
     data-next="{{ $start->copy()->addWeek()->toDateString() }}"
     data-this="{{ $thisWeek }}"
     data-current="{{ $start->toDateString() === $thisWeek ? '1' : '0' }}"
+    data-live-list="shifts"
+    data-page="{{ $employees->currentPage() }}"
+    data-last="{{ $employees->lastPage() }}"
 >
     <div class="tw sh-board">
         <table>
@@ -30,7 +33,7 @@
                     @endforeach
                 </tr>
             </thead>
-            <tbody>
+            <tbody data-list-rows>
             @forelse($employees as $employee)
                 <tr>
                     <td class="sh-emp-col">
@@ -101,15 +104,12 @@
                     @endforeach
                 </tr>
             @empty
-                <tr>
+                <tr data-list-empty>
                     <td colspan="8" class="sh-empty-row">No employees match these filters.</td>
                 </tr>
             @endforelse
             </tbody>
         </table>
     </div>
-    <div class="pgn sh-pgn">
-        <span>{{ $employees->firstItem() ?? 0 }}–{{ $employees->lastItem() ?? 0 }} of {{ $employees->total() }}</span>
-        <div>{{ $employees->links() }}</div>
-    </div>
+    @include('partials.list-footer', ['paginator' => $employees])
 </div>

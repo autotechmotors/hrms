@@ -4,7 +4,7 @@
     <div class="rl-board">
         <div class="ph">
             <div>
-                <h1>Roles</h1>
+                <h1>{{ __('Roles') }}</h1>
                 <p>{{ $stats['total'] }} roles · parent / child flags drive employee reporting and Gate Pass</p>
             </div>
             <div class="ac">
@@ -37,10 +37,11 @@
             </div>
         </div>
 
-        <div class="rl-grid">
+        <div data-live-list="roles" data-page="{{ $roles->currentPage() }}" data-last="{{ $roles->lastPage() }}">
+        <div class="rl-grid" data-list-rows>
             @if($roles->isEmpty())
-                <div class="card cb empty-state rl-empty">
-                    <h3>No roles yet</h3>
+                <div class="card cb empty-state rl-empty" data-list-empty>
+                    <h3>{{ __('No roles yet') }}</h3>
                     <p>Add a role to set parent / child rules and permissions.</p>
                 </div>
             @endif
@@ -80,13 +81,14 @@
                     <footer class="rl-foot">
                         <span>{{ $role->permissions_count }} permissions</span>
                         @if($canEdit)
-                            <a class="btn sm" href="{{ route('roles.edit', $role) }}">Edit</a>
+                            <a class="btn sm" href="{{ route('roles.edit', $role) }}">{{ __('Edit') }}</a>
                         @endif
                     </footer>
                 </article>
             @endforeach
         </div>
 
-        <div class="pgn rl-pgn">{{ $roles->links() }}</div>
+        @include('partials.list-footer', ['paginator' => $roles])
+        </div>
     </div>
 @endsection

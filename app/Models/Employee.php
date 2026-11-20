@@ -65,12 +65,12 @@ class Employee extends Model
         ])));
     }
 
-    public function credentials(): \Illuminate\Database\Eloquent\Relations\HasMany
+    public function credentials(): HasMany
     {
         return $this->hasMany(EmployeeCredential::class);
     }
 
-    public function punches(): \Illuminate\Database\Eloquent\Relations\HasMany
+    public function punches(): HasMany
     {
         return $this->hasMany(AttendancePunch::class);
     }
@@ -85,9 +85,22 @@ class Employee extends Model
         return $this->hasOne(EmployeeWorkHour::class);
     }
 
+    public function shiftSpans(): HasMany
+    {
+        return $this->hasMany(EmployeeShiftSpan::class);
+    }
+
     public function salaries(): HasMany
     {
         return $this->hasMany(EmployeeSalary::class);
+    }
+
+    public function currentSalary(): HasOne
+    {
+        return $this->hasOne(EmployeeSalary::class)->ofMany(
+            ['effective_from' => 'max', 'id' => 'max'],
+            fn (Builder $query) => $query->where('effective_from', '<=', now()->toDateString())
+        );
     }
 
     public function designation(): BelongsTo

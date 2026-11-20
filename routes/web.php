@@ -12,6 +12,8 @@ use App\Http\Controllers\Employees\EmployeeBankAccountController;
 use App\Http\Controllers\Employees\EmployeeController;
 use App\Http\Controllers\Employees\EmployeeDocumentController;
 use App\Http\Controllers\Employees\EmployeeExitController;
+use App\Http\Controllers\Employees\EmployeeShiftController;
+use App\Http\Controllers\LocaleController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\Operations\AdvanceController;
 use App\Http\Controllers\Operations\AttendanceController;
@@ -23,9 +25,7 @@ use App\Http\Controllers\Operations\HikvisionEventController;
 use App\Http\Controllers\Operations\HolidayController;
 use App\Http\Controllers\Operations\HoursPayController;
 use App\Http\Controllers\Operations\LeaveController;
-use App\Http\Controllers\Operations\PayrollController;
 use App\Http\Controllers\Operations\ReportController;
-use App\Http\Controllers\Operations\SalaryController;
 use App\Http\Controllers\Operations\SalarySheetController;
 use App\Http\Controllers\Operations\ShiftController;
 use App\Http\Controllers\Organization\BrandingController;
@@ -38,6 +38,8 @@ use App\Http\Controllers\Organization\EmploymentStatusController;
 use App\Http\Controllers\Organization\FinancialYearController;
 use App\Http\Controllers\Organization\WorkCalendarController;
 use Illuminate\Support\Facades\Route;
+
+Route::get('locale/{locale}', LocaleController::class)->whereIn('locale', ['en', 'hi', 'gu'])->name('locale.update');
 
 Route::middleware('guest')->group(function (): void {
     Route::get('login', [LoginController::class, 'create'])->name('login');
@@ -103,6 +105,8 @@ Route::middleware(['auth', 'mfa'])->group(function (): void {
 
     Route::get('leave', [LeaveController::class, 'index'])->name('leave.index');
     Route::post('leave/types', [LeaveController::class, 'storeType'])->name('leave.types.store');
+    Route::put('leave/types/{leaveType}', [LeaveController::class, 'updateType'])->name('leave.types.update');
+    Route::delete('leave/types/{leaveType}', [LeaveController::class, 'destroyType'])->name('leave.types.destroy');
     Route::post('leave', [LeaveController::class, 'store'])->name('leave.store');
     Route::put('leave/{leaveRequest}', [LeaveController::class, 'update'])->name('leave.update');
     Route::delete('leave/{leaveRequest}', [LeaveController::class, 'destroy'])->name('leave.destroy');
@@ -139,17 +143,6 @@ Route::middleware(['auth', 'mfa'])->group(function (): void {
     Route::post('salary-sheets/{salarySheet}/reject', [SalarySheetController::class, 'reject'])->name('salary-sheets.reject');
     Route::get('salary-sheets/{salarySheet}/excel', [SalarySheetController::class, 'excel'])->name('salary-sheets.excel');
     Route::get('salary-sheets/{salarySheet}/pdf', [SalarySheetController::class, 'pdf'])->name('salary-sheets.pdf');
-
-    Route::get('salary', [SalaryController::class, 'index'])->name('salary.index');
-    Route::post('salary/heads', [SalaryController::class, 'storeHead'])->name('salary.heads.store');
-    Route::post('salary/structures', [SalaryController::class, 'storeStructure'])->name('salary.structures.store');
-    Route::post('salary/assign', [SalaryController::class, 'assign'])->name('salary.assign');
-
-    Route::get('payroll', [PayrollController::class, 'index'])->name('payroll.index');
-    Route::post('payroll', [PayrollController::class, 'store'])->name('payroll.store');
-    Route::get('payroll/{payroll}', [PayrollController::class, 'show'])->name('payroll.show');
-    Route::post('payroll/{payroll}/compute', [PayrollController::class, 'compute'])->name('payroll.compute');
-    Route::post('payroll/{payroll}/approve', [PayrollController::class, 'approve'])->name('payroll.approve');
 
     Route::get('advances', [AdvanceController::class, 'index'])->name('advances.index');
     Route::post('advances', [AdvanceController::class, 'store'])->name('advances.store');
@@ -205,6 +198,8 @@ Route::middleware(['auth', 'mfa'])->group(function (): void {
     Route::post('employees/{employee}/bank-accounts', [EmployeeBankAccountController::class, 'store'])->name('employees.bank-accounts.store');
     Route::patch('employees/{employee}/blocked', [EmployeeController::class, 'toggleBlocked'])->name('employees.blocked');
     Route::post('employees/{employee}/times', [EmployeeController::class, 'updateTimes'])->name('employees.times');
+    Route::get('employees/{employee}/shifts', [EmployeeShiftController::class, 'show'])->name('employees.shifts.show');
+    Route::post('employees/{employee}/shifts', [EmployeeShiftController::class, 'update'])->name('employees.shifts.update');
     Route::resource('employees', EmployeeController::class);
 
     Route::get('settings', [SettingController::class, 'edit'])->name('settings.edit');
@@ -214,4 +209,8 @@ Route::middleware(['auth', 'mfa'])->group(function (): void {
     Route::redirect('users/{any}', '/employees', 301)->where('any', '.*');
     Route::resource('roles', RoleController::class)->except(['show']);
     Route::get('audit-logs', [AuditLogController::class, 'index'])->name('audit-logs.index');
+});
+
+Route::fallback(function () {
+    abort(404);
 });

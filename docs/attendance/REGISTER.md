@@ -4,9 +4,11 @@ Past and current days use this same register. Default day is today. Date back, d
 
 ## Already on the day row
 
-Department, in, out, worked time (`minutes_worked` shown as `Xh YYm`), status, punch photo zoom, and edit when `employees.edit` is allowed today (`attendance.edit` after `docs/roles/NAV-PERMISSIONS.md`).
+Department, in, out, worked time (`minutes_worked` shown as `Xh YYm`), status, punch photo zoom, and edit when `attendance.edit` is allowed. HR Admin and Super Admin have that permission. A machine day is marked A. A day saved from Add punch or Edit is marked M. A later terminal pull does not replace an M day. Delete that day to let the machine fill it again. Which clock a date uses, and how a night out stays on the in date when the next day is Day, is `docs/shifts/SCHEDULE.md`.
 
 Statuses stay: present, late, half day, absent, on leave, holiday, weekly off, unmarked, pending.
+
+How a day is marked: a company holiday that closes the office, or one person’s paid day, is holiday. Approved leave is on leave. Sunday off with no punch is weekly off; a punch that day is present. A roster off day, or a calendar day that is not working, is weekly off. Personal work that is still open after the pass expires, when the person has clocked in, is half day. A clock in on a working day is present. No punch is absent, unless the company rule is set to leave that day unmarked. The door terminal is not switched off for a wrong shift. A punch outside that date’s clock does not join the day.
 
 ## Add
 
@@ -22,7 +24,7 @@ A stack of cards, not a squeezed table. Each card:
 - Photo zoom when a punch image exists
 - Edit only with the edit permission
 
-"All employees" means employees `visibleTo` the signed-in user for that company and department scope.
+The signed-in person sees their own attendance and every person below them in the parent line, including people whose direct parent is a manager further down. Super Admin and HR Admin see the company. "All employees" means that `visibleTo` set. The tree is `docs/employees/PARENT-ROLE.md`.
 
 ## Code
 
@@ -31,4 +33,4 @@ A stack of cards, not a squeezed table. Each card:
 - `app/Http/Controllers/Operations/AttendanceController.php`
 - `app/Services/Operations/AttendanceCalculator.php` — do not change the math
 
-Calculation, recalculate, rules, selfie storage, and device ingest stay. See `docs/prompts/HRMS-FREEZE.md` and `docs/devices/TERMINALS.md`.
+Calculation, recalculate, rules, selfie storage, and device ingest stay. Office-work gate pass is the exception: those hours stay in the day. See `docs/attendance/GATE-PASS.md`, `docs/prompts/HRMS-FREEZE.md`, and `docs/devices/TERMINALS.md`.

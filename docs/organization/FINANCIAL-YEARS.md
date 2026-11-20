@@ -1,6 +1,6 @@
 # Financial years
 
-Financial year create, edit, and delete stay. Payroll and reports that read the open year must keep reading the same records.
+Financial year create, edit, and delete stay. A year is a company date range. Only one year for that company can be current. Salary sheets, Hours & pay, and reports do not read this table. Do not drop the records.
 
 ## Code
 

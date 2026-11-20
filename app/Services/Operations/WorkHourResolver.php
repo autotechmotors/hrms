@@ -12,6 +12,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class WorkHourResolver
 {
+    public function __construct(private readonly ShiftSchedule $shifts) {}
+
     /**
      * @return array{hours: ?float, source: string, department_hours: ?float}
      */
@@ -43,9 +45,28 @@ class WorkHourResolver
     }
 
     /**
-     * Null keeps the older rule: a night person is off on Sunday, a day person works it.
+     * Night Sunday is the department switch. Day Sunday stays on the person.
+     * A day person with an empty switch still works Sunday.
      */
-    public function worksSunday(Employee $employee): bool
+    public function worksSunday(Employee $employee, ?CarbonInterface $date = null): bool
+    {
+        $employee->loadMissing(['workHour', 'department.workHour']);
+        $own = $employee->workHour;
+        $night = $date
+            ? $this->shifts->kindOn($employee, $date) === 'night'
+            : ($own?->shift_kind ?? 'day') === 'night';
+        if ($night) {
+            if ($own && ! $own->uses_department && $own->works_sunday !== null) {
+                return (bool) $own->works_sunday;
+            }
+
+            return (bool) $employee->department?->workHour?->night_works_sunday;
+        }
+
+        return $this->dayWorksSunday($employee);
+    }
+
+    public function dayWorksSunday(Employee $employee): bool
     {
         $employee->loadMissing('workHour');
         $row = $employee->workHour;
@@ -53,7 +74,7 @@ class WorkHourResolver
             return (bool) $row->works_sunday;
         }
 
-        return ($row?->shift_kind ?? 'day') !== 'night';
+        return true;
     }
 
     /**
@@ -81,7 +102,13 @@ class WorkHourResolver
             'weekday_end' => $night ? $nightEnd : $dayEnd,
             'sunday_start' => $night ? $nightSundayStart : $daySundayStart,
             'sunday_end' => $night ? $nightSundayEnd : $daySundayEnd,
-            'works_sunday' => $this->worksSunday($employee),
+            'works_sunday' => $night ? $this->worksSunday($employee) : $this->dayWorksSunday($employee),
+            'night_works_sunday' => (bool) $employee->department?->workHour?->night_works_sunday,
+            'department_name' => $employee->department?->name ?? 'this department',
+            'department_night_sunday_start' => $this->clock($employee->department?->workHour?->night_sunday_start ?? null, '21:00'),
+            'department_night_sunday_end' => $this->clock($employee->department?->workHour?->night_sunday_end ?? null, '02:00'),
+            'department_night_sunday_break_start' => $this->clockOrEmpty($employee->department?->workHour?->night_sunday_break_start ?? null),
+            'department_night_sunday_break_end' => $this->clockOrEmpty($employee->department?->workHour?->night_sunday_break_end ?? null),
             'shift_kind' => $night ? 'night' : 'day',
             'day_start' => $dayStart,
             'day_end' => $dayEnd,
@@ -154,10 +181,8 @@ class WorkHourResolver
         }
 
         if ($payload['works_sunday']) {
-            $sunStart = $this->clock($input['sunday_start'] ?? null, '08:00');
-            $sunEnd = $this->clock($input['sunday_end'] ?? null, '13:00');
-            $payload['sunday_start'] = $sunStart;
-            $payload['sunday_end'] = $sunEnd;
+            $sunStart = $this->clock($input['sunday_start'] ?? null, $night ? '21:00' : '08:00');
+            $sunEnd = $this->clock($input['sunday_end'] ?? null, $night ? '02:00' : '13:00');
             $sunBreak = $this->pair($input['sunday_break_start'] ?? null, $input['sunday_break_end'] ?? null);
             if ($night) {
                 $payload['night_sunday_start'] = $sunStart;
@@ -165,6 +190,8 @@ class WorkHourResolver
                 $payload['night_sunday_break_start'] = $sunBreak['start'];
                 $payload['night_sunday_break_end'] = $sunBreak['end'];
             } else {
+                $payload['sunday_start'] = $sunStart;
+                $payload['sunday_end'] = $sunEnd;
                 $payload['sunday_break_start'] = $sunBreak['start'];
                 $payload['sunday_break_end'] = $sunBreak['end'];
             }
@@ -186,17 +213,28 @@ class WorkHourResolver
     {
         $day = Carbon::parse($date)->timezone('Asia/Kolkata')->startOfDay();
         $employee->loadMissing('workHour');
-        if (($employee->workHour?->shift_kind ?? 'day') === 'night') {
-            return [
-                'from' => $day->copy()->setTime(12, 0),
-                'to' => $day->copy()->addDay()->setTime(12, 0),
-            ];
+        $night = $this->shifts->kindOn($employee, $day) === 'night';
+        if ($night) {
+            $from = $day->copy()->setTime(12, 0);
+            $to = $day->copy()->addDay()->setTime(12, 0);
+        } else {
+            $from = $day->copy();
+            $to = $day->copy()->addDay()->startOfDay();
         }
 
-        return [
-            'from' => $day->copy(),
-            'to' => $day->copy()->addDay()->startOfDay(),
-        ];
+        $next = $day->copy()->addDay();
+        $previousNight = $this->shifts->kindOn($employee, $day->copy()->subDay()) === 'night';
+        $nextNight = $this->shifts->kindOn($employee, $next) === 'night';
+        if ($night && ! $nextNight) {
+            $window = $this->windowFor($employee, $next);
+            $to = $next->copy()->setTimeFromTimeString($this->clock($window['start'], '09:00').':00');
+        }
+        if (! $night && $previousNight) {
+            $window = $this->windowFor($employee, $day);
+            $from = $day->copy()->setTimeFromTimeString($this->clock($window['start'], '09:00').':00');
+        }
+
+        return ['from' => $from, 'to' => $to];
     }
 
     /**
@@ -208,13 +246,21 @@ class WorkHourResolver
         $own = $employee->workHour;
         $source = ($own && ! $own->uses_department) ? $own : $employee->department?->workHour;
         $sunday = (int) Carbon::parse($date)->dayOfWeek === Carbon::SUNDAY;
-        $night = ($own?->shift_kind ?? 'day') === 'night';
-        if ($night && $sunday && ! $this->worksSunday($employee)) {
-            return ['start' => null, 'end' => null];
+        $night = $this->shifts->kindOn($employee, $date) === 'night';
+        if ($night && $sunday) {
+            if (! $this->worksSunday($employee, $date)) {
+                return ['start' => null, 'end' => null];
+            }
+            $sundaySource = ($own && ! $own->uses_department) ? $own : $employee->department?->workHour;
+
+            return [
+                'start' => $this->clockOrEmpty($sundaySource?->night_sunday_break_start) ?: null,
+                'end' => $this->clockOrEmpty($sundaySource?->night_sunday_break_end) ?: null,
+            ];
         }
         if ($night) {
-            $start = $sunday ? ($source?->night_sunday_break_start ?? null) : ($source?->night_weekday_break_start ?? null);
-            $end = $sunday ? ($source?->night_sunday_break_end ?? null) : ($source?->night_weekday_break_end ?? null);
+            $start = $source?->night_weekday_break_start ?? null;
+            $end = $source?->night_weekday_break_end ?? null;
         } else {
             $start = $sunday ? ($source?->sunday_break_start ?? null) : ($source?->weekday_break_start ?? null);
             $end = $sunday ? ($source?->sunday_break_end ?? null) : ($source?->weekday_break_end ?? null);
@@ -251,6 +297,17 @@ class WorkHourResolver
         }
 
         return (int) round($from->diffInMinutes($to, true));
+    }
+
+    public function minutesOutsideBreak(CarbonInterface $from, CarbonInterface $to, ?string $breakStart, ?string $breakEnd): int
+    {
+        if ($to->lessThanOrEqualTo($from)) {
+            return 0;
+        }
+
+        $total = (int) round(Carbon::parse($from)->diffInMinutes(Carbon::parse($to), true));
+
+        return max(0, $total - $this->coveredBreakMinutes($from, $to, $breakStart, $breakEnd));
     }
 
     /**
@@ -338,17 +395,22 @@ class WorkHourResolver
         $standardEnd = $this->clock($source?->weekday_end ?? null, '18:00');
         $standard = $this->span($standardStart, $standardEnd);
 
-        if ($shift && $this->crossesMidnight($shift->starts_at, $shift->ends_at)) {
+        $explicit = $this->shifts->spanOn($employee, $date);
+        $night = ($explicit?->kind ?? $own?->shift_kind ?? 'day') === 'night';
+        if ($explicit === null && $shift && $this->crossesMidnight($shift->starts_at, $shift->ends_at) && ! ($night && $sunday)) {
             $start = $this->clock($shift->starts_at, '21:00');
             $end = $this->clock($shift->ends_at, '06:00');
 
             return $this->window($start, $end, $standard);
         }
 
-        $night = ($own?->shift_kind ?? 'day') === 'night';
-        if ($night) {
-            $start = $this->clock($sunday ? ($source?->night_sunday_start ?? null) : ($source?->night_weekday_start ?? null), '21:00');
-            $end = $this->clock($sunday ? ($source?->night_sunday_end ?? null) : ($source?->night_weekday_end ?? null), $sunday ? '02:00' : '06:00');
+        if ($night && $sunday) {
+            $sundaySource = ($own && ! $own->uses_department) ? $own : $employee->department?->workHour;
+            $start = $this->clock($sundaySource?->night_sunday_start ?? null, '21:00');
+            $end = $this->clock($sundaySource?->night_sunday_end ?? null, '02:00');
+        } elseif ($night) {
+            $start = $this->clock($source?->night_weekday_start ?? null, '21:00');
+            $end = $this->clock($source?->night_weekday_end ?? null, '06:00');
         } else {
             $start = $this->clock($sunday ? ($source?->sunday_start ?? null) : ($source?->weekday_start ?? null), $sunday ? '08:00' : '09:00');
             $end = $this->clock($sunday ? ($source?->sunday_end ?? null) : ($source?->weekday_end ?? null), $sunday ? '13:00' : '18:00');

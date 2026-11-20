@@ -3,7 +3,7 @@
 @section('content')
     <div class="ph">
         <div>
-            <h1>Gate Pass rules</h1>
+            <h1>{{ __('Gate Pass rules') }}</h1>
             <p>These flags change approval the same way as GMS settings.</p>
         </div>
         <div class="ac">
@@ -47,7 +47,7 @@
 
     <section class="card" style="margin-top:16px">
         <div class="cb">
-            <h3>How OUT and hours work</h3>
+            <h3>{{ __('How OUT and hours work') }}</h3>
             <ul class="st-list">
                 <li>Any role can request a pass. Parent approval opens the gate OUT machine. Reject leaves the machine closed and notifies the employee with the reason.</li>
                 <li>After an approved OUT punch, time away is not desk work until they return.</li>

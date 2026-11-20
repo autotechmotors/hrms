@@ -3,6 +3,7 @@
 @endphp
 <div
     class="ad-body"
+    data-live-list="advances"
     data-page="{{ $advances->currentPage() }}"
     data-last="{{ $advances->lastPage() }}"
     data-total="{{ $advances->total() }}"
@@ -10,7 +11,7 @@
     data-deducted="{{ $stats['deducted'] }}"
     data-balance="{{ number_format($stats['balance'], 2) }}"
 >
-    <div class="ad-cards">
+    <div class="ad-cards" data-list-rows>
         @forelse($advances as $advance)
             <article class="ad-card">
                 <div class="ad-card-top">
@@ -32,12 +33,12 @@
                 </div>
                 @if($canEdit && $advance->status === 'active')
                     <div class="ad-ops">
-                        <button class="btn sm ad-close" type="button" data-url="{{ route('advances.close', $advance) }}">Close</button>
+                        <button class="btn sm ad-close" type="button" data-url="{{ route('advances.close', $advance) }}">{{ __('Close') }}</button>
                     </div>
                 @endif
             </article>
         @empty
-            <p class="ad-empty">No advances match these filters.</p>
+            <p class="ad-empty" data-list-empty>No advances match these filters.</p>
         @endforelse
     </div>
 
@@ -45,15 +46,15 @@
         <table>
             <thead>
                 <tr>
-                    <th>Employee</th>
-                    <th>Title</th>
+                    <th>{{ __('Employee') }}</th>
+                    <th>{{ __('Title') }}</th>
                     <th class="ad-money">Amount</th>
-                    <th>Salary month</th>
-                    <th>Status</th>
+                    <th>{{ __('Salary month') }}</th>
+                    <th>{{ __('Status') }}</th>
                     <th class="ad-act">Action</th>
                 </tr>
             </thead>
-            <tbody>
+            <tbody data-list-rows>
             @forelse($advances as $advance)
                 <tr>
                     <td>
@@ -75,22 +76,19 @@
                     <td><span class="b {{ $advance->status === 'active' ? 'wn' : ($advance->status === 'completed' ? 'ok' : '') }}">{{ $advance->status === 'active' ? 'Active' : ($advance->status === 'completed' ? 'Deducted' : 'Closed') }}</span></td>
                     <td class="ad-act">
                         @if($canEdit && $advance->status === 'active')
-                            <button class="btn sm ad-close" type="button" data-url="{{ route('advances.close', $advance) }}">Close</button>
+                            <button class="btn sm ad-close" type="button" data-url="{{ route('advances.close', $advance) }}">{{ __('Close') }}</button>
                         @else
                             <span class="ad-muted">—</span>
                         @endif
                     </td>
                 </tr>
             @empty
-                <tr>
+                <tr data-list-empty>
                     <td colspan="6" class="ad-empty">No advances match these filters.</td>
                 </tr>
             @endforelse
             </tbody>
         </table>
     </div>
-    <div class="pgn">
-        <span>{{ $advances->firstItem() ?? 0 }}–{{ $advances->lastItem() ?? 0 }} of {{ $advances->total() }}</span>
-        <div>{{ $advances->links() }}</div>
-    </div>
+    @include('partials.list-footer', ['paginator' => $advances])
 </div>

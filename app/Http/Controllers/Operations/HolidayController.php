@@ -13,6 +13,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
@@ -27,12 +28,14 @@ class HolidayController extends Controller
     {
         $this->authorizeAny('holidays.view');
         $year = (int) $request->input('year', now()->year);
-        $clamped = max(1990, min(2100, $year));
-        if ($clamped !== $year) {
-            return redirect()->route('holidays.index', ['year' => $clamped]);
+        $month = (int) $request->input('month', now()->month);
+        $clampedYear = max(1990, min(2100, $year));
+        $clampedMonth = max(1, min(12, $month));
+        if ($clampedYear !== $year || ($request->filled('month') && $clampedMonth !== $month)) {
+            return redirect()->route('holidays.index', ['year' => $clampedYear, 'month' => $clampedMonth]);
         }
 
-        $data = $this->pageData($request, $year);
+        $data = $this->pageData($request, $clampedYear, $clampedMonth);
         if ($request->boolean('partial') && $request->ajax()) {
             return response(view('operations.holidays._body', $data)->render());
         }
@@ -47,7 +50,7 @@ class HolidayController extends Controller
         $data = $request->validate([
             'holiday_date' => ['required', 'date', Rule::unique('holidays', 'holiday_date')->where('company_id', $companyId)],
             'name' => ['required', 'string', 'max:120'],
-            'kind' => ['required', Rule::in(['public', 'restricted', 'optional'])],
+            'kind' => ['required', Rule::in(['public', 'cutoff'])],
         ]);
 
         $holiday = Holiday::query()->create([
@@ -57,19 +60,25 @@ class HolidayController extends Controller
             'kind' => $data['kind'],
         ]);
 
-        if ($holiday->kind === 'public') {
-            $this->refreshCompany($companyId, Carbon::parse($holiday->holiday_date));
-        }
+        $date = Carbon::parse($holiday->holiday_date);
+        $this->refreshCompany($companyId, $date);
 
-        $year = Carbon::parse($data['holiday_date'])->year;
+        $year = $date->year;
+        $message = $holiday->kind === 'cutoff'
+            ? 'Holiday added. This day is cut from everyone’s salary.'
+            : 'Holiday added. This is a paid day for everyone.';
 
         if ($request->expectsJson()) {
-            return response()->json(['message' => 'Holiday added. A public holiday is a paid day for everyone.']);
+            return response()->json([
+                'message' => $message,
+                'year' => $year,
+                'month' => $date->month,
+            ]);
         }
 
         return redirect()
-            ->route('holidays.index', ['year' => $year])
-            ->with('success', 'Holiday added.');
+            ->route('holidays.index', ['year' => $year, 'month' => $date->month])
+            ->with('success', $message);
     }
 
     public function destroy(Request $request, Holiday $holiday): RedirectResponse|JsonResponse
@@ -87,7 +96,7 @@ class HolidayController extends Controller
         }
 
         return redirect()
-            ->route('holidays.index', ['year' => $year])
+            ->route('holidays.index', ['year' => $year, 'month' => $date->month])
             ->with('success', 'Holiday removed.');
     }
 
@@ -95,9 +104,12 @@ class HolidayController extends Controller
     {
         $this->authorizeAny('holidays.manage');
         $companyId = $this->companyId();
+        $range = $request->filled('starts_on') || $request->filled('ends_on');
         $data = $request->validate([
             'employee_id' => ['required', 'integer'],
-            'holiday_date' => ['required', 'date'],
+            'holiday_date' => [Rule::requiredIf(! $range), 'nullable', 'date'],
+            'starts_on' => [Rule::requiredIf($range), 'nullable', 'date'],
+            'ends_on' => [Rule::requiredIf($range), 'nullable', 'date', 'after_or_equal:starts_on'],
             'name' => ['required', 'string', 'max:120'],
         ]);
 
@@ -111,29 +123,55 @@ class HolidayController extends Controller
             throw ValidationException::withMessages(['employee_id' => 'Choose a person you can see.']);
         }
 
-        $taken = EmployeeHoliday::query()
-            ->where('employee_id', $employee->id)
-            ->whereDate('holiday_date', $data['holiday_date'])
-            ->exists();
-        if ($taken) {
-            throw ValidationException::withMessages(['holiday_date' => 'This person already has a paid day on that date.']);
+        $start = Carbon::parse($range ? $data['starts_on'] : $data['holiday_date'])->startOfDay();
+        $end = Carbon::parse($range ? $data['ends_on'] : $data['holiday_date'])->startOfDay();
+        $span = (int) round($start->diffInDays($end)) + 1;
+        if ($span > 366) {
+            throw ValidationException::withMessages(['ends_on' => 'Choose 366 days or fewer.']);
         }
 
-        EmployeeHoliday::query()->create([
-            'employee_id' => $employee->id,
-            'holiday_date' => $data['holiday_date'],
-            'name' => $data['name'],
-        ]);
-        $this->attendance->recalculate($employee, Carbon::parse($data['holiday_date']));
+        $taken = EmployeeHoliday::query()
+            ->where('employee_id', $employee->id)
+            ->whereDate('holiday_date', '>=', $start->toDateString())
+            ->whereDate('holiday_date', '<=', $end->toDateString())
+            ->exists();
+        if ($taken) {
+            throw ValidationException::withMessages([
+                $range ? 'starts_on' : 'holiday_date' => 'This person already has a paid day inside that range.',
+            ]);
+        }
+
+        $dates = [];
+        DB::transaction(function () use ($employee, $start, $end, $data, &$dates) {
+            $cursor = $start->copy();
+            while ($cursor->lte($end)) {
+                EmployeeHoliday::query()->create([
+                    'employee_id' => $employee->id,
+                    'holiday_date' => $cursor->toDateString(),
+                    'name' => $data['name'],
+                ]);
+                $dates[] = $cursor->copy();
+                $cursor->addDay();
+            }
+        });
+        foreach ($dates as $date) {
+            $this->attendance->recalculate($employee, $date);
+        }
+
+        $message = count($dates) === 1
+            ? $employee->full_name.' is paid on that day. Everyone else still works.'
+            : $employee->full_name.' is paid for '.count($dates).' days. Everyone else still works.';
 
         if ($request->expectsJson()) {
             return response()->json([
-                'message' => $employee->full_name.' is paid on that day. Everyone else still works.',
+                'message' => $message,
+                'year' => $start->year,
+                'month' => $start->month,
             ]);
         }
 
         return redirect()
-            ->route('holidays.index', ['year' => Carbon::parse($data['holiday_date'])->year])
+            ->route('holidays.index', ['year' => $start->year, 'month' => $start->month])
             ->with('success', 'Paid day saved for '.$employee->full_name.'.');
     }
 
@@ -157,23 +195,25 @@ class HolidayController extends Controller
         }
 
         return redirect()
-            ->route('holidays.index', ['year' => $year])
+            ->route('holidays.index', ['year' => $year, 'month' => $date->month])
             ->with('success', 'Paid day removed.');
     }
 
     /**
      * @return array<string, mixed>
      */
-    private function pageData(Request $request, int $year): array
+    private function pageData(Request $request, int $year, int $month): array
     {
         $companyId = $this->companyId();
 
         return [
             'year' => $year,
+            'month' => $month,
             'holidays' => Holiday::query()
                 ->visibleTo($request->user())
                 ->where('company_id', $companyId)
                 ->whereYear('holiday_date', $year)
+                ->whereMonth('holiday_date', $month)
                 ->orderBy('holiday_date')
                 ->get(),
             'employeeHolidays' => EmployeeHoliday::query()
@@ -181,6 +221,7 @@ class HolidayController extends Controller
                     $query->visibleTo($request->user())->where('company_id', $companyId);
                 })
                 ->whereYear('holiday_date', $year)
+                ->whereMonth('holiday_date', $month)
                 ->with('employee')
                 ->orderBy('holiday_date')
                 ->get(),

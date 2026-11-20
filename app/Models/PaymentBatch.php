@@ -12,7 +12,7 @@ class PaymentBatch extends Model
 {
     use AuditsChanges, BelongsToCompany;
 
-    protected $fillable = ['company_id', 'payroll_run_id', 'company_bank_account_id', 'scheduled_on', 'status', 'total'];
+    protected $fillable = ['company_id', 'payroll_run_id', 'salary_sheet_id', 'company_bank_account_id', 'scheduled_on', 'status', 'total'];
 
     protected function casts(): array
     {
@@ -22,6 +22,11 @@ class PaymentBatch extends Model
     public function run(): BelongsTo
     {
         return $this->belongsTo(PayrollRun::class, 'payroll_run_id');
+    }
+
+    public function sheet(): BelongsTo
+    {
+        return $this->belongsTo(SalarySheet::class, 'salary_sheet_id');
     }
 
     public function account(): BelongsTo

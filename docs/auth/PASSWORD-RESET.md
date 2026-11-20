@@ -1,6 +1,6 @@
 # Password reset
 
-A staff account can ask for a reset link from the sign-in page. The link opens a page to set a new password and confirm it. Sign-in, logout, and the authenticator stay as they are.
+A staff account can ask for a reset link from the sign-in page. The link opens a page to set a new password and confirm it. Sign-in, logout, and the authenticator stay as they are. Forgot password and the new-password page use the same guest stage as sign-in: `docs/auth/SIGN-IN.md`.
 
 ## Flow
 

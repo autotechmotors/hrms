@@ -1,6 +1,6 @@
 # Departments
 
-Department create, edit, and delete stay company-scoped. Employee placement still stores `department_id`. Manager visibility still uses department scope plus direct reports.
+Department create, edit, and delete stay company-scoped. A department that employees, or another record, still use cannot be deleted. Employee placement still stores `department_id`. Manager visibility still uses department scope plus the reporting tree.
 
 ## Code
 

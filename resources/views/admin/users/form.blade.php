@@ -1,13 +1,13 @@
 @extends('layouts.app')
-@section('title', $account ? 'Edit user' : 'New user')
+@section('title', $account ? __('Edit user') : __('New user'))
 @section('content')
     <div class="ph">
         <div>
             <x-back :href="route('users.index')" label="Users" />
-            <h1>{{ $account ? 'Edit user' : 'New user' }}</h1>
+            <h1>{{ $account ? __('Edit user') : __('New user') }}</h1>
         </div>
     </div>
-    <form class="card card-body" method="post" action="{{ $account ? route('users.update', $account) : route('users.store') }}">
+    <form class="card card-body org-form" method="post" action="{{ $account ? route('users.update', $account) : route('users.store') }}">
         @csrf @if($account) @method('put') @endif
         <x-text-field name="name" label="Name" :value="$account->name ?? ''" required />
         <x-text-field name="email" label="Email" type="email" :value="$account->email ?? ''" required />
@@ -45,6 +45,9 @@
                 </div>
             @endfor
         </div>
-        <button class="btn btn-primary">Save user</button>
+        <div class="org-form-actions">
+            <a class="btn" href="{{ route('users.index') }}">{{ __('Cancel') }}</a>
+            <button class="btn pr" type="submit">Save user</button>
+        </div>
     </form>
 @endsection

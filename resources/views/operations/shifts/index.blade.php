@@ -15,7 +15,7 @@
 
     <div class="ph">
         <div>
-            <h1>Shifts & Rosters</h1>
+            <h1>{{ __('Shifts & Rosters') }}</h1>
             <p>Define shift templates, then assign them across the week.</p>
         </div>
         <div class="ac">
@@ -61,7 +61,7 @@
     <section class="card sh-templates">
         <header>
             <div>
-                <h3>Shift templates</h3>
+                <h3>{{ __('Shift templates') }}</h3>
                 <p>Codes used in the weekly roster below.</p>
             </div>
             @if($canEdit)
@@ -92,7 +92,7 @@
                                 </div>
                             </div>
                             @if($canEdit)
-                                <form class="sh-chip-act" method="post" action="{{ route('shifts.destroy', $shift) }}" data-confirm="Remove {{ $shift->name }}?">
+                                <form class="sh-chip-act" method="post" action="{{ route('shifts.destroy', $shift) }}" data-confirm="{{ __('Remove :name?', ['name' => $shift->name]) }}">
                                     @csrf @method('delete')
                                     <input type="hidden" name="week" value="{{ $start->toDateString() }}">
                                     @if($filters['q'])<input type="hidden" name="q" value="{{ $filters['q'] }}">@endif
@@ -204,7 +204,7 @@
                         </div>
                     </div>
                     <div class="modal-footer">
-                        <button type="button" class="btn" data-bs-dismiss="modal">Cancel</button>
+                        <button type="button" class="btn" data-bs-dismiss="modal">{{ __('Cancel') }}</button>
                         <button type="submit" class="btn pr">Save shift</button>
                     </div>
                 </form>
@@ -411,19 +411,20 @@
             const formEl = this;
             const mode = $('#bulkMode').val();
             if (mode === 'shift' && ! $('#bulkShiftId').val()) {
-                if (window.toast) window.toast('Select a shift before applying to the week.', 'wn');
+                if (window.toast) window.toast(@json(__('Select a shift before applying to the week.')), 'wn');
                 return;
             }
             const count = Number((board() && board().dataset.people) || 0);
-            const days = bulk.find('[name="weekdays_only"]').is(':checked') ? 'weekdays' : 'all 7 days';
-            let message = 'Clear roster for ' + count + ' people (' + days + ')?';
-            if (mode === 'shift') message = 'Apply this shift to ' + count + ' people for ' + days + '?';
-            if (mode === 'off') message = 'Mark ' + days + ' as Off for ' + count + ' people?';
+            const days = bulk.find('[name="weekdays_only"]').is(':checked') ? @json(__('weekdays')) : @json(__('all 7 days'));
+            const fill = function (phrase) { return phrase.replace(':count', count).replace(':days', days); };
+            let message = fill(@json(__('Clear roster for :count people (:days)?')));
+            if (mode === 'shift') message = fill(@json(__('Apply this shift to :count people for :days?')));
+            if (mode === 'off') message = fill(@json(__('Mark :days as Off for :count people?')));
             const go = function () {
                 postForm(formEl).done(function () { load(); });
             };
             if (window.askConfirm) {
-                window.askConfirm(message, { label: mode === 'clear' ? 'Clear' : 'Apply', danger: mode === 'clear' }).then(function (ok) {
+                window.askConfirm(message, { label: mode === 'clear' ? @json(__('Clear')) : @json(__('Apply')), danger: mode === 'clear' }).then(function (ok) {
                     if (ok) go();
                 });
                 return;
@@ -445,7 +446,7 @@
             go();
             return;
         }
-        window.askConfirm('Apply ' + code + ' to this person’s whole week?').then(function (ok) {
+        window.askConfirm(@json(__('Apply :shift to this person’s whole week?')).replace(':shift', code)).then(function (ok) {
             if (!ok) {
                 select.value = '';
                 return;

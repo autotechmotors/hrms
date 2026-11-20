@@ -8,7 +8,7 @@
     <div class="more-page">
         <div class="ph">
             <div>
-                <h1>More</h1>
+                <h1>{{ __('More') }}</h1>
             </div>
         </div>
 
@@ -22,24 +22,31 @@
             </div>
             <a class="more-edit" href="{{ route('profile.edit') }}">
                 <x-i name="pen" :size="15" />
-                <span>Edit profile</span>
+                <span>{{ __('Edit profile') }}</span>
             </a>
         </section>
 
         <button class="more-card more-install" type="button" data-pwa-install hidden>
             <img src="{{ asset('icons/icon-192.png') }}" alt="" width="40" height="40">
             <span class="more-label">
-                <b>Install app</b>
-                <small>Add the HRMS icon to your home screen</small>
+                <b>{{ __('Install app') }}</b>
+                <small>{{ __('Add the HRMS icon to your home screen') }}</small>
             </span>
             <x-i class="more-go" name="right" :size="16" />
         </button>
 
         <section class="more-card">
-            <h2>Inbox</h2>
+            <h2>{{ __('Language') }}</h2>
+            <a class="more-row {{ app()->getLocale() === 'en' ? 'on' : '' }}" href="{{ route('locale.update', 'en') }}" hreflang="en" lang="en"><span class="more-label">English</span></a>
+            <a class="more-row {{ app()->getLocale() === 'hi' ? 'on' : '' }}" href="{{ route('locale.update', 'hi') }}" hreflang="hi" lang="hi"><span class="more-label">हिन्दी</span></a>
+            <a class="more-row {{ app()->getLocale() === 'gu' ? 'on' : '' }}" href="{{ route('locale.update', 'gu') }}" hreflang="gu" lang="gu"><span class="more-label">ગુજરાતી</span></a>
+        </section>
+
+        <section class="more-card">
+            <h2>{{ __('Inbox') }}</h2>
             <a class="more-row {{ request()->routeIs('notifications.*') ? 'on' : '' }}" href="{{ route('notifications.index', [], false) }}">
                 <span class="more-ico"><x-i name="bell" :size="18" /></span>
-                <span class="more-label">Notifications</span>
+                <span class="more-label">{{ __('Notifications') }}</span>
                 @if(($unreadNotifications ?? 0) > 0)
                     <span class="more-count">{{ $unreadNotifications > 99 ? '99+' : $unreadNotifications }}</span>
                 @endif
@@ -49,11 +56,11 @@
 
         @foreach($groups as $label => $links)
             <section class="more-card">
-                <h2>{{ $label }}</h2>
+                <h2>{{ __($label) }}</h2>
                 @foreach($links as $link)
                     <a class="more-row {{ request()->routeIs(...$link['active']) ? 'on' : '' }}" href="{{ route($link['route']) }}">
                         <span class="more-ico"><x-i :name="$link['icon']" :size="18" /></span>
-                        <span class="more-label">{{ $link['label'] }}</span>
+                        <span class="more-label">{{ __($link['label']) }}</span>
                         <x-i class="more-go" name="right" :size="16" />
                     </a>
                 @endforeach
@@ -64,7 +71,7 @@
             @csrf
             <button type="submit">
                 <span class="more-ico"><x-i name="out" :size="18" /></span>
-                <span class="more-label">Logout</span>
+                <span class="more-label">{{ __('Logout') }}</span>
             </button>
         </form>
     </div>

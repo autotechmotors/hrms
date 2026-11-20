@@ -4,15 +4,15 @@
     <div class="ph">
         <div>
             <div class="sg-title">
-                <h1>Hours & pay</h1>
+                <h1>{{ __('Hours & pay') }}</h1>
                 <div class="sg-help" id="hpHelp">
                     <button class="sg-info" id="hpInfo" type="button" aria-label="How hours and pay work" aria-expanded="false" aria-controls="hpPop">
                         <x-i name="help" :size="15" />
                     </button>
                     <div class="sg-pop" id="hpPop" hidden>
                         <ol class="sg-steps">
-                            <li><b>1</b><span>Department times. Monday to Saturday, and a shorter Sunday, for everyone in that department. Night shift is Monday to Saturday only.</span></li>
-                            <li><b>2</b><span>A person’s times. They can use the department clocks, or their own. Night shift Sunday is paid, with no punch and no cutoff.</span></li>
+                            <li><b>1</b><span>Department times. Day has Monday to Saturday and Sunday. Night has Monday to Saturday, and a Sunday night switch for that department only.</span></li>
+                            <li><b>2</b><span>A person’s times. They can use the department clocks, or their own Monday to Saturday clocks. Sunday night stays the department switch.</span></li>
                             <li><b>3</b><span>Monthly salary. Set the amount payroll should use for that person.</span></li>
                         </ol>
                     </div>
@@ -26,8 +26,8 @@
         <section class="card ef-sec">
             <header>
                 <div>
-                    <h3>Departments</h3>
-                    <p>These clocks apply until a person has their own. Day works Sunday. Night does not.</p>
+                    <h3>{{ __('Departments') }}</h3>
+                    <p>These clocks apply until a person has their own. Sunday night is on or off for the whole department.</p>
                 </div>
             </header>
             <div class="cb">
@@ -49,14 +49,15 @@
                                         @csrf
                                         <div class="hp-clocks">
                                             <div class="hp-clock">
-                                                <span>Day · Monday to Saturday</span>
-                                                <div>
+                                                <span>Day · Mon–Sat</span>
+                                                <div class="hp-line">
+                                                    <b>{{ __('Work') }}</b>
                                                     <input class="form-control" type="time" name="weekday_start" value="{{ $department['weekday_start'] }}" required aria-label="Day start">
                                                     <em>to</em>
                                                     <input class="form-control" type="time" name="weekday_end" value="{{ $department['weekday_end'] }}" required aria-label="Day end">
                                                 </div>
-                                                <div class="hp-break">
-                                                    <span>Break</span>
+                                                <div class="hp-line">
+                                                    <b>{{ __('Break') }}</b>
                                                     <input class="form-control" type="time" name="weekday_break_start" value="{{ $department['weekday_break_start'] }}" aria-label="Day break start">
                                                     <em>to</em>
                                                     <input class="form-control" type="time" name="weekday_break_end" value="{{ $department['weekday_break_end'] }}" aria-label="Day break end">
@@ -64,37 +65,62 @@
                                             </div>
                                             <div class="hp-clock">
                                                 <span>Day · Sunday</span>
-                                                <div>
+                                                <div class="hp-line">
+                                                    <b>{{ __('Work') }}</b>
                                                     <input class="form-control" type="time" name="sunday_start" value="{{ $department['sunday_start'] }}" required aria-label="Sunday start">
                                                     <em>to</em>
                                                     <input class="form-control" type="time" name="sunday_end" value="{{ $department['sunday_end'] }}" required aria-label="Sunday end">
                                                 </div>
-                                                <div class="hp-break">
-                                                    <span>Break</span>
+                                                <div class="hp-line">
+                                                    <b>{{ __('Break') }}</b>
                                                     <input class="form-control" type="time" name="sunday_break_start" value="{{ $department['sunday_break_start'] }}" aria-label="Sunday break start">
                                                     <em>to</em>
                                                     <input class="form-control" type="time" name="sunday_break_end" value="{{ $department['sunday_break_end'] }}" aria-label="Sunday break end">
                                                 </div>
                                             </div>
                                             <div class="hp-clock">
-                                                <span>Night · Monday to Saturday</span>
-                                                <div>
+                                                <span>Night · Mon–Sat</span>
+                                                <div class="hp-line">
+                                                    <b>{{ __('Work') }}</b>
                                                     <input class="form-control" type="time" name="night_weekday_start" value="{{ $department['night_weekday_start'] }}" required aria-label="Night start">
                                                     <em>to</em>
                                                     <input class="form-control" type="time" name="night_weekday_end" value="{{ $department['night_weekday_end'] }}" required aria-label="Night end">
                                                 </div>
-                                                <div class="hp-break">
-                                                    <span>Break</span>
+                                                <div class="hp-line">
+                                                    <b>{{ __('Break') }}</b>
                                                     <input class="form-control" type="time" name="night_weekday_break_start" value="{{ $department['night_weekday_break_start'] }}" aria-label="Night break start">
                                                     <em>to</em>
                                                     <input class="form-control" type="time" name="night_weekday_break_end" value="{{ $department['night_weekday_break_end'] }}" aria-label="Night break end">
                                                 </div>
                                             </div>
+                                            <div class="hp-clock">
+                                                <div class="hp-sunday-top">
+                                                    <span>Night · Sunday</span>
+                                                    <input type="hidden" name="night_works_sunday" value="0">
+                                                    <label class="et-switch">
+                                                        <input type="checkbox" name="night_works_sunday" value="1" data-night-sunday @checked($department['night_works_sunday'])>
+                                                        <span class="rl-ui" aria-hidden="true"></span>
+                                                        <span class="et-switch-txt" data-night-sunday-label>{{ $department['night_works_sunday'] ? 'On' : 'Off' }}</span>
+                                                    </label>
+                                                </div>
+                                                <p class="hp-night-note" data-night-sunday-off @if($department['night_works_sunday']) hidden @endif>Off. Paid Sunday, no punch and no cutoff.</p>
+                                                <div class="hp-line" data-night-sunday-times @unless($department['night_works_sunday']) hidden @endunless>
+                                                    <b>{{ __('Work') }}</b>
+                                                    <input class="form-control" type="time" name="night_sunday_start" value="{{ $department['night_sunday_start'] }}" @disabled(! $department['night_works_sunday']) @required($department['night_works_sunday']) aria-label="Sunday night start">
+                                                    <em>to</em>
+                                                    <input class="form-control" type="time" name="night_sunday_end" value="{{ $department['night_sunday_end'] }}" @disabled(! $department['night_works_sunday']) @required($department['night_works_sunday']) aria-label="Sunday night end">
+                                                </div>
+                                                <div class="hp-line" data-night-sunday-times @unless($department['night_works_sunday']) hidden @endunless>
+                                                    <b>{{ __('Break') }}</b>
+                                                    <input class="form-control" type="time" name="night_sunday_break_start" value="{{ $department['night_sunday_break_start'] }}" @disabled(! $department['night_works_sunday']) @required($department['night_works_sunday']) aria-label="Sunday night break start">
+                                                    <em>to</em>
+                                                    <input class="form-control" type="time" name="night_sunday_break_end" value="{{ $department['night_sunday_break_end'] }}" @disabled(! $department['night_works_sunday']) @required($department['night_works_sunday']) aria-label="Sunday night break end">
+                                                </div>
+                                            </div>
                                         </div>
                                         <div class="hp-dept-foot">
                                             <p data-hours>{{ $department['hours'] }}</p>
-                                            <p class="hp-night-note">Night shift does not work Sunday. That day is paid, with no cutoff.</p>
-                                            <button class="btn pr sm" type="submit">Save</button>
+                                            <button class="btn pr sm" type="submit">{{ __('Save') }}</button>
                                         </div>
                                     </form>
                                 @else
@@ -110,7 +136,7 @@
         <section class="card ef-sec">
             <header>
                 <div>
-                    <h3>People</h3>
+                    <h3>{{ __('People') }}</h3>
                     <p>Open a person to set their hours and salary.</p>
                 </div>
             </header>
@@ -184,6 +210,26 @@
         event.preventDefault();
         const page = new URL(link.href, window.location.origin).searchParams.get('page');
         load(page ? { page: page } : null);
+    });
+
+    function paintNightSunday(form) {
+        const box = form.querySelector('[data-night-sunday]');
+        if (!box) return;
+        const on = box.checked;
+        form.querySelectorAll('[data-night-sunday-times]').forEach((el) => { el.hidden = !on; });
+        form.querySelectorAll('[data-night-sunday-off]').forEach((el) => { el.hidden = on; });
+        form.querySelectorAll('[data-night-sunday-times] input').forEach((input) => {
+            input.disabled = !on;
+            input.required = on;
+        });
+        const label = form.querySelector('[data-night-sunday-label]');
+        if (label) label.textContent = on ? 'On' : 'Off';
+    }
+    document.querySelectorAll('.hp-dept-form').forEach(paintNightSunday);
+    document.addEventListener('change', function (event) {
+        if (!event.target.matches('[data-night-sunday]')) return;
+        const form = event.target.closest('.hp-dept-form');
+        if (form) paintNightSunday(form);
     });
 
     document.addEventListener('submit', function (event) {

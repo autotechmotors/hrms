@@ -1,6 +1,6 @@
 @props(['name', 'label', 'type' => 'text', 'value' => null, 'required' => false])
 <div class="mb-3">
-    <label class="form-label" for="{{ $name }}">{{ $label }} @if($required)<span class="text-danger">*</span>@endif</label>
+    <label class="form-label" for="{{ $name }}">{{ __($label) }} @if($required)<span class="text-danger">*</span>@endif</label>
     @if($type === 'textarea')
         <textarea name="{{ $name }}" id="{{ $name }}" class="form-control @error($name) is-invalid @enderror" @required($required) {{ $attributes }}>{{ old($name, $value) }}</textarea>
     @else

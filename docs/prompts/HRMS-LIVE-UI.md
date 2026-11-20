@@ -13,7 +13,7 @@ Do not add Vue, React, Inertia, or a second Alpine app. Do not add Vite or npm. 
 | List already built like Employees (`partial=1`) | jQuery `$.ajax`. Keep that pattern. |
 | Row action on that list (delete, block, page, filter) | jQuery `$.ajax` to the existing route, then refresh the partial. |
 | New screen, or a form with several fields and live validation | Laravel Livewire component. |
-| File download, login, logout, MFA, device push (`device-events`, Hikvision) | Normal HTTP. Do not wrap these in ajax. |
+| File download, login, logout, MFA, device push (`device-events`, Hikvision), bank account save, bank CSV export | Normal HTTP. Do not wrap these in ajax. |
 
 When the first Livewire screen is added: `composer require livewire/livewire` only. In `resources/views/layouts/app.blade.php`, `@livewireStyles` in `<head>` and `@livewireScripts` before `app.js`. No Vite build.
 
@@ -27,6 +27,7 @@ Match `resources/views/employees/index.blade.php`.
 - POST, PUT, and DELETE send `_token` and `_method`. On success, reload the partial. On failure, `window.toast`.
 - Confirm with `window.askConfirm` before a destructive call. Do not use `window.confirm`.
 - Intercept pagination links inside the partial. Do not follow them as a full navigation.
+- Every list uses `partials/list-footer.blade.php` (same range line and page buttons). The list root has `data-live-list`, and the repeating rows sit in `data-list-rows`. `app.js` turns a page click into an ajax swap. On a phone (700px and under) the number buttons hide and the next page is appended when the list end reaches the screen.
 - Abort the previous list request when a new filter starts.
 
 ## Livewire

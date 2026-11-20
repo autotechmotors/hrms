@@ -21,7 +21,7 @@
 
     $(document).on('click', '.sg-approve', function () {
         var url = $(this).data('url');
-        window.askConfirm('Approve this salary request?', { label: 'Approve' }).then(function (ok) {
+        window.askConfirm(@json(__('Approve this salary request?')), { label: @json(__('Approve')) }).then(function (ok) {
             if (!ok) return;
             $.ajax({ url: url, method: 'POST', dataType: 'json', data: { _token: token } }).done(done).fail(fail);
         });

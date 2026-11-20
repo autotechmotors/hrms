@@ -15,6 +15,7 @@ use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 class SalarySheetController extends Controller
@@ -178,12 +179,17 @@ class SalarySheetController extends Controller
             return back()->withErrors(['status' => $message]);
         }
 
-        $sheet->update([
-            'status' => $status,
-            'decided_by' => $request->user()->id,
-            'decided_at' => now(),
-            'decision_note' => $reason,
-        ]);
+        DB::transaction(function () use ($sheet, $status, $request, $reason): void {
+            $sheet->update([
+                'status' => $status,
+                'decided_by' => $request->user()->id,
+                'decided_at' => now(),
+                'decision_note' => $reason,
+            ]);
+            if ($status === 'approved') {
+                $this->builder->settleAdvances($sheet);
+            }
+        });
         $sheet->load(['author', 'decider']);
         $this->notify($sheet, $status, $request->user()->id);
 

@@ -249,10 +249,20 @@ class DeviceController extends Controller
             'password' => ['nullable', 'string', 'max:64'],
             'port' => ['nullable', 'integer', 'min:1', 'max:65535'],
             'place' => ['nullable', 'string', 'max:120'],
-            'gate_kind' => ['nullable', Rule::in(['attendance', 'gate'])],
+            'gate_kind' => ['nullable', Rule::in(['attendance', 'in', 'out', 'gate'])],
             'status' => [$creating ? 'nullable' : 'required', Rule::in(['unknown', 'online', 'offline'])],
         ]);
-        $data['gate_kind'] = $data['gate_kind'] ?? Device::KIND_ATTENDANCE;
+        $choice = $data['gate_kind'] ?? Device::KIND_ATTENDANCE;
+        if ($choice === Device::ROLE_IN || $choice === Device::ROLE_OUT) {
+            $data['gate_kind'] = Device::KIND_ATTENDANCE;
+            $data['punch_role'] = $choice;
+        } elseif ($choice === Device::KIND_GATE) {
+            $data['gate_kind'] = Device::KIND_GATE;
+            $data['punch_role'] = Device::ROLE_OUT;
+        } else {
+            $data['gate_kind'] = Device::KIND_ATTENDANCE;
+            $data['punch_role'] = Device::ROLE_BOTH;
+        }
         $data['register_id'] = trim((string) ($data['register_id'] ?? '')) ?: config('devices.register_id');
         $data['username'] = trim((string) ($data['username'] ?? '')) ?: null;
         $data['port'] = ($data['port'] ?? null) ?: null;

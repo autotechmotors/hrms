@@ -14,8 +14,8 @@
             <thead>
             <tr>
                 <th class="sg-check"></th>
-                <th>Code</th>
-                <th>Name</th>
+                <th>{{ __('Code') }}</th>
+                <th>{{ __('Name') }}</th>
             </tr>
             </thead>
             <tbody>

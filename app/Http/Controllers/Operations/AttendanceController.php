@@ -43,29 +43,33 @@ class AttendanceController extends Controller
         $this->applyEmployeeFilters($filtered, $request);
         $scopedIds = (clone $filtered)->pluck('id');
 
-        $allDays = AttendanceDay::query()
+        $statusRows = AttendanceDay::query()
             ->whereIn('employee_id', $scopedIds)
             ->whereDate('work_date', $date)
-            ->get()
-            ->keyBy('employee_id');
+            ->get(['employee_id', 'status']);
 
         if ($status === 'pending') {
-            $filtered->whereNotIn('id', $allDays->keys()->all());
+            $filtered->whereNotIn('id', $statusRows->pluck('employee_id')->all());
         } elseif ($status !== '') {
-            $matched = $allDays->filter(fn (AttendanceDay $day) => $day->status === $status)->keys()->all();
+            $matched = $statusRows->where('status', $status)->pluck('employee_id')->all();
             $filtered->whereIn('id', $matched ?: [0]);
         }
 
         $employees = $filtered->paginate(30)->withQueryString();
+        $days = AttendanceDay::query()
+            ->whereIn('employee_id', $employees->pluck('id'))
+            ->whereDate('work_date', $date)
+            ->get()
+            ->keyBy('employee_id');
         $punches = $this->dayPunches($employees->pluck('id'), $date);
-        $stats = $this->dayStats($scopedIds->count(), $allDays);
+        $stats = $this->dayStats($scopedIds->count(), $statusRows);
         $partial = $request->ajax() || $request->boolean('partial');
 
         return view($partial ? 'operations.attendance._list' : 'operations.attendance.index', [
             'date' => $date,
             'employees' => $employees,
             'picker' => $partial ? collect() : $this->activeEmployees()->get(['id', 'employee_code', 'first_name', 'middle_name', 'last_name']),
-            'days' => $allDays,
+            'days' => $days,
             'punches' => $punches,
             'stats' => $stats,
             'departments' => $partial ? collect() : Department::query()->visibleTo($request->user())->orderBy('name')->get(),
@@ -253,6 +257,7 @@ class AttendanceController extends Controller
                 'worked' => $this->workedLabel($day?->minutes_worked),
                 'status' => $status['label'],
                 'status_class' => $status['class'],
+                'mark' => $this->entryMark($day),
                 'in_photo' => $this->photoUrl($inPunch, 'attendance.punch.photo'),
                 'out_photo' => $this->photoUrl($outPunch, 'attendance.punch.photo'),
             ];
@@ -437,6 +442,7 @@ class AttendanceController extends Controller
                 'worked' => $this->workedLabel($day?->minutes_worked),
                 'status' => $status['label'],
                 'status_class' => $status['class'],
+                'mark' => $this->entryMark($day),
                 'in_photo' => $entry['photo'],
                 'in_note' => $entry['note'],
                 'in_input' => Clock::input($day?->punch_in ?: $inPunch?->punched_at),
@@ -558,7 +564,7 @@ class AttendanceController extends Controller
             ->select(['id', 'employee_id', 'punched_at', 'direction'])
             ->selectRaw('(CASE WHEN image IS NOT NULL THEN 1 ELSE 0 END) as has_image')
             ->whereIn('employee_id', $employeeIds)
-            ->whereDate('punched_at', $date)
+            ->whereBetween('punched_at', [$date->copy()->startOfDay(), $date->copy()->endOfDay()])
             ->orderBy('punched_at')
             ->get()
             ->groupBy('employee_id');
@@ -579,6 +585,15 @@ class AttendanceController extends Controller
     /**
      * @return array{label: string, class: string}
      */
+    protected function entryMark(?AttendanceDay $day): string
+    {
+        if (! $day || ($day->punch_in === null && $day->punch_out === null)) {
+            return '';
+        }
+
+        return $day->source === 'manual' ? 'M' : 'A';
+    }
+
     protected function dayStatus(?AttendanceDay $day): array
     {
         $status = $day?->status;
@@ -604,7 +619,7 @@ class AttendanceController extends Controller
             ->max('updated_at');
         $punch = AttendancePunch::query()
             ->whereIn('employee_id', $employeeIds)
-            ->whereDate('punched_at', $date)
+            ->whereBetween('punched_at', [$date->copy()->startOfDay(), $date->copy()->endOfDay()])
             ->max('updated_at');
 
         return md5($date->toDateString().'|'.$day.'|'.$punch.'|'.$employeeIds->count());

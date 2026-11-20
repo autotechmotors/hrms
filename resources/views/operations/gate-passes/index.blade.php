@@ -14,7 +14,7 @@
     <div class="gp-page">
         <div class="ph">
             <div>
-                <h1>Gate Pass</h1>
+                <h1>{{ __('Gate Pass') }}</h1>
                 <p>{{ $passes->total() }} {{ \Illuminate\Support\Str::plural('pass', $passes->total()) }} in your scope</p>
             </div>
             <div class="ac">
@@ -56,7 +56,7 @@
             <section class="card gp-today">
                 <header>
                     <div>
-                        <h3>Today's pending passes</h3>
+                        <h3>{{ __('Today\'s pending passes') }}</h3>
                         <p>Only people under you. Your own pass is not listed here.</p>
                     </div>
                 </header>
@@ -73,15 +73,11 @@
                             </a>
                             @if($canDecide && $row->employee && auth()->user()->canDecideGatePassFor($row->employee))
                                 <div class="gp-req-ops">
-                                    <form method="post" action="{{ route('gate-passes.approve', $row) }}" data-confirm="Approve Gate Pass for {{ $row->employee?->full_name }}?">
+                                    <form method="post" action="{{ route('gate-passes.approve', $row) }}" data-confirm="{{ __('Approve Gate Pass for :name?', ['name' => $row->employee?->full_name]) }}">
                                         @csrf
                                         <button class="btn sm pr" type="submit">Approve</button>
                                     </form>
-                                    <form method="post" action="{{ route('gate-passes.reject', $row) }}" data-confirm="Reject Gate Pass for {{ $row->employee?->full_name }}? They will be notified and the OUT machine stays closed.">
-                                        @csrf
-                                        <input type="hidden" name="decision_note" value="Rejected by parent. OUT machine stays closed.">
-                                        <button class="btn sm" type="submit">Reject</button>
-                                    </form>
+                                    <button class="btn sm" type="button" data-bs-toggle="modal" data-bs-target="#gateRejectModal" data-action="{{ route('gate-passes.reject', $row) }}" data-name="{{ $row->employee?->full_name }}">Reject</button>
                                 </div>
                             @endif
                         </article>
@@ -141,21 +137,22 @@
                 <span class="lv-meta">{{ $passes->total() }} {{ \Illuminate\Support\Str::plural('pass', $passes->total()) }}</span>
             </form>
 
+            <div data-live-list="gate-passes" data-page="{{ $passes->currentPage() }}" data-last="{{ $passes->lastPage() }}">
             <div class="tw lv-table">
                 <table>
                     <thead>
                         <tr>
-                            <th>Pass</th>
-                            <th>Employee</th>
-                            <th>Out</th>
-                            <th>Duration</th>
-                            <th>Type</th>
-                            <th>Reason</th>
-                            <th>Status</th>
+                            <th>{{ __('Pass') }}</th>
+                            <th>{{ __('Employee') }}</th>
+                            <th>{{ __('Out') }}</th>
+                            <th>{{ __('Duration') }}</th>
+                            <th>{{ __('Type') }}</th>
+                            <th>{{ __('Reason') }}</th>
+                            <th>{{ __('Status') }}</th>
                             @if($canDecide)<th class="lv-act">Action</th>@endif
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody data-list-rows>
                     @forelse($passes as $row)
                         <tr class="cl {{ $row->isPending() ? 'lv-row-pending' : '' }}" onclick="if(!event.target.closest('form,button,a')) location.href='{{ route('gate-passes.show', $row) }}'">
                             <td>
@@ -182,22 +179,18 @@
                                 <td class="lv-act" onclick="event.stopPropagation()">
                                     @if($row->isPending() && $row->employee && auth()->user()->canDecideGatePassFor($row->employee))
                                         <div class="lv-ops">
-                                            <form method="post" action="{{ route('gate-passes.approve', $row) }}" data-confirm="Approve Gate Pass for {{ $row->employee?->full_name }}?">
+                                            <form method="post" action="{{ route('gate-passes.approve', $row) }}" data-confirm="{{ __('Approve Gate Pass for :name?', ['name' => $row->employee?->full_name]) }}">
                                                 @csrf
                                                 <button class="btn sm pr" type="submit">Approve</button>
                                             </form>
-                                            <form method="post" action="{{ route('gate-passes.reject', $row) }}" data-confirm="Reject Gate Pass for {{ $row->employee?->full_name }}? They will be notified and the OUT machine stays closed.">
-                                                @csrf
-                                                <input type="hidden" name="decision_note" value="Rejected by parent. OUT machine stays closed.">
-                                                <button class="btn sm" type="submit">Reject</button>
-                                            </form>
+                                            <button class="btn sm" type="button" data-bs-toggle="modal" data-bs-target="#gateRejectModal" data-action="{{ route('gate-passes.reject', $row) }}" data-name="{{ $row->employee?->full_name }}">Reject</button>
                                         </div>
                                     @endif
                                 </td>
                             @endif
                         </tr>
                     @empty
-                        <tr>
+                        <tr data-list-empty>
                             <td colspan="{{ $canDecide ? 8 : 7 }}" class="lv-empty-row">No Gate Passes match these filters.</td>
                         </tr>
                     @endforelse
@@ -205,7 +198,7 @@
                 </table>
             </div>
 
-            <div class="el-blocks gp-blocks">
+            <div class="el-blocks gp-blocks" data-list-rows>
                 @forelse($passes as $row)
                     <article class="el-card {{ $row->isPending() ? 'el-pending' : '' }}">
                         <a class="el-card-main" href="{{ route('gate-passes.show', $row) }}">
@@ -226,15 +219,11 @@
                             <span class="el-pill {{ $row->isOfficeWork() ? 'wn' : 'ok' }}">{{ $row->work_type_label }}</span>
                             <div class="el-ops">
                                 @if($canDecide && $row->isPending() && $row->employee && auth()->user()->canDecideGatePassFor($row->employee))
-                                    <form method="post" action="{{ route('gate-passes.approve', $row) }}" data-confirm="Approve Gate Pass for {{ $row->employee?->full_name }}?">
+                                    <form method="post" action="{{ route('gate-passes.approve', $row) }}" data-confirm="{{ __('Approve Gate Pass for :name?', ['name' => $row->employee?->full_name]) }}">
                                         @csrf
                                         <button class="btn sm pr" type="submit">Approve</button>
                                     </form>
-                                    <form method="post" action="{{ route('gate-passes.reject', $row) }}" data-confirm="Reject Gate Pass for {{ $row->employee?->full_name }}? They will be notified and the OUT machine stays closed.">
-                                        @csrf
-                                        <input type="hidden" name="decision_note" value="Rejected by parent. OUT machine stays closed.">
-                                        <button class="btn sm" type="submit">Reject</button>
-                                    </form>
+                                    <button class="btn sm" type="button" data-bs-toggle="modal" data-bs-target="#gateRejectModal" data-action="{{ route('gate-passes.reject', $row) }}" data-name="{{ $row->employee?->full_name }}">Reject</button>
                                 @else
                                     <a class="ib" href="{{ route('gate-passes.show', $row) }}" title="View" aria-label="View"><x-i name="eye" :size="15" /></a>
                                 @endif
@@ -242,21 +231,50 @@
                         </footer>
                     </article>
                 @empty
-                    <div class="el-empty">No Gate Passes match these filters.</div>
+                    <div class="el-empty" data-list-empty>No Gate Passes match these filters.</div>
                 @endforelse
             </div>
 
-            <div class="pgn el-pgn">
-                <span class="el-range">{{ $passes->firstItem() ?? 0 }}–{{ $passes->lastItem() ?? 0 }} of {{ $passes->total() }}</span>
-                <div>{{ $passes->links() }}</div>
+            @include('partials.list-footer', ['paginator' => $passes])
             </div>
         </section>
+    </div>
+
+    <div class="modal fade" id="gateRejectModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <form class="modal-content" method="post" id="gateRejectForm" action="#">
+                @csrf
+                <div class="modal-header">
+                    <h5 class="modal-title">{{ __('Reject') }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ __('Close') }}"></button>
+                </div>
+                <div class="modal-body lv-modal-body">
+                    <p class="lv-modal-help" id="gateRejectName"></p>
+                    <label class="form-label">{{ __('Reason') }} *</label>
+                    <textarea class="in w-100" name="decision_note" id="gateRejectNote" required minlength="3" maxlength="500" rows="3"></textarea>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn" data-bs-dismiss="modal">{{ __('Cancel') }}</button>
+                    <button type="submit" class="btn pr">{{ __('Reject') }}</button>
+                </div>
+            </form>
+        </div>
     </div>
 @endsection
 
 @push('scripts')
 <script>
 (function ($) {
+    const rejectModal = document.getElementById('gateRejectModal');
+    if (rejectModal) {
+        rejectModal.addEventListener('show.bs.modal', function (event) {
+            const btn = event.relatedTarget;
+            document.getElementById('gateRejectForm').action = btn ? btn.getAttribute('data-action') : '#';
+            document.getElementById('gateRejectName').textContent = btn ? (btn.getAttribute('data-name') || '') : '';
+            document.getElementById('gateRejectNote').value = '';
+        });
+    }
+
     const form = $('#gatePassFilters');
     if (!form.length) return;
     const phone = function () { return window.matchMedia('(max-width: 700px)').matches; };
