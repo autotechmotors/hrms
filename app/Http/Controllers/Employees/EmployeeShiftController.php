@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Employees;
 
 use App\Http\Controllers\Controller;
 use App\Models\Employee;
+use App\Services\AccessScope;
 use App\Services\Operations\ShiftSchedule;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -15,6 +16,8 @@ class EmployeeShiftController extends Controller
 
     public function show(Request $request, Employee $employee): JsonResponse
     {
+        abort_unless(app(AccessScope::class)->canAccessEmployee($request->user(), $employee), 404);
+
         $year = (int) $request->input('year', now()->year);
         $month = (int) $request->input('month', now()->month);
 

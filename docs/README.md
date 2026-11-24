@@ -21,7 +21,8 @@ Start at `docs/prompts/HRMS-SYSTEM.md`. Then open only the module file for the s
 | `docs/prompts/HRMS-PWA.md` | Installable app shell |
 | `docs/prompts/HRMS-WORK-ORDER.md` | Order of work and done check |
 | `docs/prompts/HRMS-LIVE-UI.md` | Ajax, jQuery, and Livewire without a full page load |
-| `docs/prompts/HRMS-PAY-DAYS.md` | Paid holidays, Sunday 08:00–13:00, and salary cutoff |
+| `docs/prompts/HRMS-PAY-DAYS.md` | Per person clocks, Sunday, day or night, and gate-pass cutoff |
+| `docs/prompts/HRMS-OUT-OVERTIME.md` | Gate pass column, OUT face window, and overtime after shift end |
 | `docs/prompts/HRMS-LOCALE.md` | English, Hindi, and Gujarati for static words |
 | `docs/prompts/HRMS-ERRORS.md` | Error pages for every HTTP code |
 
@@ -51,6 +52,7 @@ Start at `docs/prompts/HRMS-SYSTEM.md`. Then open only the module file for the s
 | `reports` | `ANALYTICS.md` | Reports |
 | `bank` | `TRANSFERS.md` | Bank accounts and transfer batches |
 | `users` | `ACCOUNTS.md` | Logins are created from the employee |
+| `roles` | `SEPARATION.md` | Permission plus AccessScope; what must not leak |
 | `organization` | `DEPARTMENTS.md` | Departments |
 | `organization` | `DESIGNATIONS.md` | Designations and employee types |
 | `organization` | `STATUSES.md` | Employment statuses |

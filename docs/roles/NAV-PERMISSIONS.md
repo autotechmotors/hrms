@@ -23,7 +23,7 @@ A screen shows only when both are true:
 - `gate_passes.view`, `gate_passes.create`, `gate_passes.decide`, `gate_passes.manage`
 - `holidays.view`, `holidays.manage`
 - `salary.view`, `salary.manage`, `salary.decide`
-- `advances.view`, `advances.manage`
+- `advances.view`, `advances.manage`, `advances.decide`
 - `payroll.view`, `payroll.process`, `payroll.approve`, `payroll.lock`, `payroll.reopen`
 - `reports.view`
 - `bank.view`, `bank_accounts.view`, `bank_accounts.manage`, `payments.release`
@@ -34,12 +34,12 @@ A screen shows only when both are true:
 |---|---|---|
 | Super Admin | Full bypass | |
 | HR Admin | Every permission: create, edit, delete, and manage on every module | Assigning or removing the Super Admin role |
-| Payroll Admin | Payroll actions they have now | Device admin, employee create |
-| Accounts | Bank, payments, and salary-sheet approve or reject | Attendance edit, generating a salary sheet |
-| Manager | Dashboard, own row and everyone below, attendance, leave view, holidays view, Gate Pass apply. Can approve or reject leave and gate passes below them, with a reason. Can set Day and night dates for people under them (`docs/shifts/SCHEDULE.md`) | Payroll, Hours & pay, salary sheets, advances, devices, reports, profile edit, holiday create, and delete of someone else’s leave |
-| Director | Same people-tree view as Manager, plus reports | Payroll process, devices, profile edit, holiday create |
+| Payroll Admin | Hours & pay, salary sheets generate, advances create, bank view | Device admin, employee create, salary approve (Accounts does that) |
+| Accounts | Bank, payments, salary-sheet approve or reject, and advance approve or reject | Attendance edit, generating a salary sheet, creating an advance, or changing net pay |
+| Manager | Dashboard, own row and everyone below, attendance, leave view, holidays view, Gate Pass apply. Can approve or reject leave and gate passes below them through the reporting tree (not `leave.decide`). Can set Day and night dates for people under them (`docs/shifts/SCHEDULE.md`) | Payroll, Hours & pay, salary sheets, advances, devices, reports, Administration, profile edit, holiday create, and delete of someone else’s leave |
+| Director | Same people-tree view as Manager, plus reports | Payroll process, devices, Administration, profile edit, holiday create |
 | Device Administrator | Devices and employee view, holiday view | Payroll, user admin, holiday create |
-| Head | Same modules as Manager, for everyone below them | Payroll, devices, user admin, profile edit, holiday create |
+| Head | Same modules as Manager, for everyone below them | Payroll, devices, Administration, profile edit, holiday create |
 | Employee | Dashboard, their own row, people assigned under them, their attendance, leave view, holidays view, and Gate Pass apply | Anyone outside that tree, payroll, devices, administration, profile edit, holiday create, and deciding their own leave or pass |
 
 The phone bar keeps More on every login. The other tabs and the rows inside More are the modules that login is allowed to open. Several roles on one person are added together.

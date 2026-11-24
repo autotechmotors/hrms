@@ -119,6 +119,8 @@ Route::middleware(['auth', 'mfa'])->group(function (): void {
         Route::get('settings', [GatePassController::class, 'settings'])->name('settings');
         Route::put('settings', [GatePassController::class, 'updateSettings'])->name('settings.update');
         Route::get('{gatePass}', [GatePassController::class, 'show'])->name('show');
+        Route::put('{gatePass}', [GatePassController::class, 'update'])->name('update');
+        Route::delete('{gatePass}', [GatePassController::class, 'destroy'])->name('destroy');
         Route::post('{gatePass}/approve', [GatePassController::class, 'approve'])->name('approve');
         Route::post('{gatePass}/reject', [GatePassController::class, 'reject'])->name('reject');
     });
@@ -143,10 +145,17 @@ Route::middleware(['auth', 'mfa'])->group(function (): void {
     Route::post('salary-sheets/{salarySheet}/reject', [SalarySheetController::class, 'reject'])->name('salary-sheets.reject');
     Route::get('salary-sheets/{salarySheet}/excel', [SalarySheetController::class, 'excel'])->name('salary-sheets.excel');
     Route::get('salary-sheets/{salarySheet}/pdf', [SalarySheetController::class, 'pdf'])->name('salary-sheets.pdf');
+    Route::get('salary-sheets/{salarySheet}/lines/{line}/excel', [SalarySheetController::class, 'lineExcel'])->name('salary-sheets.line.excel');
+    Route::get('salary-sheets/{salarySheet}/lines/{line}/pdf', [SalarySheetController::class, 'linePdf'])->name('salary-sheets.line.pdf');
+    Route::post('salary-sheets/{salarySheet}/lines/{line}/net', [SalarySheetController::class, 'adjustNet'])->name('salary-sheets.line.net');
 
     Route::get('advances', [AdvanceController::class, 'index'])->name('advances.index');
     Route::post('advances', [AdvanceController::class, 'store'])->name('advances.store');
+    Route::put('advances/{advance}', [AdvanceController::class, 'update'])->name('advances.update');
+    Route::delete('advances/{advance}', [AdvanceController::class, 'destroy'])->name('advances.destroy');
     Route::post('advances/{advance}/close', [AdvanceController::class, 'close'])->name('advances.close');
+    Route::post('advances/{advance}/approve', [AdvanceController::class, 'approve'])->name('advances.approve');
+    Route::post('advances/{advance}/reject', [AdvanceController::class, 'reject'])->name('advances.reject');
 
     Route::get('devices', [DeviceController::class, 'index'])->name('devices.index');
     Route::post('devices', [DeviceController::class, 'store'])->name('devices.store');

@@ -20,6 +20,7 @@ use App\Services\Workspace;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class EmployeeService
@@ -180,6 +181,21 @@ class EmployeeService
         }
 
         $employee?->loadMissing('user.roles');
+        if ($employee?->user?->isSuperAdmin() && $role?->slug !== 'super-admin') {
+            if (! $actor->isSuperAdmin()) {
+                throw ValidationException::withMessages(['role_id' => 'Only a Super Admin can remove the Super Admin role.']);
+            }
+
+            $remaining = User::query()
+                ->whereKeyNot($employee->user->id)
+                ->where('is_active', true)
+                ->whereHas('roles', fn ($query) => $query->where('slug', 'super-admin'))
+                ->exists();
+            if (! $remaining) {
+                throw ValidationException::withMessages(['role_id' => 'The last active Super Admin must keep that role.']);
+            }
+        }
+
         $userNeedsParent = (bool) $employee?->user?->roles->contains(
             fn (Role $linked) => $linked->requiresReportingManager()
         );
@@ -333,7 +349,7 @@ class EmployeeService
                 ['email' => strtolower((string) $employee->email)],
                 [
                     'name' => $employee->full_name,
-                    'password' => 'password',
+                    'password' => Str::password(32),
                     'is_active' => true,
                 ]
             );
@@ -345,7 +361,7 @@ class EmployeeService
         }
 
         if ($user->isSuperAdmin() && $role->slug !== 'super-admin' && ! $actor->isSuperAdmin()) {
-            return;
+            throw ValidationException::withMessages(['role_id' => 'Only a Super Admin can remove the Super Admin role.']);
         }
 
         $user->forceFill(['name' => $employee->full_name, 'is_active' => true])->save();

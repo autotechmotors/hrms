@@ -63,7 +63,7 @@ class PermissionCatalog
             'gate_passes' => ['view' => 'View gate passes', 'create' => 'Create gate passes', 'decide' => 'Decide gate passes', 'manage' => 'Manage gate pass rules'],
             'holidays' => ['view' => 'View holidays', 'manage' => 'Manage holidays'],
             'salary' => ['view' => 'View salary', 'manage' => 'Manage salary', 'decide' => 'Decide salary sheets'],
-            'advances' => ['view' => 'View advances', 'manage' => 'Manage advances'],
+            'advances' => ['view' => 'View advances', 'manage' => 'Manage advances', 'decide' => 'Decide advances'],
             'payroll' => [
                 'view' => 'View payroll',
                 'process' => 'Process payroll',

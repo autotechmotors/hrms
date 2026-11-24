@@ -102,6 +102,44 @@ class GatePassService
         return $pass;
     }
 
+    public function update(User $actor, GatePass $pass, array $data): GatePass
+    {
+        if (! $actor->canEditGatePass($pass)) {
+            abort(403);
+        }
+
+        $early = ! empty($data['is_early_leave']);
+        $settings = GatePassSetting::forCompany((int) $pass->company_id);
+        if (! $early && (int) $data['duration_minutes'] > $settings->max_duration_minutes) {
+            throw ValidationException::withMessages(['duration_minutes' => 'Duration exceeds the maximum allowed limit.']);
+        }
+
+        $minutes = (int) $data['duration_minutes'];
+        $pass->update([
+            'out_time' => $data['out_time'],
+            'duration_minutes' => $minutes,
+            'is_early_leave' => $early,
+            'work_type' => $data['work_type'] === GatePass::WORK_OFFICE ? GatePass::WORK_OFFICE : GatePass::WORK_PERSONAL,
+            'reason' => $data['reason'],
+            'expires_at' => GatePass::calculateExpiresAt($pass->date->toDateString(), $data['out_time'], $minutes),
+        ]);
+
+        return $pass->fresh(['employee.department', 'decider', 'creator']);
+    }
+
+    public function delete(User $actor, GatePass $pass): void
+    {
+        if (! $actor->canDeleteGatePass($pass)) {
+            abort(403);
+        }
+
+        if ($pass->isApproved()) {
+            $this->access->revoke($pass, 'Deleted. OUT machine access removed.');
+        }
+
+        $pass->delete();
+    }
+
     public function expireDue(): int
     {
         $due = GatePass::query()

@@ -11,6 +11,7 @@ class CompanySetting extends Model
         'company_id',
         'block_inactive_enabled',
         'block_inactive_days',
+        'out_inactive_minutes',
     ];
 
     protected function casts(): array
@@ -18,6 +19,7 @@ class CompanySetting extends Model
         return [
             'block_inactive_enabled' => 'boolean',
             'block_inactive_days' => 'integer',
+            'out_inactive_minutes' => 'integer',
         ];
     }
 
@@ -33,6 +35,7 @@ class CompanySetting extends Model
             [
                 'block_inactive_enabled' => false,
                 'block_inactive_days' => 7,
+                'out_inactive_minutes' => 10,
             ]
         );
     }

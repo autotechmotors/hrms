@@ -45,8 +45,8 @@ class WorkHourResolver
     }
 
     /**
-     * Night Sunday is the department switch. Day Sunday stays on the person.
-     * A day person with an empty switch still works Sunday.
+     * The department Sunday switch is only the default before this person has one.
+     * Day Sunday and night Sunday then use the switch stored on the person.
      */
     public function worksSunday(Employee $employee, ?CarbonInterface $date = null): bool
     {
@@ -56,7 +56,7 @@ class WorkHourResolver
             ? $this->shifts->kindOn($employee, $date) === 'night'
             : ($own?->shift_kind ?? 'day') === 'night';
         if ($night) {
-            if ($own && ! $own->uses_department && $own->works_sunday !== null) {
+            if ($own && $own->works_sunday !== null) {
                 return (bool) $own->works_sunday;
             }
 
@@ -237,6 +237,20 @@ class WorkHourResolver
         return ['from' => $from, 'to' => $to];
     }
 
+    public function workDateFor(Employee $employee, CarbonInterface $at): Carbon
+    {
+        $at = Carbon::parse($at)->timezone('Asia/Kolkata');
+        $day = $at->copy()->startOfDay();
+        foreach ([$day->copy()->subDay(), $day] as $candidate) {
+            $span = $this->attendanceSpan($employee, $candidate);
+            if ($at->greaterThanOrEqualTo($span['from']) && $at->lessThan($span['to'])) {
+                return $candidate->copy()->startOfDay();
+            }
+        }
+
+        return $day;
+    }
+
     /**
      * @return array{start: ?string, end: ?string}
      */
@@ -379,9 +393,9 @@ class WorkHourResolver
     }
 
     /**
-     * Clock window for one date. A roster night shift wins for that day.
-     * Otherwise the person’s day or night choice selects the Hours & pay clocks.
-     * The minute rate always uses the Monday–Saturday day length.
+     * Clock window for one date. ShiftSchedule::kindOn picks day or night.
+     * The minute rate uses that kind’s Monday–Saturday length, including on Sunday.
+     * A roster night shift replaces the window only when that date has no saved span.
      *
      * @return array{start: string, end: string, label: string, standard_minutes: int, overnight: bool}
      */
@@ -391,13 +405,20 @@ class WorkHourResolver
         $own = $employee->workHour;
         $source = ($own && ! $own->uses_department) ? $own : $employee->department?->workHour;
         $sunday = (int) $date->dayOfWeek === 0;
-        $standardStart = $this->clock($source?->weekday_start ?? null, '09:00');
-        $standardEnd = $this->clock($source?->weekday_end ?? null, '18:00');
+        $explicit = $this->shifts->spanOn($employee, $date);
+        $night = $this->shifts->kindOn($employee, $date) === 'night';
+        $rosterNight = $explicit === null && $shift && $this->crossesMidnight($shift->starts_at, $shift->ends_at) && ! ($night && $sunday);
+        $rateSource = ($own && ! $own->uses_department) ? $own : $employee->department?->workHour;
+        if ($night || $rosterNight) {
+            $standardStart = $this->clock($rateSource?->night_weekday_start ?? null, '21:00');
+            $standardEnd = $this->clock($rateSource?->night_weekday_end ?? null, '06:00');
+        } else {
+            $standardStart = $this->clock($rateSource?->weekday_start ?? null, '09:00');
+            $standardEnd = $this->clock($rateSource?->weekday_end ?? null, '18:00');
+        }
         $standard = $this->span($standardStart, $standardEnd);
 
-        $explicit = $this->shifts->spanOn($employee, $date);
-        $night = ($explicit?->kind ?? $own?->shift_kind ?? 'day') === 'night';
-        if ($explicit === null && $shift && $this->crossesMidnight($shift->starts_at, $shift->ends_at) && ! ($night && $sunday)) {
+        if ($rosterNight) {
             $start = $this->clock($shift->starts_at, '21:00');
             $end = $this->clock($shift->ends_at, '06:00');
 
@@ -431,6 +452,32 @@ class WorkHourResolver
             'standard_minutes' => max(1, $standard),
             'overnight' => $this->crossesMidnight($start, $end),
         ];
+    }
+
+    /**
+     * Monday–Saturday end for this kind, including on Sunday.
+     * Overtime starts here. A shorter Sunday clock does not.
+     */
+    public function fullShiftEnd(Employee $employee, CarbonInterface $date): Carbon
+    {
+        $employee->loadMissing(['workHour', 'department.workHour']);
+        $own = $employee->workHour;
+        $source = ($own && ! $own->uses_department) ? $own : $employee->department?->workHour;
+        $night = $this->shifts->kindOn($employee, $date) === 'night';
+        if ($night) {
+            $start = $this->clock($source?->night_weekday_start ?? null, '21:00');
+            $end = $this->clock($source?->night_weekday_end ?? null, '06:00');
+        } else {
+            $start = $this->clock($source?->weekday_start ?? null, '09:00');
+            $end = $this->clock($source?->weekday_end ?? null, '18:00');
+        }
+        $from = Carbon::parse($date->toDateString().' '.$start, 'Asia/Kolkata');
+        $at = Carbon::parse($date->toDateString().' '.$end, 'Asia/Kolkata');
+        if ($at->lessThanOrEqualTo($from)) {
+            $at->addDay();
+        }
+
+        return $at;
     }
 
     public function crossesMidnight(mixed $start, mixed $end): bool

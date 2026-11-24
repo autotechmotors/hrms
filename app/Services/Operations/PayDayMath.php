@@ -39,7 +39,10 @@ class PayDayMath
      *     paid_leave_days: float,
      *     unpaid_leave_days: float,
      *     paid_fraction: float,
-     *     lop_fraction: float
+     *     lop_fraction: float,
+     *     overtime_minutes: int,
+     *     overtime_pay: float,
+     *     overtime: list<array{date: string, end: string, out: string, hours: string, rupees: float}>
      * }
      */
     public function range(Employee $employee, CarbonInterface $from, CarbonInterface $to): array
@@ -119,6 +122,9 @@ class PayDayMath
         $unpaidLeave = 0.0;
         $paidFraction = 0.0;
         $lopFraction = 0.0;
+        $overtimeMinutes = 0;
+        $overtimePay = 0.0;
+        $overtime = [];
         $counted = 0;
         $monthlyUsed = null;
         $sameSalary = true;
@@ -159,9 +165,26 @@ class PayDayMath
             $cell['grid']['leave'] = $leave
                 ? 'Leave · '.($leave->leaveType?->name ?: 'Leave').($leave->leaveType && ! $leave->leaveType->is_paid ? ' · cutoff' : ' · no cutoff')
                 : '';
-            $cell['grid']['gate'] = ($gatePasses->get($key) ?? collect())
-                ->map(fn (GatePass $pass) => $pass->work_type_label.' · '.$pass->duration_label)
-                ->implode(' · ');
+            $cell['grid']['gate'] = $this->gateNotes($employee, $cursor, $gatePasses->get($key) ?? collect(), $kind);
+            if ($kind === 'working' && ! $this->sundayOff($employee, $cursor)) {
+                $slice = $this->overtimeOn($employee, $cursor, $attendance->get($key), $gatePasses->get($key) ?? collect());
+                if ($slice['minutes'] > 0) {
+                    $window = $this->hours->windowFor($employee, $cursor, $rosters->get($key)?->shift);
+                    $standardHours = max(1, (int) $window['standard_minutes']) / 60;
+                    $hourRate = $cell['day_pay'] / $standardHours;
+                    $rupees = round(($slice['minutes'] / 60) * $hourRate, 2);
+                    $cell['grid']['ot'] = $this->hourText($slice['minutes']);
+                    $overtimeMinutes += $slice['minutes'];
+                    $overtimePay += $rupees;
+                    $overtime[] = [
+                        'date' => $key,
+                        'end' => $slice['end'],
+                        'out' => $slice['out'],
+                        'hours' => $this->hourText($slice['minutes']),
+                        'rupees' => $rupees,
+                    ];
+                }
+            }
             if ($companyHoliday) {
                 foreach ($cell['cuts'] as $index => $cut) {
                     if (($cut['reason'] ?? '') === 'paid holiday') {
@@ -218,6 +241,9 @@ class PayDayMath
             'unpaid_leave_days' => $unpaidLeave,
             'paid_fraction' => round($paidFraction, 2),
             'lop_fraction' => round($lopFraction, 2),
+            'overtime_minutes' => $overtimeMinutes,
+            'overtime_pay' => round($overtimePay, 2),
+            'overtime' => $overtime,
         ];
     }
 
@@ -417,6 +443,79 @@ class PayDayMath
         ];
     }
 
+    /**
+     * @param  Collection<int, GatePass>  $passes
+     * @return array{minutes: int, end: string, out: string}
+     */
+    public function overtimeOn(Employee $employee, CarbonInterface $date, ?AttendanceDay $attendance, Collection $passes): array
+    {
+        $empty = ['minutes' => 0, 'end' => '', 'out' => ''];
+        $in = $attendance?->punch_in;
+        $out = $attendance?->punch_out;
+        if ($in === null || $in === '' || $out === null || $out === '') {
+            return $empty;
+        }
+
+        $day = Carbon::parse($date)->timezone('Asia/Kolkata')->startOfDay();
+        $inAt = Carbon::parse($day->toDateString().' '.$in, 'Asia/Kolkata');
+        $outAt = Carbon::parse($day->toDateString().' '.$out, 'Asia/Kolkata');
+        if ($outAt->lessThanOrEqualTo($inAt)) {
+            $outAt->addDay();
+        }
+        $finish = $this->hours->fullShiftEnd($employee, $day);
+        if ($outAt->lessThanOrEqualTo($finish)) {
+            return $empty;
+        }
+
+        $minutes = (int) round($finish->diffInMinutes($outAt, true));
+        foreach ($passes as $pass) {
+            if (! $pass->isOfficeWork() || $pass->out_at === null) {
+                continue;
+            }
+            $from = $pass->out_at->copy()->timezone('Asia/Kolkata');
+            $to = $pass->in_at ? $pass->in_at->copy()->timezone('Asia/Kolkata') : $outAt->copy();
+            if ($to->lessThanOrEqualTo($from)) {
+                continue;
+            }
+            $minutes -= $this->overlapMinutes($from, $to, $finish, $outAt);
+        }
+
+        return [
+            'minutes' => max(0, $minutes),
+            'end' => $finish->format('d M Y h:i A'),
+            'out' => $outAt->format('d M Y h:i A'),
+        ];
+    }
+
+    public function overtimeLabel(Employee $employee, CarbonInterface $date, ?AttendanceDay $attendance, Collection $passes): ?string
+    {
+        if ($this->sundayOff($employee, Carbon::parse($date)->startOfDay())) {
+            return null;
+        }
+        $slice = $this->overtimeOn($employee, $date, $attendance, $passes);
+
+        return $slice['minutes'] > 0 ? $this->hourText($slice['minutes']) : null;
+    }
+
+    private function overlapMinutes(Carbon $from, Carbon $to, Carbon $start, Carbon $end): int
+    {
+        $left = $from->greaterThan($start) ? $from->copy() : $start->copy();
+        $right = $to->lessThan($end) ? $to->copy() : $end->copy();
+        if ($right->lessThanOrEqualTo($left)) {
+            return 0;
+        }
+
+        return (int) round($left->diffInMinutes($right, true));
+    }
+
+    private function hourText(int $minutes): string
+    {
+        $hours = intdiv($minutes, 60);
+        $rest = $minutes % 60;
+
+        return $hours > 0 ? sprintf('%dh %02dm', $hours, $rest) : sprintf('%dm', $rest);
+    }
+
     private function openOfficeDeparture(Employee $employee, CarbonInterface $day): ?Carbon
     {
         $pass = GatePass::query()
@@ -455,6 +554,42 @@ class PayDayMath
         }
 
         return ! $this->hours->worksSunday($employee, $day);
+    }
+
+    /**
+     * @param  Collection<int, GatePass>  $passes
+     */
+    private function gateNotes(Employee $employee, CarbonInterface $day, Collection $passes, string $kind): string
+    {
+        if ($passes->isEmpty()) {
+            return '';
+        }
+
+        $bill = $kind === 'working' && ! $this->sundayOff($employee, $day);
+        $window = $this->hours->windowFor($employee, $day);
+        $clocks = $this->hours->breakClocks($employee, $day);
+        $start = Carbon::parse($day->toDateString().' '.$window['start'], 'Asia/Kolkata');
+        $finish = Carbon::parse($day->toDateString().' '.$window['end'], 'Asia/Kolkata');
+        if (($window['overnight'] ?? false) && $finish->lessThanOrEqualTo($start)) {
+            $finish->addDay();
+        }
+
+        return $passes->map(function (GatePass $pass) use ($bill, $clocks, $finish): string {
+            $left = $pass->out_at?->copy()->timezone('Asia/Kolkata');
+            $back = $pass->in_at?->copy()->timezone('Asia/Kolkata');
+            $out = $left?->format('H:i') ?? '—';
+            $in = $back?->format('H:i') ?? 'still out';
+            $minutes = 0;
+            if ($bill && ! $pass->isOfficeWork() && $left) {
+                $until = $back && $back->greaterThan($left) ? $back : $finish;
+                if ($until->greaterThan($left)) {
+                    $minutes = $this->hours->minutesOutsideBreak($left, $until, $clocks['start'], $clocks['end']);
+                }
+            }
+            $cut = $minutes > 0 ? $minutes.' min' : 'no cutoff';
+
+            return $pass->work_type_label.' · '.$out.'–'.$in.' · '.$cut;
+        })->implode(' · ');
     }
 
     /**

@@ -111,7 +111,9 @@ class MonthReport
         $leaveTypes = [];
 
         foreach ($employees as $employee) {
-            $monthly = (float) ($salaries->get($employee->id)?->gross_monthly ?? 0);
+            $monthly = $employee->isPieceSalary()
+                ? 0.0
+                : (float) ($salaries->get($employee->id)?->gross_monthly ?? 0);
             $row = $this->blank();
             $row['shift'] = $employee->workHour?->shift_kind === 'night' ? 'Night' : 'Day';
             $personLeaves = $leaves->get($employee->id, collect());

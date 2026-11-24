@@ -70,6 +70,10 @@ class RoleController extends Controller
 
     public function update(RoleRequest $request, Role $role): RedirectResponse
     {
+        if ($role->slug === 'super-admin' && ! $request->user()->isSuperAdmin()) {
+            return back()->with('error', 'Only a Super Admin can change the Super Admin role.');
+        }
+
         $role->update([
             'name' => $request->string('name')->toString(),
             'slug' => $role->is_system ? $role->slug : Str::slug($request->string('slug')->toString()),

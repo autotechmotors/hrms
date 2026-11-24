@@ -82,6 +82,7 @@ class EmployeeController extends Controller
             'statuses' => EmploymentStatus::query()->visibleTo($request->user())->orderBy('name')->get(),
             'credentialCounts' => $credentialCounts,
             'credentialSlots' => $credentialSlots,
+            'terminals' => Device::query()->visibleTo($request->user())->orderBy('name')->get()->filter->isHikvision()->values(),
         ]);
     }
 
@@ -209,8 +210,16 @@ class EmployeeController extends Controller
         $data = $request->validate([
             'kind' => ['required', 'in:face,finger,card,password'],
             'password' => ['required_if:kind,password', 'nullable', 'regex:/^\d{4,8}$/'],
+            'device_id' => ['required', 'integer'],
         ]);
-        $result = app(EmployeePush::class)->collect($employee, $data['kind'], $data['password'] ?? null);
+        $device = null;
+        if (! empty($data['device_id'])) {
+            $device = Device::query()->visibleTo($request->user())->whereKey($data['device_id'])->first();
+            if (! $device || ! $device->isHikvision() || (int) $device->company_id !== (int) $employee->company_id) {
+                return response()->json(['message' => 'Choose a face terminal.'], 422);
+            }
+        }
+        $result = app(EmployeePush::class)->collect($employee, $data['kind'], $data['password'] ?? null, $device);
         if ($result['devices'] === 0) {
             return response()->json(['message' => $result['message']], 422);
         }

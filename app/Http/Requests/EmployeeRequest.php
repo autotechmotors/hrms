@@ -43,6 +43,7 @@ class EmployeeRequest extends FormRequest
             'confirmation_date' => ['nullable', 'date', 'after_or_equal:joining_date'],
             'probation_days' => ['nullable', 'integer', 'min:0', 'max:3650'],
             'notice_period_days' => ['nullable', 'integer', 'min:0', 'max:3650'],
+            'salary_type' => ['required', Rule::in(['hours', 'piece'])],
             'movement_reason' => ['nullable', 'string', 'max:255'],
             'movement_effective_date' => ['nullable', 'date'],
             'photograph' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],

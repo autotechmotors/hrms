@@ -206,14 +206,29 @@ document.addEventListener('DOMContentLoaded', () => {
     const confirmButton = document.getElementById('confirmButton');
     let pendingForm = null;
     let pendingResolve = null;
+    let returnModal = null;
+
+    const revealConfirm = () => {
+        if (!confirmModal) return;
+        bootstrap.Modal.getOrCreateInstance(confirmModal).show();
+    };
 
     const showConfirm = (message) => {
         if (confirmText) {
             confirmText.textContent = message;
         }
-        if (confirmModal) {
-            bootstrap.Modal.getOrCreateInstance(confirmModal).show();
+        const open = Array.from(document.querySelectorAll('.modal.show')).find((node) => node !== confirmModal);
+        if (!open) {
+            returnModal = null;
+            revealConfirm();
+            return;
         }
+        returnModal = open;
+        open.addEventListener('hidden.bs.modal', function openedNext() {
+            open.removeEventListener('hidden.bs.modal', openedNext);
+            revealConfirm();
+        });
+        bootstrap.Modal.getOrCreateInstance(open).hide();
     };
 
     window.askConfirm = function askConfirm(message, options) {
@@ -242,6 +257,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     confirmButton?.addEventListener('click', () => {
+        returnModal = null;
         if (pendingForm) {
             const form = pendingForm;
             pendingForm = null;
@@ -274,6 +290,11 @@ document.addEventListener('DOMContentLoaded', () => {
             resolve(false);
         }
         pendingForm = null;
+        if (returnModal) {
+            const back = returnModal;
+            returnModal = null;
+            bootstrap.Modal.getOrCreateInstance(back).show();
+        }
     });
 
     document.querySelectorAll('form').forEach((form) => {

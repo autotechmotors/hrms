@@ -63,12 +63,14 @@ class SettingController extends Controller
         $data = $request->validate([
             'block_inactive_enabled' => ['sometimes', 'boolean'],
             'block_inactive_days' => ['required', 'integer', 'min:1', 'max:365'],
+            'out_inactive_minutes' => ['required', 'integer', 'min:0', 'max:240'],
         ]);
 
         $setting = CompanySetting::forCompany($this->companyId());
         $setting->update([
             'block_inactive_enabled' => $request->boolean('block_inactive_enabled'),
             'block_inactive_days' => (int) $data['block_inactive_days'],
+            'out_inactive_minutes' => (int) $data['out_inactive_minutes'],
         ]);
 
         $blocked = $setting->block_inactive_enabled

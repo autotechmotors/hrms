@@ -230,6 +230,7 @@ class PlantTreeSeeder extends Seeder
                 'email' => strtolower($code).'@autotech.test',
                 'phone' => '980000'.substr($code, 2),
                 'joining_date' => '2026-04-01',
+                'salary_type' => 'hours',
                 'is_blocked' => false,
             ]);
             $made[$code] = $employee;

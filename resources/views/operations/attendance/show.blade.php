@@ -64,7 +64,7 @@
                 <header>
                     <div>
                         <h3>{{ __('Attendance record') }}</h3>
-                        <p>First face of the day is clock in. Another face within 2 minutes is the same visit. The next face is clock out.</p>
+                        <p>In and Out are the shift. Gate pass opens the approved passes for that date. Overtime is the time after the shift end until the out face.</p>
                     </div>
                 </header>
                 <div class="tw">
@@ -74,6 +74,8 @@
                                 <th>{{ __('Date') }}</th>
                                 <th>{{ __('In') }}</th>
                                 <th>{{ __('Out') }}</th>
+                                <th>{{ __('Gate pass') }}</th>
+                                <th>{{ __('Overtime') }}</th>
                                 <th>{{ __('Worked') }}</th>
                                 <th>{{ __('Status') }}</th>
                                 @if($canEdit)<th>{{ __('Action') }}</th>@endif
@@ -85,6 +87,8 @@
                                     <td>{{ $day['label'] }}</td>
                                     <td class="att-time js-in">{{ $day['in'] ?: '—' }}</td>
                                     <td class="att-time js-out">{{ $day['out'] ?: '—' }}</td>
+                                    <td class="js-gate">@include('operations.attendance._gate_button', ['passes' => $day['passes'] ?? []])</td>
+                                    <td class="js-ot">{{ $day['overtime'] ?: '—' }}</td>
                                     <td class="js-worked">{{ $day['worked'] }}</td>
                                     <td>
                                         <span class="b {{ $day['status_class'] }} js-status">{{ $day['status'] }}</span>
@@ -108,7 +112,7 @@
                                 </tr>
                             @empty
                                 <tr class="att-empty-row">
-                                    <td colspan="{{ $canEdit ? 6 : 5 }}" class="att-empty">No attendance in {{ $month->format('F Y') }}.</td>
+                                    <td colspan="{{ $canEdit ? 8 : 7 }}" class="att-empty">No attendance in {{ $month->format('F Y') }}.</td>
                                 </tr>
                             @endforelse
                         </tbody>
@@ -142,6 +146,7 @@
                             <div class="att-times">
                                 <div><small>In</small><b>{{ $open['in'] ?: '—' }}</b></div>
                                 <div><small>Out</small><b>{{ $open['out'] ?: '—' }}</b></div>
+                                <div><small>Gate pass</small><b>@include('operations.attendance._gate_button', ['passes' => $open['passes'] ?? []])</b></div>
                                 <div><small>Worked</small><b>{{ $open['worked'] }}</b></div>
                             </div>
                             @if($open['punches'])
@@ -196,6 +201,7 @@
         <button type="button" class="att-view-x" data-close aria-label="Close">{{ __('Close') }}</button>
         <img id="attViewImg" alt="Attendance photo">
     </div>
+    @include('operations.attendance._gate_pop')
 @endsection
 
 @push('scripts')
@@ -236,7 +242,7 @@
             return '<li><span>' + punch.time + '</span><span>' + punch.direction + '</span></li>';
         }).join('');
         return '<figure class="att-entry">' + picture + '<figcaption><b>Entry</b><span>' + text(day.in) + note + '</span></figcaption></figure>'
-            + '<div class="att-times"><div><small>In</small><b>' + text(day.in) + '</b></div><div><small>Out</small><b>' + text(day.out) + '</b></div><div><small>Worked</small><b>' + text(day.worked) + '</b></div></div>'
+            + '<div class="att-times"><div><small>In</small><b>' + text(day.in) + '</b></div><div><small>Out</small><b>' + text(day.out) + '</b></div><div><small>Gate pass</small><b>' + window.gateHtml(day.passes) + '</b></div><div><small>Worked</small><b>' + text(day.worked) + '</b></div></div>'
             + (rows ? '<ul class="att-log">' + rows + '</ul>' : '');
     }
 
@@ -281,7 +287,7 @@
                 row.className = 'att-day';
                 row.setAttribute('data-date', day.date);
                 row.tabIndex = 0;
-                row.innerHTML = '<td></td><td class="att-time js-in"></td><td class="att-time js-out"></td><td class="js-worked"></td><td><span class="b js-status"></span></td>'
+                row.innerHTML = '<td></td><td class="att-time js-in"></td><td class="att-time js-out"></td><td class="js-gate"></td><td class="js-ot"></td><td class="js-worked"></td><td><span class="b js-status"></span></td>'
                     + (root.getAttribute('data-can-edit') === '1' ? '<td class="att-act"></td>' : '');
                 body.prepend(row);
             }
@@ -290,6 +296,8 @@
             row.children[0].textContent = day.label;
             cell(row, '.js-in', text(day.in));
             cell(row, '.js-out', text(day.out));
+            cell(row, '.js-gate', window.gateHtml(day.passes));
+            cell(row, '.js-ot', text(day.overtime));
             const worked = row.querySelector('.js-worked');
             if (worked) worked.textContent = day.worked;
             const status = row.querySelector('.js-status');

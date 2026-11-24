@@ -56,6 +56,10 @@
                     <b>{{ $employee->joining_date?->format('d M Y') ?? '—' }}</b>
                 </div>
                 <div>
+                    <small>Salary type</small>
+                    <b>{{ $employee->salaryTypeLabel() }}</b>
+                </div>
+                <div>
                     <small>Parent</small>
                     <b>{{ $employee->manager?->full_name ?? '—' }}</b>
                 </div>
@@ -134,6 +138,7 @@
                     </div>
                 </section>
 
+                {{-- Working times and Day and night stay on Hours & pay. Not on this page.
                 @include('employees._times', [
                     'employee' => $employee,
                     'times' => $times,
@@ -142,12 +147,13 @@
                 ])
 
                 @include('employees._shift_month', ['employee' => $employee])
+                --}}
 
                 <section class="card ef-sec">
                     <header>
                         <div>
                             <h3>{{ __('Employment terms') }}</h3>
-                            <p>Joining, probation, and notice</p>
+                            <p>Joining, probation, notice, and how pay is counted</p>
                         </div>
                     </header>
                     <div class="cb">
@@ -156,7 +162,11 @@
                             <div><span>Confirmation date</span><b>{{ $employee->confirmation_date?->format('d M Y') ?? '—' }}</b></div>
                             <div><span>Probation</span><b>{{ $employee->probation_days !== null ? $employee->probation_days.' days' : '—' }}</b></div>
                             <div><span>Notice period</span><b>{{ $employee->notice_period_days !== null ? $employee->notice_period_days.' days' : '—' }}</b></div>
+                            <div><span>Salary type</span><b>{{ $employee->salaryTypeLabel() }}</b></div>
                         </div>
+                        @if($employee->isPieceSalary())
+                            <p class="ef-hint mt-2 mb-0">Piece based — attendance only. This person is not included on salary sheets.</p>
+                        @endif
                     </div>
                 </section>
 

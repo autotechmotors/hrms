@@ -177,6 +177,67 @@ class GatePassWorkflowTest extends TestCase
             ->assertDontSee('No pending Gate Pass from people under you today.');
     }
 
+    public function test_owner_can_edit_and_delete_a_pending_pass_and_a_parent_cannot(): void
+    {
+        [$org, $vipul, $dharmesh, $manish, $arif] = $this->tree();
+        $arifUser = $this->linkUser('employee', $arif);
+        $manishUser = $this->linkUser('manager', $manish);
+
+        $this->actingAsScoped($arifUser)->post(route('gate-passes.store'), $this->payload($arif->id));
+        $pass = GatePass::query()->firstOrFail();
+        $this->assertSame(GatePass::STATUS_PENDING, $pass->status);
+
+        $this->actingAsScoped($arifUser)
+            ->get(route('gate-passes.index'))
+            ->assertOk()
+            ->assertSee('data-gp-edit', false)
+            ->assertSee('gp-row-delete', false);
+
+        $this->actingAsScoped($manishUser)
+            ->put(route('gate-passes.update', $pass), $this->editPayload())
+            ->assertForbidden();
+        $this->actingAsScoped($manishUser)
+            ->delete(route('gate-passes.destroy', $pass))
+            ->assertForbidden();
+
+        $this->actingAsScoped($arifUser)
+            ->put(route('gate-passes.update', $pass), $this->editPayload())
+            ->assertRedirect(route('gate-passes.show', $pass));
+
+        $pass->refresh();
+        $this->assertSame('office', $pass->work_type);
+        $this->assertSame('Updated client visit', $pass->reason);
+        $this->assertSame('16:00', substr((string) $pass->out_time, 0, 5));
+        $this->assertSame(30, (int) $pass->duration_minutes);
+
+        $this->actingAsScoped($arifUser)
+            ->delete(route('gate-passes.destroy', $pass))
+            ->assertRedirect(route('gate-passes.index'));
+        $this->assertDatabaseMissing('gate_passes', ['id' => $pass->id]);
+    }
+
+    public function test_hr_can_delete_an_approved_pass_and_the_owner_cannot(): void
+    {
+        [$org, $vipul, $dharmesh, $manish, $arif] = $this->tree();
+        $arifUser = $this->linkUser('employee', $arif);
+        $hr = $this->makeUser('hr-admin', $org['company']);
+
+        $this->actingAsScoped($hr)->post(route('gate-passes.store'), $this->payload($arif->id));
+        $pass = GatePass::query()->firstOrFail();
+        $this->assertSame(GatePass::STATUS_APPROVED, $pass->status);
+
+        $this->actingAsScoped($arifUser)
+            ->delete(route('gate-passes.destroy', $pass))
+            ->assertForbidden();
+        $this->assertDatabaseHas('gate_passes', ['id' => $pass->id]);
+
+        $this->actingAsScoped($hr)
+            ->deleteJson(route('gate-passes.destroy', $pass))
+            ->assertOk()
+            ->assertJsonPath('message', 'Gate Pass deleted.');
+        $this->assertDatabaseMissing('gate_passes', ['id' => $pass->id]);
+    }
+
     /**
      * @return array{0: array<string, mixed>, 1: \App\Models\Employee, 2: \App\Models\Employee, 3: \App\Models\Employee, 4: \App\Models\Employee}
      */
@@ -212,6 +273,20 @@ class GatePassWorkflowTest extends TestCase
             'duration_time' => '01:00',
             'work_type' => $workType,
             'reason' => 'Client visit downtown',
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function editPayload(): array
+    {
+        return [
+            'work_type' => 'office',
+            'leave_type' => 'return',
+            'out_time' => '16:00',
+            'duration_time' => '00:30',
+            'reason' => 'Updated client visit',
         ];
     }
 }

@@ -56,7 +56,7 @@ class HikvisionRelay
      */
     private function perform(array $job): array
     {
-        $device = $this->device();
+        $device = $this->device($job);
         $code = trim((string) ($job['code'] ?? ''));
         $name = trim((string) ($job['name'] ?? $code));
         $kind = (string) ($job['kind'] ?? '');
@@ -66,6 +66,18 @@ class HikvisionRelay
 
         if ($kind === 'remove') {
             $this->enroll->remove($device, $code);
+
+            return [];
+        }
+        if ($kind === 'face-access') {
+            $enabled = (bool) ($job['enabled'] ?? true);
+            $this->enroll->setUserType($device, $code, $name, $enabled ? 'normal' : 'blackList');
+            if ($enabled && is_string($job['face'] ?? null) && $job['face'] !== '') {
+                $jpeg = base64_decode($job['face'], true);
+                if (is_string($jpeg) && str_starts_with($jpeg, "\xFF\xD8\xFF")) {
+                    $this->enroll->replaceFace($device, $code, $jpeg);
+                }
+            }
 
             return [];
         }
@@ -90,9 +102,16 @@ class HikvisionRelay
         return [];
     }
 
-    private function device(): Device
+    private function device(array $job = []): Device
     {
-        $found = Device::query()->get()->first(fn (Device $device) => $device->isHikvision());
+        $registerId = trim((string) ($job['register_id'] ?? ''));
+        $found = Device::query()->get()->first(function (Device $device) use ($registerId): bool {
+            if (! $device->isHikvision()) {
+                return false;
+            }
+
+            return $registerId !== '' && strcasecmp((string) $device->register_id, $registerId) === 0;
+        }) ?: Device::query()->get()->first(fn (Device $device) => $device->isHikvision());
         if ($found) {
             if (trim((string) $found->ip_address) === '') {
                 $found->ip_address = (string) config('hikvision.host');

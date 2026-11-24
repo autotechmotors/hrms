@@ -26,7 +26,7 @@
     <header>
         <div>
             <h3>{{ __('Day and night') }}</h3>
-            <p>{{ $shift['label'] }} has {{ $shift['days'] }} days. One shift stays on. All days off is not allowed.</p>
+            <p>Which dates in {{ $shift['label'] }} use the day clock, and which use the night clock. Saving this month leaves other months as they are.</p>
         </div>
     </header>
     <div class="cb">
@@ -38,6 +38,7 @@
             </div>
             <button class="ib" type="button" data-shift-nav data-year="{{ $shift['next']['year'] }}" data-month="{{ $shift['next']['month'] }}" title="Next month" aria-label="Next month"><x-i name="right" :size="16" /></button>
         </div>
+        <div class="ss-key" aria-hidden="true"><span class="is-day">Day</span><span class="is-night">Night</span></div>
         <div class="ss-cells" data-shift-cells>
             @foreach($shift['cells'] as $cell)
                 <span class="ss-cell is-{{ $cell['kind'] }}{{ $cell['saved'] ? '' : ' is-soft' }}" data-cell="{{ $cell['date'] }}">{{ $cell['day'] }}</span>
@@ -137,7 +138,7 @@
                     <button class="btn" type="button" data-range-add @if($dayAll || $nightAll) hidden @endif>Add dates</button>
                     <button class="btn pr" type="submit" data-shift-save>Save this month</button>
                 </div>
-                <p class="ss-hint">Pick the start and end in one calendar. Dates already used on another shift stay hidden. Change them on that row. On a saved date the person punches inside that clock. A punch outside it does not count, so the day stays inactive and the usual late, early, or absent cutoff applies.</p>
+                <p class="ss-hint">All days starts on the first of this month and continues until a later month is saved. Or add ranges that cover every date once. A date already used on the other row stays hidden.</p>
             </form>
         @else
             <p class="ss-hint">You can view this shift. Super Admin, HR Admin, or the parent assigns it.</p>
@@ -197,6 +198,30 @@
         return taken;
     }
 
+    function placeShiftCalendar(instance) {
+        const anchor = instance.altInput || instance.input;
+        const box = anchor.getBoundingClientRect();
+        const cal = instance.calendarContainer;
+        const width = cal.offsetWidth || 308;
+        const height = cal.offsetHeight || 320;
+        let top = box.bottom + 6;
+        if (top + height > window.innerHeight - 8) top = Math.max(8, box.top - height - 6);
+        let left = box.left;
+        if (left + width > window.innerWidth - 8) left = Math.max(8, window.innerWidth - width - 8);
+        cal.style.position = 'fixed';
+        cal.style.top = top + 'px';
+        cal.style.left = left + 'px';
+        cal.style.right = 'auto';
+        cal.style.zIndex = '80';
+    }
+
+    window.closeShiftCalendars = function (root) {
+        if (!root) return;
+        root.querySelectorAll('[data-range-pick]').forEach(function (input) {
+            if (input._flatpickr) input._flatpickr.destroy();
+        });
+    };
+
     window.bindShiftDates = function (root) {
         if (!root || typeof flatpickr !== 'function') return;
         const host = root.id === 'empShift' ? root : root.closest('#empShift');
@@ -219,7 +244,12 @@
                 altInputClass: 'in form-control',
                 allowInput: false,
                 disableMobile: true,
-                static: true,
+                static: false,
+                appendTo: document.body,
+                clickOpens: true,
+                position: function (instance) {
+                    placeShiftCalendar(instance);
+                },
                 minDate: host.dataset.start,
                 maxDate: host.dataset.end,
                 defaultDate: initial,
@@ -228,7 +258,12 @@
                 },
                 onOpen: function (selected, value, instance) {
                     instance.calendarContainer.classList.add('ss-cal');
-                    instance.redraw();
+                },
+                onMonthChange: function (selected, value, instance) {
+                    placeShiftCalendar(instance);
+                },
+                onYearChange: function (selected, value, instance) {
+                    placeShiftCalendar(instance);
                 },
                 disable: [function (date) {
                     return !!shiftTaken(host, row)[shiftKey(date)];
@@ -397,6 +432,7 @@
                 data: { year: nav.dataset.year, month: nav.dataset.month, partial: 1 },
                 headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
             }).done(function (body) {
+                window.closeShiftCalendars(root);
                 root.outerHTML = body.html;
                 const next = document.getElementById('empShift');
                 window.bindShiftDates(next);
@@ -436,7 +472,10 @@
                 window.toast('Keep at least one date row.', 'er');
                 return;
             }
-            remove.closest('[data-range]').remove();
+            const row = remove.closest('[data-range]');
+            const pick = row.querySelector('[data-range-pick]');
+            if (pick && pick._flatpickr) pick._flatpickr.destroy();
+            row.remove();
             list.querySelectorAll('[data-range]').forEach(function (item, itemIndex) {
                 item.querySelectorAll('[name]').forEach(function (input) {
                     input.name = input.name.replace(/ranges\[\d+]/, 'ranges[' + itemIndex + ']');
@@ -459,6 +498,7 @@
             data: $(form).serialize(),
             headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
         }).done(function (body) {
+            window.closeShiftCalendars(root);
             root.outerHTML = body.html;
             const next = document.getElementById('empShift');
             window.bindShiftDates(next);

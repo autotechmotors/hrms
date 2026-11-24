@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Controllers\Operations\Concerns\UsesWorkspace;
 use App\Models\Department;
 use App\Models\SalarySheet;
+use App\Models\SalarySheetLine;
 use App\Models\User;
 use App\Notifications\SalarySheetNotice;
 use App\Services\AccessScope;
@@ -96,15 +97,37 @@ class SalarySheetController extends Controller
         $department = Department::query()->visibleTo($request->user())->whereKey($data['department_id'])->first();
         abort_unless($department, 403);
 
-        $allowed = $this->activeEmployees()
+        $people = $this->activeEmployees()
             ->where('department_id', $department->id)
             ->whereIn('id', $data['employee_ids'])
-            ->pluck('employees.id')
-            ->all();
+            ->with('currentSalary')
+            ->get(['employees.id', 'employees.employee_code', 'employees.first_name', 'employees.middle_name', 'employees.last_name', 'employees.salary_type']);
 
-        if ($allowed === []) {
+        if ($people->isEmpty()) {
             return back()->withErrors(['employee_ids' => 'Choose at least one person in this department.'])->withInput();
         }
+
+        $errors = [];
+        foreach ($people as $person) {
+            $who = $person->full_name.' ('.$person->employee_code.')';
+            if ($person->isPieceSalary()) {
+                $errors[] = $who.' is piece based. Salary sheets are only for hours-based people. Use Attendance for their month record.';
+                continue;
+            }
+            if (! $person->isHoursSalary()) {
+                $errors[] = $who.' needs a salary type set on the employee profile (Hours based).';
+                continue;
+            }
+            $amount = (float) ($person->currentSalary?->gross_monthly ?? 0);
+            if ($amount <= 0) {
+                $errors[] = $who.' needs a monthly salary amount on Hours & pay before generate.';
+            }
+        }
+        if ($errors !== []) {
+            return back()->withErrors(['employee_ids' => implode(' ', $errors)])->withInput();
+        }
+
+        $allowed = $people->pluck('id')->map(fn ($id) => (int) $id)->all();
 
         $sheet = $this->builder->make(
             (int) $department->company_id,
@@ -143,9 +166,13 @@ class SalarySheetController extends Controller
         $this->guard($request, $salarySheet);
         $salarySheet->load(['lines.employee.department', 'lines.employee.designation', 'department', 'company', 'author', 'decider']);
 
+        $user = $request->user();
+
         return view('operations.salary-sheets.show', [
             'sheet' => $salarySheet,
-            'canDecide' => $request->user()->hasPermission('salary.decide'),
+            'canDecide' => $user->hasPermission('salary.decide'),
+            'canAdjustNet' => $user->hasPermission('salary.manage')
+                || $user->hasPermission('payroll.process'),
         ]);
     }
 
@@ -163,6 +190,74 @@ class SalarySheetController extends Controller
         $this->guard($request, $salarySheet);
 
         return $this->exporter->pdf($salarySheet);
+    }
+
+    public function lineExcel(Request $request, SalarySheet $salarySheet, SalarySheetLine $line)
+    {
+        $this->authorizeAny('salary.view', 'salary.decide', 'payroll.process');
+        $this->guard($request, $salarySheet);
+        abort_unless((int) $line->salary_sheet_id === (int) $salarySheet->id, 404);
+
+        return $this->exporter->excelPerson($salarySheet, $line);
+    }
+
+    public function linePdf(Request $request, SalarySheet $salarySheet, SalarySheetLine $line)
+    {
+        $this->authorizeAny('salary.view', 'salary.decide', 'payroll.process');
+        $this->guard($request, $salarySheet);
+        abort_unless((int) $line->salary_sheet_id === (int) $salarySheet->id, 404);
+
+        return $this->exporter->pdfPerson($salarySheet, $line);
+    }
+
+    public function adjustNet(Request $request, SalarySheet $salarySheet, SalarySheetLine $line): JsonResponse
+    {
+        $this->authorizeAny('salary.manage', 'payroll.process');
+        $this->guard($request, $salarySheet);
+        abort_unless((int) $line->salary_sheet_id === (int) $salarySheet->id, 404);
+        if (! $salarySheet->isPending()) {
+            return response()->json(['message' => 'This salary request is already decided.'], 422);
+        }
+
+        $data = $request->validate([
+            'net' => ['required', 'numeric', 'min:0', 'max:99999999.99'],
+            'reason' => ['required', 'string', 'min:3', 'max:500'],
+        ]);
+
+        $breakdown = is_array($line->breakdown) ? $line->breakdown : [];
+        $computed = array_key_exists('computed_net', $breakdown)
+            ? round((float) $breakdown['computed_net'], 2)
+            : round(
+                (float) $line->earned
+                - (float) $line->deductions
+                - (float) $line->advance
+                + (float) ($breakdown['overtime_pay'] ?? 0),
+                2
+            );
+        $next = round((float) $data['net'], 2);
+        $breakdown['computed_net'] = $computed;
+        $breakdown['net_adjustment'] = [
+            'from' => $computed,
+            'to' => $next,
+            'delta' => round($next - $computed, 2),
+            'reason' => trim($data['reason']),
+            'user_id' => $request->user()->id,
+            'at' => now()->timezone('Asia/Kolkata')->toIso8601String(),
+        ];
+        $line->update([
+            'net' => $next,
+            'breakdown' => $breakdown,
+        ]);
+
+        return response()->json([
+            'message' => 'Net pay updated for '.$line->employee?->full_name.'.',
+            'line_id' => $line->id,
+            'net' => $next,
+            'computed_net' => $computed,
+            'delta' => $breakdown['net_adjustment']['delta'],
+            'reason' => $breakdown['net_adjustment']['reason'],
+            'sheet_net' => round((float) $salarySheet->lines()->sum('net'), 2),
+        ]);
     }
 
     private function decide(Request $request, SalarySheet $sheet, string $status, ?string $reason): JsonResponse|RedirectResponse
@@ -264,8 +359,16 @@ class SalarySheetController extends Controller
     {
         return $this->activeEmployees()
             ->where('department_id', $departmentId)
+            ->with('currentSalary')
             ->reorder('employees.employee_code')
-            ->get(['employees.id', 'employees.employee_code', 'employees.first_name', 'employees.last_name']);
+            ->get([
+                'employees.id',
+                'employees.employee_code',
+                'employees.first_name',
+                'employees.middle_name',
+                'employees.last_name',
+                'employees.salary_type',
+            ]);
     }
 
     private function guard(Request $request, SalarySheet $sheet): void

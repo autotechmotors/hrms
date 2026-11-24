@@ -375,7 +375,7 @@ class LeaveController extends Controller
             ->where('company_id', $this->companyId())
             ->where('is_active', true)
             ->findOrFail($data['leave_type_id']);
-        if ($type->depar        atment_id && (int) $type->department_id !== (int) $employee->department_id) {
+        if ($type->department_id && (int) $type->department_id !== (int) $employee->department_id) {
             throw ValidationException::withMessages(['leave_type_id' => 'Choose a leave type for this employee’s department.']);
         }
         $start = Carbon::parse($data['starts_on']);

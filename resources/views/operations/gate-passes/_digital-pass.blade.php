@@ -24,7 +24,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
-<link href="{{ asset('assets/css/pass.css') }}?v=9" rel="stylesheet">
+<link href="{{ asset('assets/css/pass.css') }}?v=10" rel="stylesheet">
 @endpush
 
 <div class="pass-screen">
@@ -126,7 +126,11 @@
         </div>
     </div>
 
-    @if($canDecide || $usable)
+    @php
+        $canEditPass = auth()->user()->canEditGatePass($gatePass);
+        $canDeletePass = auth()->user()->canDeleteGatePass($gatePass);
+    @endphp
+    @if($canDecide || $usable || $canEditPass || $canDeletePass)
         <div class="page-actions-bar {{ $canDecide ? 'pass-bar-decide' : 'pass-bar-usable' }}">
             @if($canDecide)
                 <form method="post" action="{{ route('gate-passes.approve', $gatePass) }}" data-confirm="{{ __('Approve this Gate Pass?') }}">
@@ -153,6 +157,8 @@
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M7 9V4h10v5M7 18H5a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="7" y="14" width="10" height="6" rx="1"/></svg>
                 </button>
             @endif
+            @include('operations.gate-passes._actions', ['row' => $gatePass, 'canDecide' => false, 'live' => false, 'variant' => 'bar'])
         </div>
     @endif
+    @include('operations.gate-passes._edit-modal')
 </div>

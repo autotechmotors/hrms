@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Services\Devices\FaceAccess;
 use App\Services\Devices\HikvisionAttendance;
 use App\Services\Devices\HikvisionAuthException;
 use App\Services\Devices\HikvisionRelay;
@@ -28,6 +29,9 @@ class WatchHikvision extends Command
                 $done = $relay->drain();
                 if (is_string($done) && $done !== '') {
                     $this->info('Face terminal updated: '.$done);
+                }
+                if ($tick % 30 === 0) {
+                    app(FaceAccess::class)->syncOpen();
                 }
                 $result = $attendance->pull($tick % 20 === 0);
                 if ($result['stored'] > 0 || $result['added'] > 0) {

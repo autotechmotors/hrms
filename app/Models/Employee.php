@@ -43,8 +43,13 @@ class Employee extends Model
         'confirmation_date',
         'probation_days',
         'notice_period_days',
+        'salary_type',
         'is_blocked',
     ];
+
+    public const SALARY_HOURS = 'hours';
+
+    public const SALARY_PIECE = 'piece';
 
     protected function casts(): array
     {
@@ -54,6 +59,25 @@ class Employee extends Model
             'confirmation_date' => 'date',
             'is_blocked' => 'boolean',
         ];
+    }
+
+    public function isHoursSalary(): bool
+    {
+        return $this->salary_type === self::SALARY_HOURS;
+    }
+
+    public function isPieceSalary(): bool
+    {
+        return $this->salary_type === self::SALARY_PIECE;
+    }
+
+    public function salaryTypeLabel(): string
+    {
+        return match ($this->salary_type) {
+            self::SALARY_HOURS => 'Hours based',
+            self::SALARY_PIECE => 'Piece based',
+            default => 'Not set',
+        };
     }
 
     public function getFullNameAttribute(): string

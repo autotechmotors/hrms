@@ -11,6 +11,8 @@ Artisan::command('inspire', function () {
 
 Schedule::command('gatepass:expire')->everyMinute()->withoutOverlapping();
 
+Schedule::command('faces:sync')->everyMinute()->withoutOverlapping();
+
 // Once each day, the first time the scheduler is awake. Uses the days saved in Settings.
 Schedule::command('employees:block-inactive')->everyFifteenMinutes()->withoutOverlapping();
 

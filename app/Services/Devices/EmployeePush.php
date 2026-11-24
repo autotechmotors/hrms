@@ -78,15 +78,19 @@ class EmployeePush
     /**
      * @return array{devices: int, message: string}
      */
-    public function collect(Employee $employee, string $kind, ?string $password = null): array
+    public function collect(Employee $employee, string $kind, ?string $password = null, ?Device $only = null): array
     {
-        $devices = $this->devices($employee);
-        if ($devices->isEmpty()) {
-            $devices = Device::query()
-                ->where('company_id', $employee->company_id)
-                ->where('gate_kind', '!=', Device::KIND_GATE)
-                ->orderBy('id')
-                ->get();
+        if ($only) {
+            $devices = collect([$only]);
+        } else {
+            $devices = $this->devices($employee);
+            if ($devices->isEmpty()) {
+                $devices = Device::query()
+                    ->where('company_id', $employee->company_id)
+                    ->where('gate_kind', '!=', Device::KIND_GATE)
+                    ->orderBy('id')
+                    ->get();
+            }
         }
         if ($devices->isEmpty()) {
             return ['devices' => 0, 'message' => 'Add a device before collecting a credential.'];
@@ -98,15 +102,17 @@ class EmployeePush
             return ['devices' => 0, 'message' => 'This employee needs a code and a name before the terminal can store them.'];
         }
 
-        $devices = Device::query()
-            ->where('company_id', $employee->company_id)
-            ->orderBy('id')
-            ->get()
-            ->filter(fn (Device $device) => $device->isHikvision())
-            ->merge($devices)
-            ->unique('id')
-            ->filter(fn (Device $device) => $device->isHikvision())
-            ->values();
+        if (! $only) {
+            $devices = Device::query()
+                ->where('company_id', $employee->company_id)
+                ->orderBy('id')
+                ->get()
+                ->filter(fn (Device $device) => $device->isHikvision())
+                ->merge($devices)
+                ->unique('id')
+                ->filter(fn (Device $device) => $device->isHikvision())
+                ->values();
+        }
         $queued = 0;
         $hikvision = null;
         $hikvisionError = null;
@@ -131,12 +137,20 @@ class EmployeePush
                 $queued++;
             } catch (\Throwable $exception) {
                 $hikvisionError = $exception->getMessage();
+
                 continue;
             }
         }
 
         if ($queued === 0) {
             return ['devices' => 0, 'message' => $hikvisionError ?: 'Add a Hikvision device before collecting a credential.'];
+        }
+
+        if ($hikvision && $hikvision->readsOut()) {
+            try {
+                app(FaceAccess::class)->sync($employee);
+            } catch (\Throwable) {
+            }
         }
 
         $target = $hikvision->name;
@@ -167,6 +181,42 @@ class EmployeePush
         }
 
         $this->placeOnTerminal($device, $employee, $userId, $name);
+    }
+
+    public function faceAccess(Employee $employee, Device $device, bool $enabled): void
+    {
+        if (app()->runningUnitTests()) {
+            return;
+        }
+
+        $userId = trim((string) $employee->employee_code);
+        $name = trim($employee->full_name);
+        if ($userId === '' || $name === '' || ! $device->isHikvision()) {
+            return;
+        }
+
+        $jpeg = $enabled ? $this->faceJpeg($employee) : null;
+        if ($this->hikvision->reachable($device)) {
+            $this->hikvision->setUserType($device, $userId, $name, $enabled ? 'normal' : 'blackList');
+            if ($enabled && $jpeg !== null) {
+                $this->hikvision->replaceFace($device, $userId, $jpeg);
+            }
+
+            return;
+        }
+
+        $result = $this->jobs->dispatchAndWait([
+            'kind' => 'face-access',
+            'employee_id' => $employee->id,
+            'register_id' => $device->register_id,
+            'code' => $userId,
+            'name' => $name,
+            'enabled' => $enabled,
+            'face' => $jpeg !== null ? base64_encode($jpeg) : null,
+        ], 25);
+        if (($result['status'] ?? '') !== 'done') {
+            throw new \RuntimeException($result['message'] ?: 'The office link to the face terminal is not running.');
+        }
     }
 
     public function linked(Employee $employee): Collection
@@ -249,7 +299,7 @@ class EmployeePush
         $face = $this->facePayload($employee);
         $prints = $this->storedPrints($employee);
         if ($this->hikvision->reachable($device)) {
-            $this->hikvision->storeProfile($device, $userId, $name, $pin, $face, $prints);
+            $this->hikvision->storeProfile($device, $userId, $name, $pin, $face, $prints, true);
 
             return;
         }
@@ -270,31 +320,53 @@ class EmployeePush
 
     private function collectOnTerminal(Device $device, Employee $employee, string $userId, string $name, string $kind, ?string $password): void
     {
-        if ($this->hikvision->reachable($device)) {
-            $this->hikvision->capture($device, $employee, $kind, $password);
+        try {
+            if ($this->hikvision->reachable($device)) {
+                $this->hikvision->capture($device, $employee, $kind, $password);
+                if ($device->status !== 'online') {
+                    $device->update(['status' => 'online']);
+                }
 
-            return;
-        }
-        if ($kind === 'card') {
-            throw new \RuntimeException($device->name.' adds a face or a finger. Stand at that terminal and use those buttons.');
-        }
+                return;
+            }
+            if (trim((string) $device->ip_address) !== '') {
+                if ($device->status !== 'offline') {
+                    $device->update(['status' => 'offline']);
+                }
+                throw new \RuntimeException($device->name.' is offline ('.$device->terminalHost().'). Check power and the LAN cable.');
+            }
+            if ($kind === 'card') {
+                throw new \RuntimeException($device->name.' adds a face or a finger. Stand at that terminal and use those buttons.');
+            }
 
-        $job = [
-            'kind' => $kind,
-            'employee_id' => $employee->id,
-            'code' => $userId,
-            'name' => $name,
-            'password' => $password,
-        ];
-        if ($kind === 'finger') {
-            $job['finger_no'] = EmployeeCredential::query()
-                ->where('employee_id', $employee->id)
-                ->where('kind', 'finger')
-                ->count() + 1;
-        }
-        $result = $this->jobs->dispatchAndWait($job, in_array($kind, ['face', 'finger'], true) ? 70 : 15);
-        if (($result['status'] ?? '') !== 'done') {
-            throw new \RuntimeException($result['message'] ?: 'The office link to the face terminal is not running.');
+            $job = [
+                'kind' => $kind,
+                'employee_id' => $employee->id,
+                'code' => $userId,
+                'name' => $name,
+                'password' => $password,
+                'register_id' => $device->register_id,
+            ];
+            if ($kind === 'finger') {
+                $job['finger_no'] = EmployeeCredential::query()
+                    ->where('employee_id', $employee->id)
+                    ->where('kind', 'finger')
+                    ->count() + 1;
+            }
+            $result = $this->jobs->dispatchAndWait($job, in_array($kind, ['face', 'finger'], true) ? 70 : 15);
+            if (($result['status'] ?? '') !== 'done') {
+                throw new \RuntimeException($result['message'] ?: 'The office link to the face terminal is not running.');
+            }
+        } catch (\Throwable $exception) {
+            $message = $exception->getMessage();
+            if (str_contains(strtolower($message), 'connection failed') || str_contains(strtolower($message), 'timed out')) {
+                if ($device->status !== 'offline') {
+                    $device->update(['status' => 'offline']);
+                }
+                throw new \RuntimeException($device->name.' is offline ('.$device->terminalHost().'). Check power and the LAN cable.');
+            }
+
+            throw $exception;
         }
     }
 
@@ -311,6 +383,43 @@ class EmployeePush
         }
 
         return Device::query()->where('company_id', $employee->company_id)->whereIn('id', $ids)->get();
+    }
+
+    private function keepTerminalFace(Device $device, Employee $employee, string $userId): void
+    {
+        $saved = app(HikvisionEvents::class)->facePhoto(
+            $device->terminalHost(),
+            $device->terminalUsername(),
+            $device->terminalPassword(),
+            $userId,
+        );
+        if (! is_string($saved) || $saved === '') {
+            return;
+        }
+        $bytes = base64_decode($saved, true);
+        if (! is_string($bytes) || ! str_starts_with($bytes, "\xFF\xD8\xFF")) {
+            return;
+        }
+
+        EmployeeCredential::query()->updateOrCreate(
+            ['employee_id' => $employee->id, 'kind' => 'face', 'slot' => '0'],
+            ['content' => $saved],
+        );
+    }
+
+    private function faceJpeg(Employee $employee): ?string
+    {
+        $stored = EmployeeCredential::query()
+            ->where('employee_id', $employee->id)
+            ->where('kind', 'face')
+            ->orderBy('slot')
+            ->value('content');
+        if (! is_string($stored) || $stored === '') {
+            return null;
+        }
+        $bytes = base64_decode($stored, true);
+
+        return is_string($bytes) && str_starts_with($bytes, "\xFF\xD8\xFF") ? $bytes : null;
     }
 
     private function facePayload(Employee $employee): ?string

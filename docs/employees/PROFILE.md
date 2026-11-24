@@ -1,6 +1,6 @@
 # Employee profile
 
-Keep the current employee record working: identity, email, phone, department, designation, status, manager, joining, probation, notice, photograph, custom fields, movement history, documents, bank accounts, device credentials, block, exit, import, and export. The payout account on this profile is the person’s account for salary. Company bank accounts stay on `/bank`: `docs/bank/TRANSFERS.md`.
+Keep the current employee record working: identity, email, phone, department, designation, status, manager, joining, probation, notice, photograph, custom fields, movement history, documents, bank accounts, device credentials, block, exit, import, and export. Access Credentials asks which face terminal to use, then sends the face, finger, card, or password only to that machine. The payout account on this profile is the person’s account for salary. Company bank accounts stay on `/bank`: `docs/bank/TRANSFERS.md`.
 
 Super Admin and HR Admin can edit, update, and delete a profile. Anyone else can open only their own row and the people assigned under them, and cannot edit those profiles.
 
@@ -13,6 +13,7 @@ These are on the employee form and are saved with the employee.
 - `alternate_phone`
 - `confirmation_date`
 - `address`, `city`, `state`, `postal_code`
+- `salary_type` — `hours` (Hours based) or `piece` (Piece based). Required on create and edit. Piece based people stay on attendance only and are not put on salary sheets. Hours based people need a monthly amount on Hours & pay before generate.
 
 ## Code
 
@@ -30,4 +31,4 @@ One card on the employee profile, for that person only. Today first, then earlie
 
 Who may open the employee list: `docs/roles/NAV-PERMISSIONS.md`.
 
-The list has a Salary action beside View, Edit, and Delete when the person has `salary.view`. It opens that person’s Hours & pay page. The profile also has the Day and night month card. Rules: `docs/shifts/SCHEDULE.md`.
+The list has a Salary action beside View, Edit, and Delete when the person has `salary.view`. It opens that person’s Hours & pay page. Working times and Day and night are not on the employee profile or edit form. They stay on Hours & pay. Rules: `docs/shifts/SCHEDULE.md` and `docs/salary/HOURS-AND-PAY.md`.

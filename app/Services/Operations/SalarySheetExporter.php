@@ -47,21 +47,37 @@ class SalarySheetExporter
     public function pdf(SalarySheet $sheet): StreamedResponse|Response
     {
         $sheet->loadMissing(['lines.employee.department', 'lines.employee.designation', 'company', 'department']);
-        $html = view('operations.salary-sheets.print', ['sheet' => $sheet])->render();
-        $name = $this->filename($sheet, 'pdf');
 
-        if (! class_exists(Dompdf::class)) {
-            return response($html, 200, ['Content-Type' => 'text/html; charset=UTF-8']);
-        }
+        return $this->pdfDownload($sheet, $this->filename($sheet, 'pdf'));
+    }
 
-        $dompdf = new Dompdf(['isRemoteEnabled' => false]);
-        $dompdf->loadHtml($html);
-        $dompdf->setPaper('A3', 'landscape');
-        $dompdf->render();
+    public function excelPerson(SalarySheet $sheet, SalarySheetLine $line): StreamedResponse
+    {
+        $sheet->loadMissing(['company', 'department']);
+        $line->loadMissing(['employee.department', 'employee.designation']);
+        $book = new Spreadsheet;
+        $book->getDefaultStyle()->getFont()->setName('Calibri')->setSize(10);
+        $tab = $book->getActiveSheet();
+        $tab->setTitle($this->tabTitle($line));
+        $this->person($tab, $sheet, $line);
 
-        return response()->streamDownload(function () use ($dompdf) {
-            echo $dompdf->output();
-        }, $name, ['Content-Type' => 'application/pdf']);
+        $name = $this->personFilename($sheet, $line, 'xlsx');
+
+        return response()->streamDownload(function () use ($book) {
+            $writer = new Xlsx($book);
+            $writer->save('php://output');
+        }, $name, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ]);
+    }
+
+    public function pdfPerson(SalarySheet $sheet, SalarySheetLine $line): StreamedResponse|Response
+    {
+        $sheet->loadMissing(['company', 'department']);
+        $line->loadMissing(['employee.department', 'employee.designation']);
+        $sheet->setRelation('lines', collect([$line]));
+
+        return $this->pdfDownload($sheet, $this->personFilename($sheet, $line, 'pdf'));
     }
 
     public function filename(SalarySheet $sheet, string $ext): string
@@ -69,6 +85,37 @@ class SalarySheetExporter
         $slug = preg_replace('/[^A-Za-z0-9]+/', '-', $sheet->title) ?: 'salary';
 
         return $slug.'-'.$sheet->starts_on->format('Ymd').'-'.$sheet->ends_on->format('Ymd').'.'.$ext;
+    }
+
+    public function personFilename(SalarySheet $sheet, SalarySheetLine $line, string $ext): string
+    {
+        $code = preg_replace('/[^A-Za-z0-9]+/', '-', (string) $line->employee?->employee_code) ?: 'person';
+        $slug = preg_replace('/[^A-Za-z0-9]+/', '-', $sheet->title) ?: 'salary';
+
+        return $slug.'-'.$code.'-'.$sheet->starts_on->format('Ymd').'-'.$sheet->ends_on->format('Ymd').'.'.$ext;
+    }
+
+    private function pdfDownload(SalarySheet $sheet, string $name): StreamedResponse|Response
+    {
+        $html = view('operations.salary-sheets.print', ['sheet' => $sheet])->render();
+
+        if (! class_exists(Dompdf::class)) {
+            return response($html, 200, ['Content-Type' => 'text/html; charset=UTF-8']);
+        }
+
+        $dompdf = new Dompdf([
+            'isRemoteEnabled' => false,
+            'isHtml5ParserEnabled' => true,
+            'defaultFont' => 'DejaVu Sans',
+            'dpi' => 96,
+        ]);
+        $dompdf->loadHtml($html);
+        $dompdf->setPaper('A3', 'landscape');
+        $dompdf->render();
+
+        return response()->streamDownload(function () use ($dompdf) {
+            echo $dompdf->output();
+        }, $name, ['Content-Type' => 'application/pdf']);
     }
 
     private function summary(Worksheet $tab, SalarySheet $sheet): void
@@ -155,11 +202,12 @@ class SalarySheetExporter
         foreach ($dates as $index => $date) {
             $column = $index + 2;
             $cell = $line->days[$date] ?? [];
-            $tab->setCellValue([$column, 3], Carbon::parse($date)->format('d'));
+            $day = Carbon::parse($date);
+            $tab->setCellValue([$column, 3], $day->format('d')."\n".$day->format('D'));
             $tab->setCellValue([$column, 4], $cell['in'] ?? '—');
             $tab->setCellValue([$column, 5], $cell['out'] ?? '—');
             $tab->setCellValue([$column, 6], (int) ($cell['late'] ?? 0));
-            $tab->setCellValue([$column, 7], (int) ($cell['ot'] ?? 0));
+            $tab->setCellValue([$column, 7], ($cell['ot'] ?? 0) === 0 || ($cell['ot'] ?? '') === '' ? 0 : $cell['ot']);
             $tab->setCellValue([$column, 8], (int) ($cell['early'] ?? 0));
             $tab->setCellValue([$column, 9], (int) ($cell['break'] ?? 0));
             $tab->setCellValue([$column, 10], (int) ($cell['attended'] ?? 0));
@@ -171,6 +219,8 @@ class SalarySheetExporter
 
         $last = $this->column(count($dates) + 1);
         $tab->getStyle('A3:'.$last.'3')->applyFromArray($this->headStyle());
+        $tab->getStyle('A3:'.$last.'3')->getAlignment()->setWrapText(true)->setVertical(Alignment::VERTICAL_CENTER);
+        $tab->getRowDimension(3)->setRowHeight(28);
         $tab->getStyle('A11:'.$last.'14')->getFont()->setBold(true);
         $tab->getStyle('A3:'.$last.'14')->applyFromArray([
             'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['rgb' => 'E4E4EE']]],
@@ -194,9 +244,11 @@ class SalarySheetExporter
             ['Hours per day', (float) $line->hours_per_day],
             ['Day pay', (float) $line->hourly_rate],
             ['Salary cutoff', (float) ($line->breakdown['cutoff'] ?? 0)],
+            ['Overtime pay', (float) ($line->breakdown['overtime_pay'] ?? 0)],
             ['Earned', (float) $line->earned],
             ['Advance', (float) $line->advance],
             ['Other deductions', (float) $line->deductions],
+            ['Counted net', (float) ($line->breakdown['computed_net'] ?? $line->net)],
             ['Net pay', (float) $line->net],
         ];
         foreach ($pairs as $index => $pair) {
@@ -208,6 +260,24 @@ class SalarySheetExporter
         $tab->getStyle('B'.(16 + count($pairs)))->getFont()->setBold(true);
 
         $row = 17 + count($pairs) + 1;
+        $adjust = $line->breakdown['net_adjustment'] ?? null;
+        if (is_array($adjust) && ($adjust['reason'] ?? '') !== '') {
+            $tab->setCellValue('A'.$row, 'Net pay change');
+            $tab->getStyle('A'.$row)->getFont()->setBold(true);
+            $row++;
+            $tab->setCellValue('A'.$row, 'From counted');
+            $tab->setCellValue('B'.$row, (float) ($adjust['from'] ?? 0));
+            $row++;
+            $tab->setCellValue('A'.$row, 'To net pay');
+            $tab->setCellValue('B'.$row, (float) ($adjust['to'] ?? $line->net));
+            $row++;
+            $tab->setCellValue('A'.$row, 'Difference');
+            $tab->setCellValue('B'.$row, (float) ($adjust['delta'] ?? 0));
+            $row++;
+            $tab->setCellValue('A'.$row, 'Reason');
+            $tab->setCellValue('B'.$row, (string) $adjust['reason']);
+            $row++;
+        }
         foreach ($line->breakdown['deductions'] ?? [] as $item) {
             $tab->setCellValue('A'.$row, $item['name']);
             $tab->setCellValue('B'.$row, (float) $item['amount']);
@@ -239,10 +309,35 @@ class SalarySheetExporter
                 $tab->setCellValue('G'.$row, trim(($cut['reason'] ?? '').(! empty($cut['detail']) ? ' · '.$cut['detail'] : '')));
             }
         }
+        $overtime = $line->breakdown['overtime'] ?? [];
+        if ($overtime !== []) {
+            $row += 2;
+            $tab->setCellValue('A'.$row, 'Overtime');
+            $tab->getStyle('A'.$row)->getFont()->setBold(true);
+            $row++;
+            $tab->setCellValue('A'.$row, 'Date');
+            $tab->setCellValue('B'.$row, 'Shift end');
+            $tab->setCellValue('C'.$row, 'Out');
+            $tab->setCellValue('D'.$row, 'Extra hours');
+            $tab->setCellValue('E'.$row, 'Rupees');
+            $tab->getStyle('A'.$row.':E'.$row)->getFont()->setBold(true);
+            foreach ($overtime as $item) {
+                $row++;
+                $tab->setCellValue('A'.$row, $item['date']);
+                $tab->setCellValue('B'.$row, $item['end']);
+                $tab->setCellValue('C'.$row, $item['out']);
+                $tab->setCellValue('D'.$row, $item['hours']);
+                $tab->setCellValue('E'.$row, (float) $item['rupees']);
+            }
+            $row++;
+            $tab->setCellValue('A'.$row, 'Total');
+            $tab->setCellValue('E'.$row, (float) ($line->breakdown['overtime_pay'] ?? 0));
+            $tab->getStyle('A'.$row.':E'.$row)->getFont()->setBold(true);
+        }
 
         $tab->getColumnDimension('A')->setWidth(22);
         for ($i = 2; $i <= count($dates) + 1; $i++) {
-            $tab->getColumnDimension($this->column($i))->setWidth(8);
+            $tab->getColumnDimension($this->column($i))->setWidth(5.5);
         }
     }
 

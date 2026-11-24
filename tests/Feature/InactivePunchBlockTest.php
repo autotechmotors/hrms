@@ -75,6 +75,7 @@ class InactivePunchBlockTest extends TestCase
             ->put(route('settings.update'), [
                 'block_inactive_enabled' => '1',
                 'block_inactive_days' => 3,
+                'out_inactive_minutes' => 10,
             ])
             ->assertRedirect(route('settings.edit'));
 

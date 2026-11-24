@@ -8,6 +8,7 @@ use App\Models\DepartmentWorkHour;
 use App\Models\EmployeeHoliday;
 use App\Models\EmployeeSalary;
 use App\Models\EmployeeWorkHour;
+use App\Models\GatePass;
 use App\Models\Holiday;
 use App\Models\LeaveRequest;
 use App\Models\SalaryHead;
@@ -396,6 +397,75 @@ class PayDayTest extends TestCase
         $this->assertSame(30, $nightOn['cuts'][0]['minutes']);
     }
 
+    public function test_sunday_uses_that_persons_monday_to_saturday_length(): void
+    {
+        $org = $this->makeCompany('SUN');
+        $employee = $this->makeEmployee($org, 'S1');
+        $this->paySalary($employee, $this->structure($org), 31000);
+        EmployeeWorkHour::query()->create([
+            'employee_id' => $employee->id,
+            'uses_department' => false,
+            'shift_kind' => 'day',
+            'works_sunday' => true,
+            'weekday_start' => '08:00:00',
+            'weekday_end' => '19:00:00',
+            'sunday_start' => '08:00:00',
+            'sunday_end' => '13:00:00',
+        ]);
+        AttendanceRule::query()->create([
+            'company_id' => $org['company']->id,
+            'grace_minutes' => 0,
+            'mark_absent_without_punch' => true,
+        ]);
+        AttendanceDay::query()->create([
+            'employee_id' => $employee->id,
+            'work_date' => '2026-11-01',
+            'punch_in' => '08:30:00',
+            'punch_out' => '13:00:00',
+            'status' => 'present',
+            'source' => 'manual',
+        ]);
+
+        $short = app(PayDayMath::class)->range($employee, Carbon::parse('2026-11-01'), Carbon::parse('2026-11-01'));
+
+        $this->assertSame(30, $short['cuts'][0]['minutes']);
+        $this->assertEqualsWithDelta(round((31000 / 30) * 30 / 660, 2), $short['cuts'][0]['rupees'], 0.02);
+
+        AttendanceDay::query()->where('employee_id', $employee->id)->update([
+            'punch_in' => '08:00:00',
+            'punch_out' => '13:00:00',
+        ]);
+        $employee->unsetRelation('workHour');
+        $full = app(PayDayMath::class)->range($employee->fresh(), Carbon::parse('2026-11-01'), Carbon::parse('2026-11-01'));
+
+        $this->assertSame([], $full['cuts']);
+        $this->assertEqualsWithDelta(31000 / 30, $full['earned'], 0.02);
+
+        $night = $this->makeEmployee($org, 'S2');
+        $this->paySalary($night, SalaryStructure::query()->first(), 31000);
+        EmployeeWorkHour::query()->create([
+            'employee_id' => $night->id,
+            'uses_department' => false,
+            'shift_kind' => 'night',
+            'weekday_start' => '09:00:00',
+            'weekday_end' => '18:00:00',
+            'night_weekday_start' => '20:00:00',
+            'night_weekday_end' => '08:00:00',
+        ]);
+        AttendanceDay::query()->create([
+            'employee_id' => $night->id,
+            'work_date' => '2026-11-02',
+            'punch_in' => '20:30:00',
+            'punch_out' => '08:00:00',
+            'status' => 'present',
+            'source' => 'manual',
+        ]);
+        $nightLate = app(PayDayMath::class)->range($night, Carbon::parse('2026-11-02'), Carbon::parse('2026-11-02'));
+
+        $this->assertSame(30, $nightLate['cuts'][0]['minutes']);
+        $this->assertEqualsWithDelta(round((31000 / 30) * 30 / 720, 2), $nightLate['cuts'][0]['rupees'], 0.02);
+    }
+
     private function structure(array $org): SalaryStructure
     {
         $head = SalaryHead::query()->create([
@@ -420,6 +490,79 @@ class PayDayTest extends TestCase
         ]);
 
         return $structure;
+    }
+
+    public function test_overtime_is_after_the_shift_end_and_does_not_change_late(): void
+    {
+        $org = $this->makeCompany('OT');
+        $employee = $this->makeEmployee($org, 'OT1');
+        $this->paySalary($employee, $this->structure($org), 25000);
+        DepartmentWorkHour::query()->create([
+            'department_id' => $org['department']->id,
+            'hours_per_day' => 9,
+            'weekday_start' => '09:00:00',
+            'weekday_end' => '18:00:00',
+            'weekday_break_start' => '13:00:00',
+            'weekday_break_end' => '14:00:00',
+        ]);
+        AttendanceDay::query()->create([
+            'employee_id' => $employee->id,
+            'work_date' => '2026-11-24',
+            'punch_in' => '10:00:00',
+            'punch_out' => '07:00:00',
+            'status' => 'present',
+            'source' => 'device',
+        ]);
+
+        $pay = app(PayDayMath::class)->range($employee, Carbon::parse('2026-11-24'), Carbon::parse('2026-11-24'));
+
+        $this->assertSame(60, $pay['late_minutes']);
+        $this->assertSame('late', $pay['cuts'][0]['reason']);
+        $this->assertCount(1, $pay['cuts']);
+        $this->assertSame(780, $pay['overtime_minutes']);
+        $this->assertSame('13h 00m', $pay['overtime'][0]['hours']);
+        $this->assertEqualsWithDelta(round(13 * 25000 / (30 * 9), 2), $pay['overtime_pay'], 0.02);
+        $this->assertEqualsWithDelta(round(60 * (25000 / 30) / 540, 2), $pay['cuts'][0]['rupees'], 0.02);
+    }
+
+    public function test_factory_time_after_the_shift_end_is_not_overtime(): void
+    {
+        $org = $this->makeCompany('OTF');
+        $employee = $this->makeEmployee($org, 'OTF1');
+        $this->paySalary($employee, $this->structure($org), 25000);
+        DepartmentWorkHour::query()->create([
+            'department_id' => $org['department']->id,
+            'hours_per_day' => 9,
+            'weekday_start' => '09:00:00',
+            'weekday_end' => '18:00:00',
+        ]);
+        AttendanceDay::query()->create([
+            'employee_id' => $employee->id,
+            'work_date' => '2026-11-24',
+            'punch_in' => '09:00:00',
+            'punch_out' => '20:00:00',
+            'status' => 'present',
+            'source' => 'device',
+        ]);
+        GatePass::query()->create([
+            'company_id' => $org['company']->id,
+            'number' => 'GP-OTF',
+            'employee_id' => $employee->id,
+            'date' => '2026-11-24',
+            'out_time' => '18:00:00',
+            'duration_minutes' => 120,
+            'work_type' => 'office',
+            'reason' => 'Site',
+            'status' => 'approved',
+            'expires_at' => '2026-11-24 20:00:00',
+            'out_at' => '2026-11-24 18:00:00',
+            'in_at' => '2026-11-24 20:00:00',
+        ]);
+
+        $pay = app(PayDayMath::class)->range($employee, Carbon::parse('2026-11-24'), Carbon::parse('2026-11-24'));
+
+        $this->assertSame(0, $pay['overtime_minutes']);
+        $this->assertSame(0, $pay['early_minutes']);
     }
 
     private function paySalary($employee, SalaryStructure $structure, float $amount): void

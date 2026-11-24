@@ -113,6 +113,7 @@
         $('#sgPeople').addClass('is-loading');
         $.get(peopleUrl, { department_id: this.value }, function (html) {
             $('#sgPeople').html(html).removeClass('is-loading');
+            paintCount();
         });
     });
 
@@ -195,6 +196,8 @@
         var page = new URL(this.href, window.location.origin).searchParams.get('page') || 1;
         loadHistory(page);
     });
+
+    paintCount();
 })(jQuery);
 </script>
 @include('operations.salary-sheets._decide-script')

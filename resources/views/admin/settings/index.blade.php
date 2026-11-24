@@ -5,7 +5,7 @@
         <div class="ph">
             <div>
                 <h1>{{ __('Settings') }}</h1>
-                <p>Attendance block rule for this company. Super Admin and HR Admin are never blocked.</p>
+                <p>Company rules for auto-block and for when OUT closes. Super Admin and HR Admin are never auto-blocked.</p>
             </div>
             <div class="ac">
                 <button class="btn pr" type="submit" form="settingsForm">Save settings</button>
@@ -46,6 +46,18 @@
                         <li>Saving while the rule is on blocks everyone already over the limit. The scheduled job does the same once each day.</li>
                         <li>Super Admin and HR Admin stay active even when they have no punches.</li>
                     </ul>
+                    <div class="st-days">
+                        <x-text-field
+                            name="out_inactive_minutes"
+                            label="Minutes before out"
+                            type="number"
+                            :value="old('out_inactive_minutes', $setting->out_inactive_minutes)"
+                            required
+                            min="0"
+                            max="240"
+                        />
+                        <p class="form-text">A machine scan becomes OUT only inside this many minutes before the scheduled end, or with an approved gate pass. An earlier scan stays an in. IN can be at any time. Late minutes are still cut after grace.</p>
+                    </div>
                 </div>
             </form>
 

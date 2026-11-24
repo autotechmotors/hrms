@@ -20,7 +20,7 @@
     <link rel="stylesheet" href="{{ asset('assets/vendor/bootstrap/bootstrap.min.css') }}">
     <link rel="stylesheet" href="{{ asset('assets/vendor/select2/select2.min.css') }}">
     <link rel="stylesheet" href="{{ asset('assets/vendor/flatpickr/flatpickr.min.css') }}">
-    <link rel="stylesheet" href="{{ asset('assets/css/app.css') }}?v=139">
+    <link rel="stylesheet" href="{{ asset('assets/css/app.css') }}?v=149">
 </head>
 <body class="guest-body">
     <div class="auth-stage" aria-hidden="true">

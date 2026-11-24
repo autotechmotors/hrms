@@ -311,7 +311,12 @@ class DeviceSync
             $keys[$employeeId.'|'.$previous] = true;
         }
 
-        foreach (array_keys($keys) as $key) {
+        $ordered = array_keys($keys);
+        usort($ordered, function (string $left, string $right): int {
+            return strcmp(substr($left, strpos($left, '|') + 1), substr($right, strpos($right, '|') + 1));
+        });
+
+        foreach ($ordered as $key) {
             [$employeeId, $date] = explode('|', (string) $key, 2);
             $employee = Employee::query()->find($employeeId);
             if ($employee) {
@@ -334,6 +339,7 @@ class DeviceSync
             ->first();
         if ($kept?->source === 'manual') {
             $this->calculator->recalculate($employee, $date);
+            app(FaceAccess::class)->sync($employee);
 
             return;
         }
@@ -348,26 +354,96 @@ class DeviceSync
             ->orderBy('punched_at')
             ->orderBy('id')
             ->get();
-        $clusters = $this->clusters($punches);
+        $previous = AttendanceDay::query()
+            ->where('employee_id', $employee->id)
+            ->whereDate('work_date', $start->copy()->subDay()->toDateString())
+            ->first();
+        if ($previous?->punch_out) {
+            $window = $this->hours->windowFor($employee, $start);
+            $opens = $start->copy()->setTimeFromTimeString($this->hours->clock($window['start'], '09:00').':00');
+            $needle = Carbon::parse($previous->punch_out)->format('H:i');
+            $punches = $punches->reject(function (AttendancePunch $punch) use ($opens, $needle): bool {
+                $at = $punch->punched_at->copy()->timezone('Asia/Kolkata');
 
-        foreach ($clusters as $index => $cluster) {
-            $direction = $index % 2 === 0 ? 'in' : 'out';
-            foreach ($cluster['punches'] as $punch) {
-                if (in_array($punch->device?->punch_role, [Device::ROLE_IN, Device::ROLE_OUT], true)) {
-                    continue;
+                return $at->lt($opens) && $at->format('H:i') === $needle;
+            })->values();
+        }
+        $clusters = $this->clusters($punches);
+        $access = app(GatePassAccess::class);
+        $in = null;
+        $out = null;
+        $waitingForOut = false;
+
+        foreach ($clusters as $cluster) {
+            $at = $cluster['start'];
+            $punches = collect($cluster['punches']);
+            $roles = $punches->map(fn (AttendancePunch $punch) => $punch->device?->punch_role);
+            $onlyIn = $roles->isNotEmpty() && $roles->every(fn ($role) => $role === Device::ROLE_IN);
+            $onlyOut = $roles->isNotEmpty() && $roles->every(fn ($role) => $role === Device::ROLE_OUT);
+            if ($onlyIn) {
+                foreach ($punches as $punch) {
+                    if ($punch->direction !== 'in') {
+                        $punch->update(['direction' => 'in']);
+                    }
                 }
+                if ($in === null) {
+                    $in = $at;
+                }
+                $waitingForOut = true;
+
+                continue;
+            }
+            if ($onlyOut) {
+                if ($waitingForOut && $access->outAllowed($employee, $at, $start)) {
+                    foreach ($punches as $punch) {
+                        if ($punch->direction !== 'out') {
+                            $punch->update(['direction' => 'out']);
+                        }
+                    }
+                    $out = $at;
+                    $waitingForOut = false;
+                }
+
+                continue;
+            }
+            $asOut = $waitingForOut && $access->inShiftOutWindow($employee, $at, $start);
+            foreach ($punches as $punch) {
+                $direction = $asOut ? 'out' : 'in';
                 if ($punch->direction !== $direction) {
                     $punch->update(['direction' => $direction]);
                 }
             }
-        }
+            if ($asOut) {
+                $out = $at;
+                $waitingForOut = false;
 
-        $in = $clusters[0]['start'] ?? null;
-        $out = null;
-        for ($index = count($clusters) - 1; $index >= 1; $index--) {
-            if ($index % 2 === 1) {
-                $out = $clusters[$index]['start'];
-                break;
+                continue;
+            }
+            if ($in === null) {
+                $in = $at;
+            }
+            $waitingForOut = true;
+        }
+        if ($out === null && $in !== null) {
+            $next = $start->copy()->addDay();
+            $nextWindow = $this->hours->windowFor($employee, $next);
+            $nextStart = $next->copy()->setTimeFromTimeString($this->hours->clock($nextWindow['start'], '09:00').':00');
+            if ($nextStart->greaterThan($span['to'])) {
+                $candidate = AttendancePunch::query()
+                    ->with('device:id,punch_role')
+                    ->where('employee_id', $employee->id)
+                    ->whereNull('gate_pass_id')
+                    ->where('punched_at', '>=', $span['to'])
+                    ->where('punched_at', '<', $nextStart)
+                    ->orderBy('punched_at')
+                    ->orderBy('id')
+                    ->first();
+                if ($candidate && $candidate->device?->punch_role !== Device::ROLE_IN && $access->inShiftOutWindow($employee, $candidate->punched_at->copy()->timezone('Asia/Kolkata'), $start)) {
+                    $out = $candidate->punched_at->copy()->timezone('Asia/Kolkata');
+                    if ($candidate->direction !== 'out') {
+                        $candidate->update(['direction' => 'out']);
+                    }
+                }
             }
         }
         $day = AttendanceDay::query()
@@ -384,6 +460,7 @@ class DeviceSync
             'status' => $day->status ?: 'absent',
         ])->save();
         $this->calculator->recalculate($employee, $date);
+        app(FaceAccess::class)->sync($employee);
     }
 
     private function storeSelfie(Device $device): bool

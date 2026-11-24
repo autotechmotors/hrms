@@ -72,7 +72,8 @@ class SalarySheetBuilder
         $deductions = 0.0;
         $advances = $this->advances($employee, $from, $to);
         $advanceTotal = round(array_sum(array_column($advances, 'amount')), 2);
-        $net = max(0, round($earned - $deductions - $advanceTotal, 2));
+        $overtimePay = round((float) $pay['overtime_pay'], 2);
+        $net = max(0, round($earned - $deductions - $advanceTotal + $overtimePay, 2));
 
         return [
             'salary_sheet_id' => $sheetId,
@@ -82,7 +83,7 @@ class SalarySheetBuilder
             'hourly_rate' => round($rate, 4),
             'attended_minutes' => $attended,
             'paid_minutes' => $paid,
-            'ot_minutes' => 0,
+            'ot_minutes' => (int) $pay['overtime_minutes'],
             'late_minutes' => $late,
             'early_minutes' => $early,
             'break_minutes' => $break,
@@ -99,6 +100,9 @@ class SalarySheetBuilder
                 'advances' => $advances,
                 'cuts' => $pay['cuts'],
                 'cutoff' => $pay['cutoff'],
+                'overtime' => $pay['overtime'],
+                'overtime_pay' => $overtimePay,
+                'computed_net' => $net,
             ],
         ];
     }

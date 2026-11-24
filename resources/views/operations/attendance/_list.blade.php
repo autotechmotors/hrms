@@ -49,6 +49,17 @@
                     $inPunch = $rows->firstWhere('direction', 'in') ?? $rows->first();
                     $outPunch = $rows->where('direction', 'out')->last();
                     $portrait = $portraits->get($employee->id);
+                    $cards = $gates[$employee->id] ?? ($gates->get($employee->id) ?? []);
+                    $outMinute = $day?->punch_out ? \Carbon\Carbon::parse($day->punch_out)->format('H:i') : '';
+                    $outShown = $formatTime($day?->punch_out);
+                    foreach ($cards as $card) {
+                        if (! empty($card['early'])) {
+                            continue;
+                        }
+                        if ($outMinute !== '' && ($card['out_minute'] ?? '') === $outMinute) {
+                            $outShown = '—';
+                        }
+                    }
                 @endphp
                 <article class="att-card {{ $statusKey === 'absent' ? 'att-row-absent' : ($statusKey === 'pending' ? 'att-row-pending' : '') }}" data-employee="{{ $employee->id }}">
                     <div class="who">
@@ -79,7 +90,7 @@
                         </div>
                         <div class="att-time js-out">
                             <small>Out</small>
-                            <span class="js-clock">{{ $formatTime($day?->punch_out) }}</span>
+                            <span class="js-clock">{{ $outShown }}</span>
                             @if($outPunch && (int) $outPunch->has_image === 1)
                                 <button type="button" class="att-zoom" data-photo="{{ route('attendance.punch.photo', $outPunch) }}" title="View out photo"><img class="att-shot" src="{{ route('attendance.punch.photo', $outPunch) }}" alt="Out photo"></button>
                             @endif
@@ -87,6 +98,10 @@
                         <div>
                             <small>Worked</small>
                             <b class="js-worked">{{ $formatMinutes($day?->minutes_worked) }}</b>
+                        </div>
+                        <div class="js-gate">
+                            <small>Gate pass</small>
+                            @include('operations.attendance._gate_button', ['passes' => $cards])
                         </div>
                         <div>
                             <span class="b {{ $badge }} js-status">{{ $label }}</span>
@@ -168,6 +183,17 @@
                             $rows = $punches->get($employee->id, collect());
                             $inPunch = $rows->firstWhere('direction', 'in') ?? $rows->first();
                             $outPunch = $rows->where('direction', 'out')->last();
+                            $cards = $gates[$employee->id] ?? ($gates->get($employee->id) ?? []);
+                            $outMinute = $day?->punch_out ? \Carbon\Carbon::parse($day->punch_out)->format('H:i') : '';
+                            $outShown = $formatTime($day?->punch_out);
+                            foreach ($cards as $card) {
+                                if (! empty($card['early'])) {
+                                    continue;
+                                }
+                                if ($outMinute !== '' && ($card['out_minute'] ?? '') === $outMinute) {
+                                    $outShown = '—';
+                                }
+                            }
                         @endphp
                         <td class="att-time js-in">
                             <span class="js-clock">{{ $formatTime($day?->punch_in) }}</span>
@@ -176,13 +202,14 @@
                             @endif
                         </td>
                         <td class="att-time js-out">
-                            <span class="js-clock">{{ $formatTime($day?->punch_out) }}</span>
+                            <span class="js-clock">{{ $outShown }}</span>
                             @if($outPunch && (int) $outPunch->has_image === 1)
                                 <button type="button" class="att-zoom" data-photo="{{ route('attendance.punch.photo', $outPunch) }}" title="View out photo"><img class="att-shot" src="{{ route('attendance.punch.photo', $outPunch) }}" alt="Out photo"></button>
                             @endif
                         </td>
                         <td class="att-mins js-worked">{{ $formatMinutes($day?->minutes_worked) }}</td>
                         <td>
+                            <span class="js-gate">@include('operations.attendance._gate_button', ['passes' => $cards])</span>
                             <span class="b {{ $badge }} js-status">{{ $label }}</span>
                             @if($day?->punch_in || $day?->punch_out)
                                 <span class="att-mark js-mark {{ $day->source === 'manual' ? 'is-m' : 'is-a' }}" title="{{ $day->source === 'manual' ? 'Manual' : 'Machine' }}">{{ $day->source === 'manual' ? 'M' : 'A' }}</span>

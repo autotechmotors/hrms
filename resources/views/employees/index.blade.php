@@ -71,6 +71,41 @@
             @include('employees._list', ['employees' => $employees, 'canEdit' => $canEdit, 'canDelete' => $canDelete, 'canBlock' => $canBlock])
         </div>
     </section>
+
+    <div class="modal fade" id="credentialMachineModal" tabindex="-1" aria-labelledby="credentialMachineTitle" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="credentialMachineTitle">{{ __('Choose a terminal') }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ __('Close') }}"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="cred-machine-error" id="credentialMachineError" hidden></p>
+                    <div class="cred-machines" id="credentialMachineList">
+                        @forelse($terminals as $terminal)
+                            @php
+                                $role = match ($terminal->punch_role) {
+                                    'in' => 'In',
+                                    'out' => 'Out',
+                                    default => 'In and out',
+                                };
+                                $online = $terminal->status === 'online';
+                            @endphp
+                            <button type="button" class="cred-machine {{ $online ? 'is-online' : 'is-offline' }}" data-device="{{ $terminal->id }}" data-name="{{ $terminal->name }}" data-online="{{ $online ? '1' : '0' }}">
+                                <span class="cred-machine-top">
+                                    <b>{{ $terminal->name }}</b>
+                                    <em class="cred-machine-state">{{ $online ? __('Online') : __('Offline') }}</em>
+                                </span>
+                                <small>{{ $role }} · {{ $terminal->ip_address }}</small>
+                            </button>
+                        @empty
+                            <p class="ed-empty">{{ __('Add a face terminal before collecting a credential.') }}</p>
+                        @endforelse
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 @endsection
 
 @push('scripts')
@@ -344,12 +379,58 @@
             if (!pin) return;
             body.password = pin;
         }
-        if ((kind === 'face' || kind === 'finger') && window.toast) {
-            window.toast(kind === 'face'
-                ? 'Look at the face terminal now. Stay still until it finishes.'
-                : 'Place one finger on the face terminal. Wait until it finishes.');
+        const modal = document.getElementById('credentialMachineModal');
+        const list = document.getElementById('credentialMachineList');
+        if (!modal || !list || !list.querySelector('[data-device]')) {
+            if (window.toast) window.toast('Add a face terminal before collecting a credential.', 'er');
+            return;
         }
+        const labels = { face: 'Face', finger: 'Finger', card: 'Card', password: 'Password' };
+        document.getElementById('credentialMachineTitle').textContent = 'Add ' + (labels[kind] || 'credential') + ' on a terminal';
+        const err = document.getElementById('credentialMachineError');
+        if (err) {
+            err.hidden = true;
+            err.textContent = '';
+        }
+        modal.dataset.url = url;
+        modal.dataset.kind = kind;
+        modal.dataset.password = body.password || '';
+        modal.dataset.button = '';
+        button.addClass('cred-pending');
+        bootstrap.Modal.getOrCreateInstance(modal).show();
+    });
+
+    document.getElementById('credentialMachineModal')?.addEventListener('hidden.bs.modal', function () {
+        document.querySelectorAll('button.ac-item.cred-pending').forEach(function (node) {
+            node.classList.remove('cred-pending');
+        });
+    });
+
+    document.getElementById('credentialMachineList')?.addEventListener('click', function (event) {
+        const choice = event.target.closest('[data-device]');
+        const modal = document.getElementById('credentialMachineModal');
+        const pending = document.querySelector('button.ac-item.cred-pending');
+        const err = document.getElementById('credentialMachineError');
+        if (!choice || !modal || !pending || choice.classList.contains('cred-busy')) return;
+        if (err) {
+            err.hidden = true;
+            err.textContent = '';
+        }
+        const button = $(pending);
+        const kind = modal.dataset.kind;
+        const body = { kind: kind, device_id: choice.getAttribute('data-device') };
+        if (modal.dataset.password) body.password = modal.dataset.password;
+        const name = choice.getAttribute('data-name') || 'the terminal';
+        const url = modal.dataset.url;
+        choice.classList.add('cred-busy');
         button.addClass('wait');
+        if ((kind === 'face' || kind === 'finger') && err) {
+            err.hidden = false;
+            err.className = 'cred-machine-error is-wait';
+            err.textContent = kind === 'face'
+                ? 'Look at ' + name + ' now. Stay still until the camera finishes.'
+                : 'Place one finger on ' + name + '. Wait until it finishes.';
+        }
         $.ajax({
             url: url,
             method: 'POST',
@@ -360,10 +441,36 @@
             paintCounts(button.closest('.ac-cred'), data.counts || {}, data.slots || null);
             if (window.toast) window.toast(data.message || 'Sent to the terminal.');
             watchCredentials(button.closest('.ac-cred'));
+            choice.classList.remove('is-offline');
+            choice.classList.add('is-online');
+            choice.setAttribute('data-online', '1');
+            const state = choice.querySelector('.cred-machine-state');
+            if (state) state.textContent = 'Online';
+            pending.classList.remove('cred-pending');
+            bootstrap.Modal.getInstance(modal)?.hide();
         }).fail(function (xhr) {
             const message = xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'The terminal could not be updated.';
-            if (window.toast) window.toast(message, 'er');
+            if (window.toast) window.toast(message, 'er', 9000);
+            if (/offline/i.test(message)) {
+                choice.classList.remove('is-online');
+                choice.classList.add('is-offline');
+                choice.setAttribute('data-online', '0');
+                const state = choice.querySelector('.cred-machine-state');
+                if (state) state.textContent = 'Offline';
+            } else {
+                choice.classList.remove('is-offline');
+                choice.classList.add('is-online');
+                choice.setAttribute('data-online', '1');
+                const state = choice.querySelector('.cred-machine-state');
+                if (state) state.textContent = 'Online';
+            }
+            if (err) {
+                err.className = 'cred-machine-error';
+                err.textContent = message;
+                err.hidden = false;
+            }
         }).always(function () {
+            choice.classList.remove('cred-busy');
             button.removeClass('wait');
         });
     });

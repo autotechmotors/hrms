@@ -169,11 +169,22 @@ class HoursPayController extends Controller
     {
         $this->authorizeAny('salary.manage');
         $employee = $this->visibleEmployee($request, $employee);
+        if ($employee->isPieceSalary()) {
+            return response()->json([
+                'message' => 'Piece based people stay on attendance only. Monthly salary is not set for them.',
+            ], 422);
+        }
+        if (! $employee->isHoursSalary()) {
+            return response()->json([
+                'message' => 'Set salary type to Hours based on the employee profile before saving a monthly amount.',
+            ], 422);
+        }
         $data = $request->validate([
-            'gross_monthly' => ['required', 'numeric', 'min:0'],
+            'gross_monthly' => ['required', 'numeric', 'min:0.01'],
             'effective_from' => ['required', 'date'],
         ], [
             'gross_monthly.required' => 'Enter the monthly salary.',
+            'gross_monthly.min' => 'Enter a monthly salary greater than zero.',
             'effective_from.required' => 'Choose the date this salary starts.',
         ]);
 
@@ -222,8 +233,13 @@ class HoursPayController extends Controller
                     'hours' => $this->hours->label($resolved['hours']),
                     'shift' => $employee->workHour?->shift_kind === 'night' ? 'Night' : 'Day',
                     'source' => $resolved['source'] === 'unset' ? 'Not chosen yet' : $this->hours->sourceLabel($resolved['source']),
-                    'salary' => $salary ? '₹'.number_format((float) $salary->gross_monthly, 2) : 'Not set',
-                    'salaryNote' => $salary ? 'a month' : 'No salary yet',
+                    'salary' => $employee->isPieceSalary()
+                        ? 'Piece based'
+                        : ($salary ? '₹'.number_format((float) $salary->gross_monthly, 2) : 'Not set'),
+                    'salaryNote' => $employee->isPieceSalary()
+                        ? 'Attendance only'
+                        : ($salary ? 'a month' : 'No salary yet'),
+                    'salaryType' => $employee->salaryTypeLabel(),
                 ];
             });
     }

@@ -27,10 +27,19 @@ class HoursPayTest extends TestCase
         $user = $this->makeUser('hr-admin', $org['company']);
         $employee = $this->makeEmployee($org, 'E1');
 
+        $clocks = [
+            'weekday_start' => '09:00',
+            'weekday_end' => '17:00',
+            'sunday_start' => '08:00',
+            'sunday_end' => '13:00',
+            'night_weekday_start' => '21:00',
+            'night_weekday_end' => '06:00',
+        ];
+
         $this->actingAsScoped($user)
-            ->postJson(route('hours-pay.departments.store', $org['department']), ['hours_per_day' => 8])
+            ->postJson(route('hours-pay.departments.store', $org['department']), $clocks)
             ->assertOk()
-            ->assertJsonPath('hours', '8 h');
+            ->assertJsonPath('value', '8');
 
         $this->assertDatabaseHas('department_work_hours', [
             'department_id' => $org['department']->id,
@@ -40,13 +49,13 @@ class HoursPayTest extends TestCase
         $this->actingAsScoped($user)
             ->get(route('hours-pay.show', $employee))
             ->assertOk()
-            ->assertSee('uses Dept hours')
-            ->assertSee('8 h');
+            ->assertSee('Use department times');
 
         $this->actingAsScoped($user)
-            ->postJson(route('hours-pay.employees.hours', $employee), [
+            ->postJson(route('hours-pay.employees.hours', $employee), $clocks + [
                 'mode' => 'own',
-                'hours_per_day' => 6,
+                'shift_kind' => 'day',
+                'weekday_end' => '16:00',
             ])
             ->assertOk();
 
@@ -104,7 +113,7 @@ class HoursPayTest extends TestCase
 
         $hours = app(WorkHourResolver::class);
         $sunday = Carbon::parse('2026-11-15');
-        $this->assertFalse($hours->worksSunday($night));
+        $this->assertTrue($hours->worksSunday($night));
         $this->assertFalse($hours->worksSunday($day));
 
         $clocks = [

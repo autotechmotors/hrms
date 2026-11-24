@@ -30,6 +30,9 @@ class HikvisionEnroll
         }
 
         $this->ensureUser($device, $userId, $name, null, false);
+        if ($device->readsOut()) {
+            $this->setUserType($device, $userId, $name, 'normal');
+        }
         if ($kind === 'face') {
             $jpeg = $this->takenFace($device, $userId, $name);
             $next = 0;
@@ -66,9 +69,9 @@ class HikvisionEnroll
     /**
      * @param  list<string>  $prints
      */
-    public function storeProfile(Device $device, string $userId, string $name, ?string $password, ?string $face, array $prints): void
+    public function storeProfile(Device $device, string $userId, string $name, ?string $password, ?string $face, array $prints, bool $enabled = true): void
     {
-        $this->ensureUser($device, $userId, $name, $password);
+        $this->ensureUser($device, $userId, $name, $password, true, $enabled);
         $jpeg = $this->jpegBytes($face);
         if ($jpeg !== null) {
             $this->uploadJpeg($device, $userId, $jpeg);
@@ -138,24 +141,21 @@ class HikvisionEnroll
 
     public function reachable(Device $device): bool
     {
-        if ($this->published($device)) {
+        if (app()->runningUnitTests()) {
             return true;
-        }
-        if (trim((string) config('hikvision.password')) === '') {
-            return false;
         }
         if (config('hikvision.direct') === false) {
             return false;
         }
-        if (app()->runningUnitTests()) {
-            return true;
+        if ($device->terminalPassword() === '' && trim((string) config('hikvision.password')) === '') {
+            return false;
         }
 
         [$host, $port] = $this->endpoint($device);
         if ($host === '') {
             return false;
         }
-        $socket = @fsockopen($host, $port, $errno, $error, 3);
+        $socket = @fsockopen($host, $port, $errno, $error, 2);
         if ($socket === false) {
             return false;
         }
@@ -178,10 +178,10 @@ class HikvisionEnroll
         return $this->captureFinger($device, $userId, $fingerNo);
     }
 
-    public function ensureUser(Device $device, string $userId, string $name, ?string $password = null, bool $refresh = true): void
+    public function ensureUser(Device $device, string $userId, string $name, ?string $password = null, bool $refresh = true, bool $enabled = true): void
     {
         [$username, $secret] = $this->login($device);
-        $body = $this->userBody($userId, $name, $password);
+        $body = $this->userBody($userId, $name, $password, $enabled, 'normal');
         $base = $this->base($device);
         $created = $this->client->call('POST', $base.'/ISAPI/AccessControl/UserInfo/Record?format=json', $username, $secret, $body);
         if ($this->ok($created)) {
@@ -200,18 +200,86 @@ class HikvisionEnroll
         }
     }
 
+    public function setEnabled(Device $device, string $userId, string $name, bool $enabled): void
+    {
+        [$username, $secret] = $this->login($device);
+        $updated = $this->client->call(
+            'PUT',
+            $this->base($device).'/ISAPI/AccessControl/UserInfo/Modify?format=json',
+            $username,
+            $secret,
+            $this->userBody($userId, $name, null, $enabled),
+        );
+        if (! $this->ok($updated)) {
+            throw new RuntimeException($this->problem($updated));
+        }
+    }
+
+    /**
+     * OUT terminal person type. blackList is the device "Blocklist" user.
+     * normal is a regular user who can match for the out window or an approved pass.
+     */
+    public function setUserType(Device $device, string $userId, string $name, string $userType): void
+    {
+        $userType = $userType === 'blackList' ? 'blackList' : 'normal';
+        [$username, $secret] = $this->login($device);
+        $body = $this->userBody($userId, $name, null, true, $userType);
+        $base = $this->base($device);
+        $updated = $this->client->call('PUT', $base.'/ISAPI/AccessControl/UserInfo/Modify?format=json', $username, $secret, $body);
+        if ($this->ok($updated)) {
+            return;
+        }
+        $created = $this->client->call('POST', $base.'/ISAPI/AccessControl/UserInfo/Record?format=json', $username, $secret, $body);
+        if (! $this->ok($created) && ! $this->exists($created)) {
+            throw new RuntimeException($this->problem($updated));
+        }
+    }
+
     private function captureFace(Device $device, string $userId): string
     {
         [$username, $password] = $this->login($device);
         $base = $this->base($device);
-        $response = $this->client->call('POST', $base.'/ISAPI/AccessControl/CaptureFaceData', $username, $password, $this->xml('CaptureFaceDataCond', '<captureInfrared>false</captureInfrared><dataType>url</dataType>'), 55);
-        if (! $this->ok($response)) {
-            throw new RuntimeException($this->problem($response));
+        $types = $this->faceDataTypes($device);
+        $response = ['status' => 0, 'body' => ''];
+        foreach ($types as $type) {
+            $response = $this->client->call(
+                'POST',
+                $base.'/ISAPI/AccessControl/CaptureFaceData',
+                $username,
+                $password,
+                $this->xml('CaptureFaceDataCond', '<captureInfrared>false</captureInfrared><dataType>'.$type.'</dataType>'),
+                55,
+            );
+            if ($this->ok($response) && $this->faceCaptureReady($response['body'])) {
+                break;
+            }
+            if ($this->ok($response) && ! $this->faceCaptureReady($response['body'])) {
+                throw new RuntimeException('Stand in front of '.$device->name.' and look at the camera until the green frame finishes, then try again.');
+            }
+            if (! $this->badFaceDataType($response)) {
+                throw new RuntimeException($this->problem($response));
+            }
+        }
+        if (! $this->ok($response) || ! $this->faceCaptureReady($response['body'])) {
+            throw new RuntimeException($this->ok($response)
+                ? 'Stand in front of '.$device->name.' and look at the camera until the green frame finishes, then try again.'
+                : $this->problem($response));
+        }
+
+        $inline = $this->value($response['body'], 'faceData');
+        if ($inline !== '') {
+            $jpeg = base64_decode($inline, true) ?: '';
+            if ($jpeg === '' || ! str_starts_with($jpeg, "\xFF\xD8\xFF")) {
+                throw new RuntimeException('The face terminal took a picture, but HRMS could not read it.');
+            }
+            $this->uploadJpeg($device, $userId, $jpeg);
+
+            return $jpeg;
         }
 
         $url = $this->value($response['body'], 'faceDataUrl');
         if ($url === '') {
-            throw new RuntimeException('Look at '.$device->name.' until the face frame finishes, then try again.');
+            throw new RuntimeException('Stand in front of '.$device->name.' and look at the camera until the green frame finishes, then try again.');
         }
         if (str_starts_with($url, '/')) {
             $url = $base.$url;
@@ -226,6 +294,50 @@ class HikvisionEnroll
         $this->bindFace($device, $userId, $url, $jpeg);
 
         return $jpeg;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function faceDataTypes(Device $device): array
+    {
+        try {
+            [$username, $password] = $this->login($device);
+            $caps = $this->client->call('GET', $this->base($device).'/ISAPI/AccessControl/CaptureFaceData/capabilities', $username, $password, null, 5);
+            if ($this->ok($caps) || $caps['status'] === 200) {
+                if (preg_match('/<dataType[^>]*opt="([^"]+)"/', $caps['body'], $match) === 1) {
+                    $options = array_values(array_filter(array_map('trim', explode(',', strtolower($match[1])))));
+                    if ($options !== []) {
+                        $preferred = array_values(array_intersect(['url', 'binary'], $options));
+
+                        return $preferred !== [] ? $preferred : $options;
+                    }
+                }
+            }
+        } catch (\Throwable) {
+        }
+
+        return ['url', 'binary'];
+    }
+
+    private function badFaceDataType(array $response): bool
+    {
+        $body = strtolower($response['body']);
+
+        return str_contains($body, 'badparameters')
+            || str_contains($body, 'invalid content')
+            || str_contains($body, 'invalid operation')
+            || str_contains($body, 'notsupport');
+    }
+
+    private function faceCaptureReady(string $body): bool
+    {
+        if ($this->value($body, 'faceData') !== '' || $this->value($body, 'faceDataUrl') !== '') {
+            return true;
+        }
+        $progress = $this->value($body, 'captureProgress');
+
+        return $progress !== '' && (int) $progress >= 100;
     }
 
     private function captureFinger(Device $device, string $userId, int $fingerNo): string
@@ -314,16 +426,16 @@ class HikvisionEnroll
     /**
      * @return array{UserInfo: array<string, mixed>}
      */
-    private function userBody(string $userId, string $name, ?string $password): array
+    private function userBody(string $userId, string $name, ?string $password, bool $enabled = true, string $userType = 'normal'): array
     {
         $info = [
             'employeeNo' => $userId,
             'name' => mb_substr($name, 0, 32),
-            'userType' => 'normal',
+            'userType' => $userType === 'blackList' ? 'blackList' : 'normal',
             'Valid' => [
-                'enable' => true,
+                'enable' => $enabled,
                 'beginTime' => '2020-01-01T00:00:00',
-                'endTime' => '2037-12-31T23:59:59',
+                'endTime' => $enabled ? '2037-12-31T23:59:59' : '2020-01-01T00:00:01',
                 'timeType' => 'local',
             ],
             'doorRight' => '1',

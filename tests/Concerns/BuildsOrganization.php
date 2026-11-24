@@ -48,6 +48,7 @@ trait BuildsOrganization
             'first_name' => 'Test',
             'last_name' => $code,
             'joining_date' => '2026-04-01',
+            'salary_type' => 'hours',
         ]);
     }
 

@@ -71,15 +71,7 @@
                                 </div>
                                 <span class="b wn">Pending</span>
                             </a>
-                            @if($canDecide && $row->employee && auth()->user()->canDecideGatePassFor($row->employee))
-                                <div class="gp-req-ops">
-                                    <form method="post" action="{{ route('gate-passes.approve', $row) }}" data-confirm="{{ __('Approve Gate Pass for :name?', ['name' => $row->employee?->full_name]) }}">
-                                        @csrf
-                                        <button class="btn sm pr" type="submit">Approve</button>
-                                    </form>
-                                    <button class="btn sm" type="button" data-bs-toggle="modal" data-bs-target="#gateRejectModal" data-action="{{ route('gate-passes.reject', $row) }}" data-name="{{ $row->employee?->full_name }}">Reject</button>
-                                </div>
-                            @endif
+                            @include('operations.gate-passes._actions', ['row' => $row, 'canDecide' => $canDecide, 'live' => true, 'wrap' => 'gp-req-ops'])
                         </article>
                     @endforeach
                 </div>
@@ -149,7 +141,7 @@
                             <th>{{ __('Type') }}</th>
                             <th>{{ __('Reason') }}</th>
                             <th>{{ __('Status') }}</th>
-                            @if($canDecide)<th class="lv-act">Action</th>@endif
+                            <th class="lv-act">{{ __('Action') }}</th>
                         </tr>
                     </thead>
                     <tbody data-list-rows>
@@ -175,23 +167,13 @@
                             <td>{{ $row->work_type_label }}</td>
                             <td><span class="lv-reason" title="{{ $row->reason }}">{{ \Illuminate\Support\Str::limit($row->reason, 40) }}</span></td>
                             <td><span class="b {{ $row->status_badge }}">{{ $row->status_label }}</span></td>
-                            @if($canDecide)
-                                <td class="lv-act" onclick="event.stopPropagation()">
-                                    @if($row->isPending() && $row->employee && auth()->user()->canDecideGatePassFor($row->employee))
-                                        <div class="lv-ops">
-                                            <form method="post" action="{{ route('gate-passes.approve', $row) }}" data-confirm="{{ __('Approve Gate Pass for :name?', ['name' => $row->employee?->full_name]) }}">
-                                                @csrf
-                                                <button class="btn sm pr" type="submit">Approve</button>
-                                            </form>
-                                            <button class="btn sm" type="button" data-bs-toggle="modal" data-bs-target="#gateRejectModal" data-action="{{ route('gate-passes.reject', $row) }}" data-name="{{ $row->employee?->full_name }}">Reject</button>
-                                        </div>
-                                    @endif
-                                </td>
-                            @endif
+                            <td class="lv-act" onclick="event.stopPropagation()">
+                                @include('operations.gate-passes._actions', ['row' => $row, 'canDecide' => $canDecide, 'live' => true])
+                            </td>
                         </tr>
                     @empty
                         <tr data-list-empty>
-                            <td colspan="{{ $canDecide ? 8 : 7 }}" class="lv-empty-row">No Gate Passes match these filters.</td>
+                            <td colspan="8" class="lv-empty-row">No Gate Passes match these filters.</td>
                         </tr>
                     @endforelse
                     </tbody>
@@ -218,15 +200,8 @@
                         <footer class="el-card-foot">
                             <span class="el-pill {{ $row->isOfficeWork() ? 'wn' : 'ok' }}">{{ $row->work_type_label }}</span>
                             <div class="el-ops">
-                                @if($canDecide && $row->isPending() && $row->employee && auth()->user()->canDecideGatePassFor($row->employee))
-                                    <form method="post" action="{{ route('gate-passes.approve', $row) }}" data-confirm="{{ __('Approve Gate Pass for :name?', ['name' => $row->employee?->full_name]) }}">
-                                        @csrf
-                                        <button class="btn sm pr" type="submit">Approve</button>
-                                    </form>
-                                    <button class="btn sm" type="button" data-bs-toggle="modal" data-bs-target="#gateRejectModal" data-action="{{ route('gate-passes.reject', $row) }}" data-name="{{ $row->employee?->full_name }}">Reject</button>
-                                @else
-                                    <a class="ib" href="{{ route('gate-passes.show', $row) }}" title="View" aria-label="View"><x-i name="eye" :size="15" /></a>
-                                @endif
+                                <a class="ib" href="{{ route('gate-passes.show', $row) }}" title="View" aria-label="View"><x-i name="eye" :size="15" /></a>
+                                @include('operations.gate-passes._actions', ['row' => $row, 'canDecide' => $canDecide, 'live' => true])
                             </div>
                         </footer>
                     </article>
@@ -239,6 +214,8 @@
             </div>
         </section>
     </div>
+
+    @include('operations.gate-passes._edit-modal', ['live' => true])
 
     <div class="modal fade" id="gateRejectModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">

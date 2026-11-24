@@ -4,10 +4,12 @@ namespace Tests\Feature;
 
 use App\Models\AttendanceDay;
 use App\Models\AttendancePunch;
+use App\Models\CompanySetting;
 use App\Models\DepartmentWorkHour;
 use App\Models\Employee;
 use App\Models\GatePass;
 use App\Services\Devices\DeviceSync;
+use App\Services\Devices\FaceAccess;
 use App\Services\Operations\AttendanceCalculator;
 use App\Services\Operations\GatePassAccess;
 use App\Services\Operations\PayDayMath;
@@ -61,6 +63,24 @@ class BreakGateTest extends TestCase
 
         $this->assertSame(30, $day->minutes_personal);
         $this->assertSame(30, $this->early($employee, $day));
+    }
+
+    public function test_a_personal_pass_from_half_past_one_to_three_cuts_one_hour(): void
+    {
+        [$employee] = $this->person();
+        $employee->department->workHour->update([
+            'weekday_start' => '08:00:00',
+            'weekday_end' => '19:00:00',
+        ]);
+        $this->pass($employee, '13:30:00', '15:00:00', 'personal');
+        $this->day($employee, '08:00:00', '19:00:00');
+
+        $day = app(AttendanceCalculator::class)->recalculate($employee, Carbon::parse('2026-11-18'));
+        $pay = app(PayDayMath::class)->range($employee->fresh(), Carbon::parse('2026-11-18'), Carbon::parse('2026-11-18'));
+
+        $this->assertSame(60, $day->minutes_personal);
+        $this->assertSame(60, $this->early($employee, $day));
+        $this->assertStringContainsString('Personal Work · 13:30–15:00 · 60 min', $pay['days']['2026-11-18']['gate']);
     }
 
     public function test_office_work_is_not_cut(): void
@@ -169,6 +189,122 @@ class BreakGateTest extends TestCase
 
         $this->pass($employee, '16:00:00', null, 'personal', $early->copy()->addHour());
         $this->assertTrue($access->outAllowed($employee, $early));
+    }
+
+    public function test_an_early_second_scan_is_not_the_out(): void
+    {
+        [$employee] = $this->person();
+        CompanySetting::forCompany($employee->company_id)->update(['out_inactive_minutes' => 30]);
+        AttendancePunch::query()->create([
+            'employee_id' => $employee->id,
+            'punched_at' => Carbon::parse('2026-11-18 09:00:00', 'Asia/Kolkata'),
+            'direction' => 'in',
+            'external_key' => 'in-lead',
+        ]);
+
+        $access = app(GatePassAccess::class);
+
+        $this->assertSame(30, $access->leadMinutes((int) $employee->company_id));
+        $this->assertFalse($access->outAllowed($employee, Carbon::parse('2026-11-18 17:29:00', 'Asia/Kolkata')));
+        $this->assertTrue($access->outAllowed($employee, Carbon::parse('2026-11-18 17:30:00', 'Asia/Kolkata')));
+        $this->assertTrue($access->outAllowed($employee, Carbon::parse('2026-11-18 18:01:00', 'Asia/Kolkata')));
+
+        AttendancePunch::query()->create([
+            'employee_id' => $employee->id,
+            'punched_at' => Carbon::parse('2026-11-18 10:39:00', 'Asia/Kolkata'),
+            'direction' => 'out',
+            'external_key' => 'early-scan',
+        ]);
+        AttendancePunch::query()->create([
+            'employee_id' => $employee->id,
+            'punched_at' => Carbon::parse('2026-11-18 17:55:00', 'Asia/Kolkata'),
+            'direction' => 'in',
+            'external_key' => 'real-out',
+        ]);
+
+        app(DeviceSync::class)->rebuild($employee, Carbon::parse('2026-11-18'));
+
+        $day = AttendanceDay::query()->where('employee_id', $employee->id)->whereDate('work_date', '2026-11-18')->first();
+        $this->assertSame('09:00:00', substr((string) $day->punch_in, 0, 8));
+        $this->assertSame('17:55:00', substr((string) $day->punch_out, 0, 8));
+        $this->assertSame('in', AttendancePunch::query()->where('external_key', 'early-scan')->value('direction'));
+    }
+
+    public function test_a_gate_pass_does_not_replace_the_shift_out(): void
+    {
+        [$employee] = $this->person();
+        AttendancePunch::query()->create([
+            'employee_id' => $employee->id,
+            'punched_at' => Carbon::parse('2026-11-18 09:00:00', 'Asia/Kolkata'),
+            'direction' => 'in',
+            'external_key' => 'shift-in',
+        ]);
+        AttendancePunch::query()->create([
+            'employee_id' => $employee->id,
+            'punched_at' => Carbon::parse('2026-11-18 11:15:00', 'Asia/Kolkata'),
+            'direction' => 'out',
+            'external_key' => 'pass-out',
+        ]);
+        $this->pass($employee, '11:00:00', null, 'personal', Carbon::parse('2026-11-18 12:00:00', 'Asia/Kolkata'));
+        AttendancePunch::query()->create([
+            'employee_id' => $employee->id,
+            'punched_at' => Carbon::parse('2026-11-18 17:55:00', 'Asia/Kolkata'),
+            'direction' => 'in',
+            'external_key' => 'shift-out',
+        ]);
+
+        app(DeviceSync::class)->rebuild($employee, Carbon::parse('2026-11-18'));
+
+        $day = AttendanceDay::query()->where('employee_id', $employee->id)->whereDate('work_date', '2026-11-18')->first();
+        $this->assertSame('09:00:00', substr((string) $day->punch_in, 0, 8));
+        $this->assertSame('17:55:00', substr((string) $day->punch_out, 0, 8));
+    }
+
+    public function test_the_face_stays_off_after_in_until_the_out_window_or_a_pass(): void
+    {
+        [$employee] = $this->person();
+        CompanySetting::forCompany($employee->company_id)->update(['out_inactive_minutes' => 10]);
+        AttendanceDay::query()->create([
+            'employee_id' => $employee->id,
+            'work_date' => '2026-11-18',
+            'punch_in' => '10:30:00',
+            'status' => 'present',
+            'source' => 'device',
+        ]);
+
+        $faces = app(FaceAccess::class);
+        $this->assertFalse($faces->allowsFace($employee, Carbon::parse('2026-11-18 10:39:00', 'Asia/Kolkata')));
+        $this->assertTrue($faces->allowsFace($employee, Carbon::parse('2026-11-18 17:50:00', 'Asia/Kolkata')));
+
+        $this->pass($employee, '11:00:00', null, 'personal', Carbon::parse('2026-11-18 12:00:00', 'Asia/Kolkata'));
+        $this->assertFalse($faces->allowsFace($employee, Carbon::parse('2026-11-18 10:39:00', 'Asia/Kolkata')));
+        $this->assertTrue($faces->allowsFace($employee, Carbon::parse('2026-11-18 11:10:00', 'Asia/Kolkata')));
+    }
+
+    public function test_a_face_the_next_morning_closes_the_open_shift(): void
+    {
+        [$employee] = $this->person();
+        AttendancePunch::query()->create([
+            'employee_id' => $employee->id,
+            'punched_at' => Carbon::parse('2026-11-18 10:00:00', 'Asia/Kolkata'),
+            'direction' => 'in',
+            'external_key' => 'in-next',
+        ]);
+        AttendancePunch::query()->create([
+            'employee_id' => $employee->id,
+            'punched_at' => Carbon::parse('2026-11-19 07:00:00', 'Asia/Kolkata'),
+            'direction' => 'in',
+            'external_key' => 'out-next',
+        ]);
+
+        app(DeviceSync::class)->rebuild($employee, Carbon::parse('2026-11-18'));
+        app(DeviceSync::class)->rebuild($employee, Carbon::parse('2026-11-19'));
+
+        $day = AttendanceDay::query()->where('employee_id', $employee->id)->whereDate('work_date', '2026-11-18')->first();
+        $next = AttendanceDay::query()->where('employee_id', $employee->id)->whereDate('work_date', '2026-11-19')->first();
+        $this->assertSame('10:00:00', substr((string) $day->punch_in, 0, 8));
+        $this->assertSame('07:00:00', substr((string) $day->punch_out, 0, 8));
+        $this->assertTrue($next === null || $next->punch_in === null);
     }
 
     /**

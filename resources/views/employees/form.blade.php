@@ -164,18 +164,20 @@
                     </div>
                 </section>
 
+                {{-- Working times stay on Hours & pay. Not on create or edit.
                 @include('employees._times', [
                     'employee' => $employee,
                     'times' => $times,
                     'canEditTimes' => true,
                     'standalone' => false,
                 ])
+                --}}
 
                 <section class="card ef-sec">
                     <header>
                         <div>
                             <h3>{{ __('Employment terms') }}</h3>
-                            <p>Joining, probation, and notice</p>
+                            <p>Joining, probation, notice, and how pay is counted</p>
                         </div>
                     </header>
                     <div class="cb">
@@ -184,7 +186,13 @@
                             <x-text-field name="confirmation_date" label="Confirmation date" type="date" :value="optional($employee?->confirmation_date)->toDateString()" />
                             <x-text-field name="probation_days" label="Probation days" type="number" :value="$employee->probation_days ?? ''" />
                             <x-text-field name="notice_period_days" label="Notice period days" type="number" :value="$employee->notice_period_days ?? ''" />
+                            <x-select-field name="salary_type" label="Salary type" required>
+                                <option value="">Select</option>
+                                <option value="hours" @selected(old('salary_type', $employee->salary_type ?? '') === 'hours')>Hours based</option>
+                                <option value="piece" @selected(old('salary_type', $employee->salary_type ?? '') === 'piece')>Piece based</option>
+                            </x-select-field>
                         </div>
+                        <p class="ef-hint mt-2 mb-0">Hours based people go on salary sheets. Piece based people stay on attendance only — salary is not generated for them.</p>
                         @if($employee)
                             <div class="ef-note">
                                 <div class="g c2">

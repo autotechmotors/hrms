@@ -25,7 +25,7 @@ class Navigation
             'Payroll' => [
                 self::link('Hours & pay', 'hours-pay.index', ['hours-pay.*'], 'clock', ['salary.view'], 'hours & pay'),
                 self::link('Salary sheets', 'salary-sheets.index', ['salary-sheets.*'], 'wallet', ['salary.view', 'salary.decide', 'payroll.process'], 'salary sheets'),
-                self::link('Advances & Deductions', 'advances.index', ['advances.*'], 'minus', ['advances.view', 'advances.manage', 'payroll.process'], 'advances & deductions'),
+                self::link('Advances & Deductions', 'advances.index', ['advances.*'], 'minus', ['advances.view', 'advances.manage', 'advances.decide', 'payroll.process'], 'advances & deductions'),
             ],
             'Operations' => [
                 self::link('Devices', 'devices.index', ['devices.*'], 'cpu', ['devices.manage'], 'devices'),

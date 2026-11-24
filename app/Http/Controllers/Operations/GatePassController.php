@@ -5,9 +5,11 @@ namespace App\Http\Controllers\Operations;
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\Operations\Concerns\UsesWorkspace;
 use App\Http\Requests\StoreGatePassRequest;
+use App\Http\Requests\UpdateGatePassRequest;
 use App\Models\GatePass;
 use App\Models\GatePassSetting;
 use App\Services\Operations\GatePassService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -131,6 +133,22 @@ class GatePassController extends Controller
         return back()->with('success', 'Gate Pass rejected. OUT machine stays closed. '.$pass->employee?->full_name.' has been notified.');
     }
 
+    public function update(UpdateGatePassRequest $request, GatePass $gatePass): RedirectResponse|JsonResponse
+    {
+        $this->assertVisible($gatePass);
+        $this->gatePasses->update($request->user(), $gatePass, $request->validated());
+
+        return $this->done($request, 'Gate Pass updated.', route('gate-passes.show', $gatePass));
+    }
+
+    public function destroy(Request $request, GatePass $gatePass): RedirectResponse|JsonResponse
+    {
+        $this->assertVisible($gatePass);
+        $this->gatePasses->delete($request->user(), $gatePass);
+
+        return $this->done($request, 'Gate Pass deleted.', route('gate-passes.index'));
+    }
+
     public function settings(): View
     {
         $this->authorizeAny('gate_passes.manage');
@@ -162,5 +180,14 @@ class GatePassController extends Controller
     {
         $this->authorizeAny('gate_passes.view');
         abort_unless($this->activeEmployees()->whereKey($gatePass->employee_id)->exists(), 404);
+    }
+
+    private function done(Request $request, string $message, string $to): RedirectResponse|JsonResponse
+    {
+        if ($request->expectsJson() || $request->ajax()) {
+            return response()->json(['message' => $message]);
+        }
+
+        return redirect($to)->with('success', $message);
     }
 }

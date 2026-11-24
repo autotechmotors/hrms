@@ -97,6 +97,7 @@ class RoleHierarchyTest extends TestCase
             'first_name' => 'Test',
             'last_name' => 'MEMB',
             'joining_date' => '2026-04-01',
+            'salary_type' => 'hours',
         ];
 
         $this->actingAsScoped($hr)
@@ -138,6 +139,7 @@ class RoleHierarchyTest extends TestCase
             'last_name' => 'Parent',
             'joining_date' => '2026-04-01',
             'role_id' => $hrRole->id,
+            'salary_type' => 'hours',
         ];
 
         $this->actingAsScoped($hr)
@@ -158,6 +160,7 @@ class RoleHierarchyTest extends TestCase
                 'last_name' => 'Manager',
                 'joining_date' => '2026-04-02',
                 'role_id' => $managerRole->id,
+                'salary_type' => 'hours',
             ])
             ->assertSessionHasErrors('reporting_manager_id');
 
@@ -172,6 +175,7 @@ class RoleHierarchyTest extends TestCase
                 'joining_date' => '2026-04-02',
                 'role_id' => $managerRole->id,
                 'reporting_manager_id' => $lead->id,
+                'salary_type' => 'hours',
             ])
             ->assertRedirect();
 
@@ -214,6 +218,7 @@ class RoleHierarchyTest extends TestCase
                 'joining_date' => '2026-04-01',
                 'role_id' => $managerRole->id,
                 'reporting_manager_id' => $lead->id,
+                'salary_type' => 'hours',
             ])
             ->assertRedirect();
 

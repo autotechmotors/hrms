@@ -84,6 +84,7 @@ class FoundationAccessTest extends TestCase
             'first_name' => 'Asha',
             'last_name' => 'Shah',
             'joining_date' => '2026-04-01',
+            'salary_type' => 'hours',
         ];
 
         $this->actingAsScoped($hr)->post(route('employees.store'), $payload)->assertRedirect();

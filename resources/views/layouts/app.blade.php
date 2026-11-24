@@ -13,7 +13,7 @@
     <link rel="stylesheet" href="{{ asset('assets/vendor/bootstrap/bootstrap.min.css') }}">
     <link rel="stylesheet" href="{{ asset('assets/vendor/select2/select2.min.css') }}">
     <link rel="stylesheet" href="{{ asset('assets/vendor/flatpickr/flatpickr.min.css') }}">
-    <link rel="stylesheet" href="{{ asset('assets/css/app.css') }}?v=139">
+    <link rel="stylesheet" href="{{ asset('assets/css/app.css') }}?v=162">
     @stack('styles')
     <script>
         (function () {
@@ -49,10 +49,7 @@
             <div class="sp"></div>
             @include('partials.lang-switch')
             {{-- White / Dark stays available. Small screens hide this control in CSS; the buttons are not removed. --}}
-            <div class="theme-set" role="group" aria-label="{{ __('Appearance') }}">
-                <button type="button" data-theme-set="light">{{ __('White') }}</button>
-                <button type="button" data-theme-set="dark">{{ __('Dark') }}</button>
-            </div>
+          {{-- Work, then break. Sunday uses the switch. Night uses this person’s Sunday night. --}}net
             @php $unreadNotifications = auth()->user()->unreadNotifications()->count(); @endphp
             <a class="ib tb-bell" href="{{ route('notifications.index', [], false) }}" aria-label="{{ __('Notifications') }}">
                 <x-i name="bell" :size="18" />
@@ -134,7 +131,7 @@
     <script src="{{ asset('assets/vendor/select2/select2.min.js') }}"></script>
     <script src="{{ asset('assets/vendor/flatpickr/flatpickr.min.js') }}"></script>
     <script src="{{ asset('assets/vendor/bootstrap/bootstrap.bundle.min.js') }}"></script>
-    <script src="{{ asset('assets/js/app.js') }}?v=29"></script>
+    <script src="{{ asset('assets/js/app.js') }}?v=32"></script>
     @stack('scripts')
 </body>
 </html>

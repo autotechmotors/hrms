@@ -285,8 +285,11 @@
             event.preventDefault();
             if (!deleteForm.action || deleteForm.action.endsWith('#')) return;
             window.askConfirm(@json(__('Remove this holiday? That day becomes a working day again.')), { label: @json(__('Remove')), danger: true }).then(function (ok) {
-                if (!ok) return;
                 const button = deleteForm.querySelector('button');
+                if (!ok) {
+                    if (button) button.disabled = false;
+                    return;
+                }
                 if (button) button.disabled = true;
                 window.jQuery.ajax({
                     url: deleteForm.action,

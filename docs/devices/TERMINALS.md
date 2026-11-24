@@ -2,6 +2,8 @@
 
 Devices is the hub for Hikvision terminals. Enroll, block, and terminal users stay. Do not change tokens, throttles, CSRF exceptions, or payload handling.
 
+The IN terminal and the OUT terminal are separate devices. `HIKVISION_IN_*` is the in reader. `HIKVISION_OUT_*` is the out reader. Each keeps its own register id, host, and login. Face capture reads each terminal’s `CaptureFaceData` capabilities: some accept `url`, others only `binary`. A person who has punched in is a blocklist user on the OUT terminal until an approved gate pass or the minutes-before-out window, when they become a normal user again. See `docs/attendance/GATE-PASS.md`.
+
 ## Code
 
 - `app/Http/Controllers/Operations/DeviceController.php`

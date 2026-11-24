@@ -149,6 +149,7 @@
         </form>
 
         @include('operations.attendance._list')
+        @include('operations.attendance._gate_pop')
 
     </section>
 
@@ -248,7 +249,7 @@
 @push('scripts')
 <script>
 (function ($) {
-    $(document).on('click', '#attendanceList [data-photo], #attView', function (event) {
+    $(document).on('click', '#attendanceList [data-photo], #gpPop [data-photo], #attView', function (event) {
         const view = document.getElementById('attView');
         if (!view) return;
         if (this.id === 'attView') {
@@ -316,6 +317,9 @@
                         const opener = portrait.closest('[data-photo]');
                         if (opener) opener.setAttribute('data-photo', item.photo);
                     }
+                    row.querySelectorAll('.js-gate').forEach(function (slot) {
+                        slot.innerHTML = window.gateHtml(item.passes || []);
+                    });
                     if (worked) worked.textContent = item.worked;
                     if (status) {
                         status.textContent = item.status;

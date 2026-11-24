@@ -26,6 +26,7 @@ class HikvisionAttendance
      */
     public function pull(bool $full = true): array
     {
+        app(HikvisionTerminals::class)->ensure();
         $password = $this->secret();
         if ($password === '') {
             throw new RuntimeException('Set HIKVISION_PASSWORD to the face terminal login, then run hikvision:pull again.');
@@ -55,7 +56,15 @@ class HikvisionAttendance
             $device = Device::query()->get()->first(fn (Device $row) => strcasecmp((string) $row->register_id, (string) $registerId) === 0);
             $username = $device && trim((string) $device->username) !== '' ? $device->terminalUsername() : (string) config('hikvision.username');
             $secret = $device && trim((string) $device->password) !== '' ? $device->terminalPassword() : $password;
-            $result = $this->pullTarget((string) $registerId, $host, $username, $secret, $full);
+            try {
+                $result = $this->pullTarget((string) $registerId, $host, $username, $secret, $full);
+            } catch (HikvisionAuthException $exception) {
+                throw $exception;
+            } catch (RuntimeException) {
+                $this->mark((string) $registerId, 'offline');
+
+                continue;
+            }
             $stored += $result['stored'];
             $held += $result['held'];
             $added += $result['added'];

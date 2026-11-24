@@ -11,8 +11,10 @@ use App\Models\AttendanceRule;
 use App\Models\Department;
 use App\Models\Employee;
 use App\Models\EmployeeCredential;
+use App\Models\GatePass;
 use App\Services\Devices\DeviceSync;
 use App\Services\Operations\AttendanceCalculator;
+use App\Services\Operations\PayDayMath;
 use App\Support\Clock;
 use App\Support\StoredImage;
 use Carbon\Carbon;
@@ -62,6 +64,7 @@ class AttendanceController extends Controller
             ->get()
             ->keyBy('employee_id');
         $punches = $this->dayPunches($employees->pluck('id'), $date);
+        $gates = $this->gateCardsFor($employees->pluck('id'), $date);
         $stats = $this->dayStats($scopedIds->count(), $statusRows);
         $partial = $request->ajax() || $request->boolean('partial');
 
@@ -71,6 +74,7 @@ class AttendanceController extends Controller
             'picker' => $partial ? collect() : $this->activeEmployees()->get(['id', 'employee_code', 'first_name', 'middle_name', 'last_name']),
             'days' => $days,
             'punches' => $punches,
+            'gates' => $gates,
             'stats' => $stats,
             'departments' => $partial ? collect() : Department::query()->visibleTo($request->user())->orderBy('name')->get(),
             'filters' => [
@@ -239,19 +243,22 @@ class AttendanceController extends Controller
             ->get()
             ->keyBy('employee_id');
         $punches = $this->dayPunches($employees->pluck('id'), $date);
+        $gates = $this->gateCardsFor($employees->pluck('id'), $date);
 
         $portraits = $this->portraits($employees);
         $rows = [];
         foreach ($employees as $employee) {
             $day = $days->get($employee->id);
             $list = $punches->get($employee->id, collect());
+            $cards = $gates->get($employee->id, []);
             $inPunch = $list->firstWhere('direction', 'in') ?? $list->first();
             $outPunch = $list->where('direction', 'out')->last();
             $status = $this->dayStatus($day);
             $rows[(string) $employee->id] = [
                 'photo' => $portraits->get($employee->id),
                 'in' => Clock::time($day?->punch_in),
-                'out' => Clock::time($day?->punch_out),
+                'out' => $this->listedOut($day?->punch_out, $cards),
+                'passes' => $cards,
                 'in_input' => Clock::input($day?->punch_in),
                 'out_input' => Clock::input($day?->punch_out),
                 'worked' => $this->workedLabel($day?->minutes_worked),
@@ -401,6 +408,10 @@ class AttendanceController extends Controller
     protected function guardEmployee(?Employee $employee): void
     {
         abort_unless($employee && (int) $employee->company_id === $this->companyId(), 404);
+        abort_unless(
+            Employee::query()->visibleTo(request()->user())->whereKey($employee->id)->exists(),
+            404
+        );
     }
 
     /**
@@ -425,12 +436,28 @@ class AttendanceController extends Controller
             ->whereBetween('work_date', [$start->toDateString(), $end->toDateString()])
             ->get()
             ->keyBy(fn (AttendanceDay $day) => $day->work_date->toDateString());
+        $passes = GatePass::query()
+            ->where('employee_id', $employee->id)
+            ->whereIn('status', [GatePass::STATUS_APPROVED, GatePass::STATUS_EXPIRED])
+            ->whereBetween('date', [$start->toDateString(), $end->toDateString()])
+            ->orderBy('id')
+            ->get()
+            ->groupBy(fn (GatePass $pass) => $pass->date->toDateString());
+        $flatPasses = $passes->flatten();
+        $shots = $flatPasses->isEmpty()
+            ? collect()
+            : AttendancePunch::query()
+                ->select(['id', 'gate_pass_id', 'direction', 'punched_at'])
+                ->selectRaw('(CASE WHEN image IS NOT NULL THEN 1 ELSE 0 END) as has_image')
+                ->whereIn('gate_pass_id', $flatPasses->pluck('id'))
+                ->orderBy('punched_at')
+                ->get()
+                ->groupBy('gate_pass_id');
 
-        $days = $punches->keys()->merge($storedDays->keys())->unique()->sortDesc()->values()->map(function (string $date) use ($punches, $storedDays, $faceUrl) {
+        $days = $punches->keys()->merge($storedDays->keys())->merge($passes->keys())->unique()->sortDesc()->values()->map(function (string $date) use ($employee, $punches, $storedDays, $passes, $shots, $faceUrl) {
             $list = app(DeviceSync::class)->collapse($punches->get($date, collect())->values());
             $day = $storedDays->get($date);
             $inPunch = $list->firstWhere('direction', 'in') ?? $list->first();
-            $outPunch = $list->where('direction', 'out')->last();
             $status = $this->dayStatus($day);
             $entry = $this->shotFor($inPunch, $faceUrl);
 
@@ -438,15 +465,17 @@ class AttendanceController extends Controller
                 'date' => $date,
                 'label' => Carbon::parse($date)->format('D, d M'),
                 'in' => $day?->punch_in ? Clock::time($day->punch_in) : ($inPunch ? Clock::time($inPunch->punched_at) : null),
-                'out' => $day?->punch_out ? Clock::time($day->punch_out) : ($outPunch ? Clock::time($outPunch->punched_at) : null),
-                'worked' => $this->workedLabel($day?->minutes_worked),
+                'out' => $shiftOut = $this->shiftClockOut($day?->punch_out, $passes->get($date, collect())),
+                'passes' => $this->gateCardList($passes->get($date, collect()), $shots),
+                'overtime' => app(PayDayMath::class)->overtimeLabel($employee, Carbon::parse($date), $day, $passes->get($date, collect())),
+                'worked' => $shiftOut ? $this->workedLabel($day?->minutes_worked) : null,
                 'status' => $status['label'],
                 'status_class' => $status['class'],
                 'mark' => $this->entryMark($day),
                 'in_photo' => $entry['photo'],
                 'in_note' => $entry['note'],
                 'in_input' => Clock::input($day?->punch_in ?: $inPunch?->punched_at),
-                'out_input' => Clock::input($day?->punch_out ?: ($outPunch?->punched_at)),
+                'out_input' => $shiftOut ? Clock::input($day?->punch_out) : '',
                 'punches' => $list->map(fn (AttendancePunch $punch) => [
                     'time' => Clock::time($punch->punched_at),
                     'direction' => $punch->direction === 'out' ? 'Out' : 'In',
@@ -637,8 +666,126 @@ class AttendanceController extends Controller
             ->where('employee_id', $employee->id)
             ->whereBetween('punched_at', [$start->copy()->startOfDay(), $end->copy()->endOfDay()])
             ->max('updated_at');
+        $pass = GatePass::query()
+            ->where('employee_id', $employee->id)
+            ->whereBetween('date', [$start->toDateString(), $end->toDateString()])
+            ->max('updated_at');
 
-        return md5($employee->id.'|'.$start->toDateString().'|'.$day.'|'.$punch);
+        return md5($employee->id.'|'.$start->toDateString().'|'.$day.'|'.$punch.'|'.$pass);
+    }
+
+    /**
+     * @param  Collection<int, GatePass>  $passes
+     */
+    protected function shiftClockOut(mixed $punchOut, Collection $passes): ?string
+    {
+        if ($punchOut === null || $punchOut === '') {
+            return null;
+        }
+
+        $minute = Carbon::parse($punchOut)->format('H:i');
+        $matchesPass = $passes->contains(function (GatePass $pass) use ($minute): bool {
+            if ($pass->isEarlyLeave()) {
+                return false;
+            }
+
+            return $pass->out_at !== null
+                && $pass->out_at->copy()->timezone('Asia/Kolkata')->format('H:i') === $minute;
+        });
+        if ($matchesPass) {
+            return null;
+        }
+
+        $label = Clock::time($punchOut);
+
+        return $label === '—' ? null : $label;
+    }
+
+    /**
+     * @param  Collection<int, int|string>  $employeeIds
+     * @return Collection<int|string, list<array<string, mixed>>>
+     */
+    protected function gateCardsFor(Collection $employeeIds, Carbon $date): Collection
+    {
+        if ($employeeIds->isEmpty()) {
+            return collect();
+        }
+
+        $passes = GatePass::query()
+            ->whereIn('employee_id', $employeeIds)
+            ->whereDate('date', $date->toDateString())
+            ->whereIn('status', [GatePass::STATUS_APPROVED, GatePass::STATUS_EXPIRED])
+            ->orderBy('out_at')
+            ->get();
+        if ($passes->isEmpty()) {
+            return collect();
+        }
+
+        $shots = AttendancePunch::query()
+            ->select(['id', 'gate_pass_id', 'direction', 'punched_at'])
+            ->selectRaw('(CASE WHEN image IS NOT NULL THEN 1 ELSE 0 END) as has_image')
+            ->whereIn('gate_pass_id', $passes->pluck('id'))
+            ->orderBy('punched_at')
+            ->get()
+            ->groupBy('gate_pass_id');
+
+        return $passes->groupBy('employee_id')->map(function (Collection $rows) use ($shots): array {
+            return $this->gateCardList($rows, $shots);
+        });
+    }
+
+    /**
+     * @param  Collection<int, GatePass>  $passes
+     * @param  Collection<int|string, Collection<int, AttendancePunch>>  $shots
+     * @return list<array<string, mixed>>
+     */
+    protected function gateCardList(Collection $passes, Collection $shots): array
+    {
+        return $passes
+            ->filter(fn (GatePass $pass) => in_array($pass->status, [GatePass::STATUS_APPROVED, GatePass::STATUS_EXPIRED], true))
+            ->sortBy(fn (GatePass $pass) => $pass->out_at?->getTimestamp() ?? 0)
+            ->map(function (GatePass $pass) use ($shots): array {
+                $linked = $shots->get($pass->id, collect());
+                $outPunch = $linked->first(fn (AttendancePunch $punch) => $punch->direction === 'out') ?? $linked->first();
+                $inPunch = $linked->first(fn (AttendancePunch $punch) => $punch->direction === 'in' && $punch->id !== $outPunch?->id);
+
+                return [
+                    'taken' => $pass->created_at?->timezone('Asia/Kolkata')->format('d M Y h:i A') ?: '—',
+                    'reason' => (string) $pass->reason,
+                    'type' => $pass->isOfficeWork() ? 'Factory' : 'Personal',
+                    'leave' => $pass->isEarlyLeave() ? 'Early leave' : 'Return',
+                    'early' => $pass->isEarlyLeave(),
+                    'out' => $pass->out_at ? Clock::time($pass->out_at) : '—',
+                    'in' => $pass->in_at ? Clock::time($pass->in_at) : '—',
+                    'out_minute' => $pass->out_at ? $pass->out_at->copy()->timezone('Asia/Kolkata')->format('H:i') : '',
+                    'out_photo' => $this->photoUrl($outPunch, 'attendance.punch.photo'),
+                    'in_photo' => $this->photoUrl($inPunch, 'attendance.punch.photo'),
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $cards
+     */
+    protected function listedOut(mixed $punchOut, array $cards): string
+    {
+        if ($punchOut === null || $punchOut === '') {
+            return '—';
+        }
+
+        $minute = Carbon::parse($punchOut)->format('H:i');
+        foreach ($cards as $card) {
+            if (! empty($card['early'])) {
+                continue;
+            }
+            if (($card['out_minute'] ?? '') === $minute) {
+                return '—';
+            }
+        }
+
+        return Clock::time($punchOut);
     }
 
     protected function statusMeta(?string $status): array

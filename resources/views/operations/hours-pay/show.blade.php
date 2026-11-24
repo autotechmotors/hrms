@@ -55,6 +55,8 @@
         if (!own || !selected) return;
         const custom = selected.value === 'own';
         own.hidden = !custom;
+        const preview = scope.querySelector('[data-dept-preview]');
+        if (preview) preview.hidden = custom;
         own.querySelectorAll('input').forEach((field) => {
             if (field.closest('[data-night-sunday-times]') || field.name === 'works_sunday') return;
             field.disabled = false;
@@ -90,6 +92,7 @@
             data: $(form).serialize(),
             headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
         }).done(function (body) {
+            if (window.closeShiftCalendars) window.closeShiftCalendars(root);
             root.innerHTML = body.html;
             bind(root);
             if (window.bindShiftDates) window.bindShiftDates(document.getElementById('empShift'));
