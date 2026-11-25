@@ -39,15 +39,33 @@ class Device extends Model
     public function terminalUsername(): string
     {
         $username = trim((string) $this->username);
+        if ($username !== '') {
+            return $username;
+        }
+        if ($this->punch_role === self::ROLE_OUT) {
+            $out = trim((string) config('hikvision.terminals.out.username'));
+            if ($out !== '') {
+                return $out;
+            }
+        }
 
-        return $username !== '' ? $username : (string) config('hikvision.username', 'admin');
+        return (string) config('hikvision.username', 'admin');
     }
 
     public function terminalPassword(): string
     {
         $password = trim((string) $this->password);
+        if ($password !== '') {
+            return $password;
+        }
+        if ($this->punch_role === self::ROLE_OUT) {
+            $out = trim((string) config('hikvision.terminals.out.password'));
+            if ($out !== '') {
+                return $out;
+            }
+        }
 
-        return $password !== '' ? $password : trim((string) config('hikvision.password'));
+        return trim((string) config('hikvision.password'));
     }
 
     public function terminalHost(): string
@@ -102,14 +120,22 @@ class Device extends Model
 
     private function publishedPort(int $devicePort): int
     {
+        $inPort = config('hikvision.terminals.in.port') ?: config('hikvision.port');
+        $inPort = is_numeric($inPort) ? (int) $inPort : 0;
+        $outPort = config('hikvision.terminals.out.port');
+        $outPort = is_numeric($outPort) ? (int) $outPort : 0;
+        if ($this->punch_role === self::ROLE_OUT && $outPort > 80) {
+            if ($devicePort <= 80 || $devicePort === $inPort) {
+                return $outPort;
+            }
+
+            return $devicePort;
+        }
         if ($devicePort > 80) {
             return $devicePort;
         }
-        $rolePort = $this->punch_role === self::ROLE_OUT
-            ? config('hikvision.terminals.out.port')
-            : (config('hikvision.terminals.in.port') ?: config('hikvision.port'));
-        if (is_numeric($rolePort) && (int) $rolePort > 0) {
-            return (int) $rolePort;
+        if ($inPort > 0) {
+            return $inPort;
         }
 
         return 80;

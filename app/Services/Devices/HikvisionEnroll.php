@@ -245,41 +245,37 @@ class HikvisionEnroll
         [$username, $password] = $this->login($device);
         $base = $this->base($device);
         $types = $this->faceDataTypes($device);
-        $response = ['status' => 0, 'body' => ''];
+        $plans = [];
         foreach ($types as $type) {
+            $plans[] = [$type, false];
+        }
+        $plans[] = ['binary', true];
+        $response = ['status' => 0, 'body' => ''];
+        foreach ($plans as [$type, $withReader]) {
+            $inner = '<captureInfrared>false</captureInfrared><dataType>'.$type.'</dataType>';
+            if ($withReader) {
+                $inner .= '<readerID>1</readerID>';
+            }
             $response = $this->client->call(
                 'POST',
                 $base.'/ISAPI/AccessControl/CaptureFaceData',
                 $username,
                 $password,
-                $this->xml('CaptureFaceDataCond', '<captureInfrared>false</captureInfrared><dataType>'.$type.'</dataType>'),
+                $this->xml('CaptureFaceDataCond', $inner),
                 55,
             );
+            $jpeg = $this->jpegIn($response['body']);
+            if ($jpeg !== null) {
+                $this->uploadJpeg($device, $userId, $jpeg);
+
+                return $jpeg;
+            }
             if ($this->faceCaptureReady($response['body'])) {
                 break;
             }
             if (! $this->ok($response) && ! $this->badFaceDataType($response)) {
-                throw new RuntimeException($this->problem($response));
+                throw new RuntimeException($this->problem($response).' ('.$device->terminalHost().')');
             }
-        }
-        if (! $this->faceCaptureReady($response['body'])) {
-            throw new RuntimeException('Stand in front of '.$device->name.' and look at the camera until the green frame finishes, then try again.');
-        }
-
-        $inline = $this->value($response['body'], 'faceData');
-        if ($inline === '' && str_starts_with($response['body'], "\xFF\xD8\xFF")) {
-            $this->uploadJpeg($device, $userId, $response['body']);
-
-            return $response['body'];
-        }
-        if ($inline !== '') {
-            $jpeg = base64_decode($inline, true) ?: '';
-            if ($jpeg === '' || ! str_starts_with($jpeg, "\xFF\xD8\xFF")) {
-                throw new RuntimeException('The face terminal took a picture, but HRMS could not read it.');
-            }
-            $this->uploadJpeg($device, $userId, $jpeg);
-
-            return $jpeg;
         }
 
         $url = $this->value($response['body'], 'faceDataUrl');
@@ -287,11 +283,12 @@ class HikvisionEnroll
             $url = $this->value($response['body'], 'faceURL');
         }
         if ($url === '') {
-            throw new RuntimeException('Stand in front of '.$device->name.' and look at the camera until the green frame finishes, then try again.');
+            $progress = $this->value($response['body'], 'captureProgress');
+            $detail = $progress === '' ? 'no photo' : 'progress '.$progress;
+
+            throw new RuntimeException($device->name.' at '.$device->terminalHost().' returned '.$detail.'. Stand in front of that camera until the green frame finishes, then try again.');
         }
-        if (str_starts_with($url, '/')) {
-            $url = $base.$url;
-        }
+        $url = $this->publicPhotoUrl($url, $base);
 
         $photo = $this->client->call('GET', $url, $username, $password, null, 15);
         $jpeg = $photo['status'] === 200 ? $photo['body'] : '';
@@ -336,6 +333,43 @@ class HikvisionEnroll
             || str_contains($body, 'invalid content')
             || str_contains($body, 'invalid operation')
             || str_contains($body, 'notsupport');
+    }
+
+    private function jpegIn(string $body): ?string
+    {
+        $start = strpos($body, "\xFF\xD8\xFF");
+        if ($start !== false) {
+            $end = strpos($body, "\xFF\xD9", $start);
+            $jpeg = $end === false ? substr($body, $start) : substr($body, $start, $end - $start + 2);
+
+            return $jpeg !== '' ? $jpeg : null;
+        }
+        $inline = $this->value($body, 'faceData');
+        if ($inline === '') {
+            return null;
+        }
+        $jpeg = base64_decode(preg_replace('/\s+/', '', $inline) ?? '', true) ?: '';
+
+        return str_starts_with($jpeg, "\xFF\xD8\xFF") ? $jpeg : null;
+    }
+
+    private function publicPhotoUrl(string $url, string $base): string
+    {
+        if (str_starts_with($url, '/')) {
+            return $base.$url;
+        }
+        $host = parse_url($url, PHP_URL_HOST);
+        if (! is_string($host) || $host === '') {
+            return $url;
+        }
+        $private = filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false;
+        if (! $private) {
+            return $url;
+        }
+        $path = (string) parse_url($url, PHP_URL_PATH);
+        $query = parse_url($url, PHP_URL_QUERY);
+
+        return $base.$path.(is_string($query) && $query !== '' ? '?'.$query : '');
     }
 
     private function faceCaptureReady(string $body): bool

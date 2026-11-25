@@ -360,6 +360,47 @@ class HikvisionAttendanceTest extends TestCase
         $this->assertDatabaseHas('employee_credentials', ['employee_id' => $employee->id, 'kind' => 'face']);
     }
 
+    public function test_an_out_terminal_downloads_its_photo_through_the_open_port(): void
+    {
+        config([
+            'hikvision.public_host' => '103.214.226.146',
+            'hikvision.host' => '192.168.1.156',
+            'hikvision.port' => 18080,
+            'hikvision.terminals.out.port' => 18081,
+            'hikvision.username' => 'admin',
+            'hikvision.password' => 'secret',
+        ]);
+        $org = $this->makeCompany('HIK');
+        $employee = $this->makeEmployee($org, 'AT0012');
+        $device = Device::query()->create([
+            'company_id' => $org['company']->id,
+            'name' => 'Hikvision-(OUT)',
+            'register_id' => 'HIK1921681160',
+            'ip_address' => '192.168.1.160',
+            'port' => 80,
+            'punch_role' => 'out',
+            'status' => 'online',
+        ]);
+        $jpeg = base64_decode('/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAb/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCwAA//2Q==');
+        $urls = [];
+        $this->app->instance(HikvisionClient::class, new HikvisionClient(function (string $method, string $url) use (&$urls, $jpeg) {
+            $urls[] = $url;
+            if (str_contains($url, 'CaptureFaceData') && ! str_contains($url, 'capabilities')) {
+                return ['status' => 200, 'body' => json_encode(['CaptureFaceData' => ['faceDataUrl' => 'http://192.168.1.160/face.jpg', 'captureProgress' => 100]])];
+            }
+            if ($method === 'GET' && str_contains($url, 'face.jpg')) {
+                return ['status' => 200, 'body' => $jpeg];
+            }
+
+            return ['status' => 200, 'body' => json_encode(['statusCode' => 1, 'statusString' => 'OK'])];
+        }));
+
+        app(\App\Services\Devices\EmployeePush::class)->collect($employee, 'face', null, $device);
+
+        $this->assertTrue(collect($urls)->contains(fn (string $url) => str_starts_with($url, 'http://103.214.226.146:18081/face.jpg')));
+        $this->assertFalse(collect($urls)->contains(fn (string $url) => str_contains($url, '192.168.1.160')));
+    }
+
     public function test_a_face_button_opens_the_camera_without_rewriting_an_existing_person(): void
     {
         config([
@@ -671,9 +712,11 @@ class HikvisionAttendanceTest extends TestCase
         ]);
         $in = new Device(['ip_address' => '192.168.1.156', 'port' => 80, 'punch_role' => 'in']);
         $out = new Device(['ip_address' => '192.168.1.160', 'port' => 80, 'punch_role' => 'out']);
+        $outOnInPort = new Device(['ip_address' => '192.168.1.160', 'port' => 18080, 'punch_role' => 'out']);
 
         $this->assertSame('103.214.226.146:18080', $in->terminalHost());
         $this->assertSame('103.214.226.146:18081', $out->terminalHost());
+        $this->assertSame('103.214.226.146:18081', $outOnInPort->terminalHost());
     }
 
     public function test_saving_an_employee_asks_the_office_link_when_the_server_cannot_see_the_terminal(): void
