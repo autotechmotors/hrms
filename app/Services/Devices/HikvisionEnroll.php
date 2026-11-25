@@ -148,6 +148,17 @@ class HikvisionEnroll
     }
 
     /**
+     * Write one existing face onto another terminal without rebuilding it.
+     * The model from the terminal that already matches is sent unchanged.
+     */
+    public function putSameFace(Device $device, string $userId, string $name, string $jpeg, string $model): void
+    {
+        $name = trim($name) !== '' ? trim($name) : $userId;
+        $this->ensureUser($device, $userId, $name, null, false);
+        $this->uploadJpeg($device, $userId, $jpeg, $model);
+    }
+
+    /**
      * Put a person back to a normal user and write the face after that.
      * Modify clears the face and fingers, so both are sent again in the same step.
      *
@@ -283,15 +294,15 @@ class HikvisionEnroll
         [$username, $password] = $this->login($device);
         $base = $this->base($device);
         $types = $this->faceDataTypes($device);
-        $plans = [];
-        foreach ($types as $type) {
-            $plans[] = $type;
-        }
-        if (! in_array('binary', $plans, true)) {
-            $plans[] = 'binary';
-        }
+        $plans = array_values(array_unique(array_merge(
+            in_array('binary', $types, true) ? ['binary'] : [],
+            $types,
+            ['binary'],
+        )));
         $response = ['status' => 0, 'body' => ''];
+        $keptByCamera = false;
         foreach ($plans as $type) {
+            $keptByCamera = $type === 'binary';
             $inner = '<captureInfrared>false</captureInfrared><dataType>'.$type.'</dataType>';
             if ($type === 'binary') {
                 $inner .= '<readerID>1</readerID><employeeNo>'.htmlspecialchars($userId, ENT_XML1).'</employeeNo>';
@@ -306,7 +317,9 @@ class HikvisionEnroll
             );
             $jpeg = $this->jpegIn($response['body']);
             if ($jpeg !== null) {
-                $this->uploadJpeg($device, $userId, $jpeg);
+                if (! $keptByCamera) {
+                    $this->uploadJpeg($device, $userId, $jpeg);
+                }
 
                 return $jpeg;
             }
@@ -325,7 +338,9 @@ class HikvisionEnroll
         if ($url === '') {
             $saved = $this->waitForSavedFace($userId, $username, $password, $base);
             if ($saved !== null) {
-                $this->uploadJpeg($device, $userId, $saved);
+                if (! $keptByCamera) {
+                    $this->uploadJpeg($device, $userId, $saved);
+                }
 
                 return $saved;
             }
@@ -342,7 +357,9 @@ class HikvisionEnroll
             throw new RuntimeException('The face terminal took a picture, but HRMS could not read it.');
         }
 
-        $this->bindFace($device, $userId, $url, $jpeg);
+        if (! $keptByCamera) {
+            $this->bindFace($device, $userId, $url, $jpeg);
+        }
 
         return $jpeg;
     }
@@ -515,25 +532,27 @@ class HikvisionEnroll
     {
         [$username, $password] = $this->login($device);
         $base = $this->base($device);
-        $picture = $this->withinFaceLimit($jpeg);
-        $attached = $model;
-        $response = $this->sendFace($device, $username, $password, 'POST', $base.'/ISAPI/Intelligent/FDLib/FaceDataRecord?format=json', $userId, $picture, $attached);
+        $picture = $model === '' ? $this->withinFaceLimit($jpeg) : $jpeg;
+        if ($model !== '' && strlen($picture) > 200 * 1024) {
+            $picture = $this->withinFaceLimit($picture);
+        }
+        $response = $this->sendFace($device, $username, $password, 'POST', $base.'/ISAPI/Intelligent/FDLib/FaceDataRecord?format=json', $userId, $picture, $model);
         if (! $this->ok($response) && $this->rejectedFace($response)) {
-            $smaller = $this->shrinkFace($picture !== '' ? $picture : $jpeg, 480, 120 * 1024);
-            if (is_string($smaller) && $smaller !== '') {
-                $picture = $smaller;
+            if ($model === '') {
+                $smaller = $this->shrinkFace($picture !== '' ? $picture : $jpeg, 480, 120 * 1024);
+                if (is_string($smaller) && $smaller !== '') {
+                    $picture = $smaller;
+                }
+                $response = $this->sendFace($device, $username, $password, 'POST', $base.'/ISAPI/Intelligent/FDLib/FaceDataRecord?format=json', $userId, $picture, '');
             }
-            $attached = '';
-            $response = $this->sendFace($device, $username, $password, 'POST', $base.'/ISAPI/Intelligent/FDLib/FaceDataRecord?format=json', $userId, $picture, '');
         }
         if (! $this->ok($response) && $this->rejectedFace($response)) {
-            $attached = '';
-            $response = $this->sendFace($device, $username, $password, 'PUT', $base.'/ISAPI/Intelligent/FDLib/FDSetUp?format=json', $userId, $picture, '');
+            $response = $this->sendFace($device, $username, $password, 'PUT', $base.'/ISAPI/Intelligent/FDLib/FDSetUp?format=json', $userId, $picture, $model);
         }
         if (! $this->ok($response)) {
             throw new RuntimeException($this->problem($response));
         }
-        if ($attached === '') {
+        if ($model === '') {
             $this->learnFace($device, $userId);
         }
     }

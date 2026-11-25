@@ -56,7 +56,7 @@ class HikvisionEvents
             'serialNo' => $event['serialNo'] ?? 0,
             'time' => (string) ($payload['dateTime'] ?? $event['dateTime'] ?? $event['time'] ?? ''),
         ];
-        if (! $this->facePassed($row) && (int) $row['minor'] !== 38) {
+        if (! $this->passed($row)) {
             return null;
         }
 
@@ -275,7 +275,7 @@ class HikvisionEvents
      */
     private function mapRow(array $row, string $base, string $username, string $password, Carbon $from, Carbon $to): ?array
     {
-        if (! $this->facePassed($row)) {
+        if (! $this->passed($row)) {
             return null;
         }
 
@@ -309,6 +309,33 @@ class HikvisionEvents
             'type' => $this->type($row),
             'image' => $this->image($row, $base, $username, $password),
         ];
+    }
+
+    /**
+     * A successful face or fingerprint. Card swipes and failed reads stay out.
+     *
+     * @param  array<string, mixed>  $row
+     */
+    private function passed(array $row): bool
+    {
+        if ($this->facePassed($row)) {
+            return true;
+        }
+
+        $minor = (int) ($row['minor'] ?? -1);
+        if ($minor === 39) {
+            return false;
+        }
+        if ($minor === 38) {
+            return true;
+        }
+
+        $mode = strtolower((string) ($row['currentVerifyMode'] ?? ''));
+
+        return $minor === 1
+            && $mode !== ''
+            && (str_contains($mode, 'finger') || preg_match('/(^|[^a-z])fp([^a-z]|$)/', $mode) === 1)
+            && ! str_contains($mode, 'fail');
     }
 
     /**

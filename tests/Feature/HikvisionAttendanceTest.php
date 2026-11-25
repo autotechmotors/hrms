@@ -319,9 +319,9 @@ class HikvisionAttendanceTest extends TestCase
         $this->assertTrue(collect($urls)->contains(fn (string $url) => str_contains($url, 'CaptureFaceData') && ! str_contains($url, 'format=json')));
         $this->assertIsString($capture);
         $this->assertStringContainsString('<CaptureFaceDataCond', $capture);
-        $this->assertStringContainsString('<dataType>url</dataType>', $capture);
-        $this->assertTrue(collect($urls)->contains(fn (string $url) => str_contains($url, 'FaceDataRecord')));
-        $this->assertTrue(collect($urls)->contains(fn (string $url) => str_contains($url, 'manualModeling')));
+        $this->assertStringContainsString('<dataType>binary</dataType>', $capture);
+        $this->assertStringContainsString('<employeeNo>AT0007</employeeNo>', $capture);
+        $this->assertFalse(collect($urls)->contains(fn (string $url) => str_contains($url, 'FaceDataRecord')));
     }
 
     public function test_a_face_added_on_one_terminal_is_copied_to_the_other(): void
@@ -419,6 +419,50 @@ class HikvisionAttendanceTest extends TestCase
         $this->assertSame(2, $posts);
         $this->assertIsArray($finger);
         $this->assertSame(3, data_get($finger, 'FingerPrintCfg.fingerPrintID'));
+    }
+
+    public function test_an_existing_face_keeps_the_same_model_on_the_other_terminal(): void
+    {
+        config([
+            'hikvision.username' => 'admin',
+            'hikvision.password' => 'secret',
+        ]);
+        $org = $this->makeCompany('HIK');
+        $device = Device::query()->create([
+            'company_id' => $org['company']->id,
+            'name' => 'Hikvision-(OUT)',
+            'register_id' => 'HIK1921681160',
+            'ip_address' => '192.168.1.160',
+            'username' => 'admin',
+            'password' => 'secret',
+            'punch_role' => 'out',
+            'status' => 'online',
+        ]);
+        $written = null;
+        $modeled = false;
+        $this->app->instance(HikvisionClient::class, new HikvisionClient(function (string $method, string $url, array|string|null $body = null) use (&$written, &$modeled) {
+            if (str_contains($url, 'manualModeling')) {
+                $modeled = true;
+
+                return ['status' => 200, 'body' => json_encode(['statusCode' => 1])];
+            }
+            if (str_contains($url, 'FaceDataRecord') && $method === 'POST') {
+                return ['status' => 400, 'body' => json_encode(['statusCode' => 6, 'subStatusCode' => 'saveFacePic'])];
+            }
+            if (str_contains($url, 'FDSetUp') && $method === 'PUT') {
+                $written = $body;
+
+                return ['status' => 200, 'body' => json_encode(['statusCode' => 1])];
+            }
+
+            return ['status' => 200, 'body' => json_encode(['statusCode' => 1])];
+        }));
+
+        app(\App\Services\Devices\HikvisionEnroll::class)->putSameFace($device, 'PL05', 'Nilesh Rana', "\xFF\xD8\xFF\xD9", 'MODELDATA');
+
+        $this->assertIsString($written);
+        $this->assertStringContainsString('MODELDATA', $written);
+        $this->assertFalse($modeled);
     }
 
     public function test_an_out_terminal_keeps_a_raw_photo_when_the_url_capture_is_empty(): void
@@ -1149,6 +1193,63 @@ class HikvisionAttendanceTest extends TestCase
         $this->assertSame('18:10:00', substr((string) $day->punch_out, 0, 8));
     }
 
+    public function test_a_fingerprint_on_the_out_terminal_is_stored(): void
+    {
+        config(['devices.forward_token' => 'secrettoken']);
+        $org = $this->makeCompany('HIK');
+        $employee = $this->makeEmployee($org, '900001');
+        Device::query()->create([
+            'company_id' => $org['company']->id,
+            'name' => 'Door IN',
+            'register_id' => 'HIK1921681156',
+            'ip_address' => '192.168.1.156',
+            'punch_role' => 'in',
+            'status' => 'online',
+        ]);
+        $out = Device::query()->create([
+            'company_id' => $org['company']->id,
+            'name' => 'Door OUT',
+            'register_id' => 'HIK1921681160',
+            'ip_address' => '192.168.1.160',
+            'punch_role' => 'out',
+            'status' => 'online',
+        ]);
+
+        $this->postScan('192.168.1.156', '2026-11-25T09:05:00+05:30', 11)->assertJson(['saved' => 1]);
+        $this->postJson('/hikvision-events/secrettoken', [
+            'ipAddress' => '192.168.1.160',
+            'dateTime' => '2026-11-25T18:20:00+05:30',
+            'eventType' => 'AccessControllerEvent',
+            'AccessControllerEvent' => [
+                'subEventType' => 1,
+                'employeeNoString' => '900001',
+                'name' => 'New Person',
+                'serialNo' => 12,
+                'currentVerifyMode' => 'fingerPrint',
+                'attendanceStatus' => 'checkOut',
+            ],
+        ])->assertOk()->assertJson(['saved' => 1]);
+        $this->postJson('/hikvision-events/secrettoken', [
+            'ipAddress' => '192.168.1.160',
+            'dateTime' => '2026-11-25T18:21:00+05:30',
+            'eventType' => 'AccessControllerEvent',
+            'AccessControllerEvent' => [
+                'subEventType' => 1,
+                'employeeNoString' => '900001',
+                'name' => 'New Person',
+                'serialNo' => 13,
+                'currentVerifyMode' => 'card',
+            ],
+        ])->assertOk()->assertJson(['saved' => 0, 'ignored' => true]);
+
+        $punch = AttendancePunch::query()->where('device_id', $out->id)->first();
+        $this->assertNotNull($punch);
+        $this->assertSame($employee->id, $punch->employee_id);
+        $this->assertSame('out', $punch->direction);
+        $day = \App\Models\AttendanceDay::query()->where('employee_id', $employee->id)->whereDate('work_date', '2026-11-25')->first();
+        $this->assertSame('18:20:00', substr((string) $day->punch_out, 0, 8));
+    }
+
     public function test_only_out_terminal_people_remain_and_their_face_stays(): void
     {
         $this->app->instance(\App\Services\Devices\HikvisionClient::class, new \App\Services\Devices\HikvisionClient(function () {
@@ -1310,6 +1411,18 @@ class HikvisionAttendanceTest extends TestCase
         $bodies = [];
         $this->app->instance(\App\Services\Devices\HikvisionClient::class, new \App\Services\Devices\HikvisionClient(function (string $method, string $url, $body) use (&$bodies, $jpeg) {
             $bodies[] = ['method' => $method, 'url' => $url, 'body' => $body];
+            if (str_contains($url, 'UserInfo/Search')) {
+                return ['status' => 200, 'body' => json_encode(['UserInfoSearch' => [
+                    'responseStatusStrg' => 'OK',
+                    'numOfMatches' => 1,
+                    'UserInfo' => [[
+                        'employeeNo' => '900001',
+                        'name' => 'New Person',
+                        'numOfFace' => 1,
+                        'numOfFP' => 0,
+                    ]],
+                ]])];
+            }
             if (str_contains($url, 'FDSearch')) {
                 return ['status' => 200, 'body' => json_encode(['MatchList' => [[
                     'faceURL' => 'http://192.168.1.156/face.jpg',
@@ -1331,11 +1444,7 @@ class HikvisionAttendanceTest extends TestCase
         $this->assertNotNull($face);
         $this->assertStringContainsString('MODELDATA', (string) $face['body']);
         $this->assertStringContainsString($jpeg, (string) $face['body']);
-        $modifyAt = collect($bodies)->search(fn (array $call) => str_contains($call['url'], 'UserInfo/Modify'));
-        $faceAt = collect($bodies)->search(fn (array $call) => str_contains($call['url'], 'FaceDataRecord'));
-        $this->assertIsInt($modifyAt);
-        $this->assertIsInt($faceAt);
-        $this->assertLessThan($faceAt, $modifyAt);
+        $this->assertFalse(collect($bodies)->contains(fn (array $call) => str_contains($call['url'], 'UserInfo/Modify')));
         $photo = collect($bodies)->first(fn (array $call) => $call['method'] === 'GET');
         $this->assertSame('http://192.168.1.156/face.jpg', $photo['url']);
     }

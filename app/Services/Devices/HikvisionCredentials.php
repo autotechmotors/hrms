@@ -118,33 +118,24 @@ class HikvisionCredentials
     }
 
     /**
-     * Copy the face that already matches on one terminal onto another.
-     * The target person is set back to a normal user, then the picture is written.
+     * Copy the face model that already matches on one terminal onto another.
+     * The picture and the model are written together, and the target is not rebuilt.
      *
      * @return array{restored: int, missing: int, failed: int, total: int}
      */
     public function mirrorFaces(Device $from, Device $to): array
     {
         $enroll = app(HikvisionEnroll::class);
-        $fingerCounts = [];
-        try {
-            foreach ($this->listing($from) as $row) {
-                $fingerCounts[$row['code']] = (int) $row['fingers'];
-            }
-        } catch (\Throwable) {
-            $fingerCounts = [];
-        }
-        $people = DeviceTerminalUser::query()
-            ->where('device_id', $to->id)
-            ->whereNull('dismissed_at')
-            ->orderBy('id')
-            ->get();
+        $people = array_values(array_filter(
+            $this->listing($from),
+            fn (array $person): bool => trim((string) $person['code']) !== '' && (int) $person['faces'] >= 1,
+        ));
         $restored = 0;
         $missing = 0;
         $failed = 0;
         foreach ($people as $person) {
-            $code = trim((string) $person->user_id);
-            if ($code === '') {
+            $code = trim((string) $person['code']);
+            if ($code === '' || (int) $person['faces'] < 1) {
                 continue;
             }
             $template = $this->events->faceTemplate(
@@ -155,38 +146,13 @@ class HikvisionCredentials
             );
             $jpeg = $template['jpeg'];
             $model = $template['model'];
-            if ($jpeg === null && $person->employee_id) {
-                $stored = EmployeeCredential::query()
-                    ->where('employee_id', $person->employee_id)
-                    ->where('kind', 'face')
-                    ->orderBy('slot')
-                    ->value('content');
-                $bytes = is_string($stored) ? StoredImage::bytes($stored) : null;
-                if (is_string($bytes) && str_starts_with($bytes, "\xFF\xD8\xFF")) {
-                    $jpeg = $bytes;
-                }
-            }
-            if ($jpeg === null && $model === '') {
+            if ($jpeg === null || $model === '') {
                 $missing++;
 
                 continue;
             }
-            $prints = [];
-            if (($fingerCounts[$code] ?? 0) > 0) {
-                try {
-                    $prints = $this->events->fingerprints(
-                        $from->terminalHost(),
-                        $from->terminalUsername(),
-                        $from->terminalPassword(),
-                        $code,
-                        (int) $fingerCounts[$code],
-                    );
-                } catch (\Throwable) {
-                    $prints = [];
-                }
-            }
             try {
-                $enroll->restoreFace($to, $code, trim((string) ($person->name ?: $code)), (string) $jpeg, $model, $prints);
+                $enroll->putSameFace($to, $code, trim((string) ($person['name'] ?: $code)), $jpeg, $model);
                 $restored++;
             } catch (\Throwable) {
                 $failed++;
@@ -197,7 +163,7 @@ class HikvisionCredentials
             'restored' => $restored,
             'missing' => $missing,
             'failed' => $failed,
-            'total' => $people->count(),
+            'total' => count($people),
         ];
     }
 
