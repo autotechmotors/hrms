@@ -149,16 +149,29 @@ class EmployeePush
         $copied = [];
         $missed = [];
         if (in_array($kind, ['face', 'finger'], true) && $hikvision instanceof Device) {
+            $model = '';
+            if ($kind === 'face') {
+                try {
+                    $model = app(HikvisionEvents::class)->faceTemplate(
+                        $hikvision->terminalHost(),
+                        $hikvision->terminalUsername(),
+                        $hikvision->terminalPassword(),
+                        $userId,
+                    )['model'];
+                } catch (\Throwable) {
+                    $model = '';
+                }
+            }
             foreach ($this->otherTerminals($employee, $hikvision) as $other) {
                 try {
-                    $this->placeOnTerminal($other, $employee, $userId, $name, false);
+                    $this->placeOnTerminal($other, $employee, $userId, $name, false, $model);
                     DeviceTerminalUser::query()->updateOrCreate(
                         ['device_id' => $other->id, 'user_id' => $userId],
                         ['name' => $name, 'employee_id' => $employee->id, 'dismissed_at' => null, 'synced_at' => now()],
                     );
                     $copied[] = $other->name;
-                } catch (\Throwable) {
-                    $missed[] = $other->name;
+                } catch (\Throwable $exception) {
+                    $missed[] = $other->name.' ('.$exception->getMessage().')';
                 }
             }
         }
@@ -324,13 +337,13 @@ class EmployeePush
     /**
      * @return Collection<int, Device>
      */
-    private function placeOnTerminal(Device $device, Employee $employee, string $userId, string $name, bool $wait = true): void
+    private function placeOnTerminal(Device $device, Employee $employee, string $userId, string $name, bool $wait = true, string $model = ''): void
     {
         $pin = $this->storedPin($employee);
         $face = $this->facePayload($employee);
         $prints = $this->storedPrints($employee);
         if ($this->hikvision->reachable($device)) {
-            $this->hikvision->storeProfile($device, $userId, $name, $pin, $face, $prints, true);
+            $this->hikvision->storeProfile($device, $userId, $name, $pin, $face, $prints, true, $model);
 
             return;
         }
@@ -557,7 +570,7 @@ class EmployeePush
     }
 
     /**
-     * @return list<string>
+     * @return list<array{id: int, data: string}>
      */
     private function storedPrints(Employee $employee): array
     {
@@ -565,8 +578,15 @@ class EmployeePush
             ->where('employee_id', $employee->id)
             ->where('kind', 'finger')
             ->orderBy('slot')
-            ->pluck('content')
-            ->map(fn ($content) => StoredImage::normalize((string) $content))
+            ->get(['slot', 'content'])
+            ->map(function ($row): ?array {
+                $data = StoredImage::normalize((string) $row->content);
+                $id = (int) $row->slot;
+
+                return is_string($data) && $data !== '' && $id >= 1 && $id <= 10
+                    ? ['id' => $id, 'data' => $data]
+                    : null;
+            })
             ->filter()
             ->values()
             ->all();

@@ -40,11 +40,12 @@ class HikvisionEnroll
         }
         if ($kind === 'face') {
             $jpeg = $this->takenFace($device, $userId, $name);
-            $next = 0;
-            foreach (EmployeeCredential::query()->where('employee_id', $employee->id)->where('kind', 'face')->pluck('slot') as $slot) {
-                $next = max($next, (int) $slot + 1);
-            }
-            $this->people->storeItem($employee, ['PhotoData' => [['slot' => $next, 'data' => base64_encode($jpeg)]]]);
+            EmployeeCredential::query()
+                ->where('employee_id', $employee->id)
+                ->where('kind', 'face')
+                ->where('slot', '!=', '0')
+                ->delete();
+            $this->people->storeItem($employee, ['PhotoData' => [['slot' => 0, 'data' => base64_encode($jpeg)]]]);
 
             return;
         }
@@ -72,19 +73,29 @@ class HikvisionEnroll
     }
 
     /**
-     * @param  list<string>  $prints
+     * @param  list<string|array{id?: int, data?: string}>  $prints
      */
-    public function storeProfile(Device $device, string $userId, string $name, ?string $password, ?string $face, array $prints, bool $enabled = true): void
+    public function storeProfile(Device $device, string $userId, string $name, ?string $password, ?string $face, array $prints, bool $enabled = true, string $model = ''): void
     {
         // Modify replaces the whole person and drops the face already on the
         // machine. Create only when missing, then write the face on top.
         $this->ensureUser($device, $userId, $name, $password, false, $enabled);
         $jpeg = $this->jpegBytes($face);
-        if ($jpeg !== null) {
-            $this->uploadJpeg($device, $userId, $jpeg);
+        if ($jpeg !== null || $model !== '') {
+            $this->uploadJpeg($device, $userId, $jpeg ?? '', $model);
         }
         foreach (array_values($prints) as $index => $print) {
-            $this->saveFinger($device, $userId, $index + 1, $print);
+            if (is_array($print)) {
+                $fingerNo = (int) ($print['id'] ?? ($index + 1));
+                $data = (string) ($print['data'] ?? '');
+            } else {
+                $fingerNo = $index + 1;
+                $data = (string) $print;
+            }
+            if ($fingerNo < 1 || $fingerNo > 10 || $data === '') {
+                continue;
+            }
+            $this->saveFinger($device, $userId, $fingerNo, $data);
         }
     }
 
@@ -503,6 +514,35 @@ class HikvisionEnroll
     private function uploadJpeg(Device $device, string $userId, string $jpeg, string $model = ''): void
     {
         [$username, $password] = $this->login($device);
+        $base = $this->base($device);
+        $picture = $this->withinFaceLimit($jpeg);
+        $attached = $model;
+        $response = $this->sendFace($device, $username, $password, 'POST', $base.'/ISAPI/Intelligent/FDLib/FaceDataRecord?format=json', $userId, $picture, $attached);
+        if (! $this->ok($response) && $this->rejectedFace($response)) {
+            $smaller = $this->shrinkFace($picture !== '' ? $picture : $jpeg, 480, 120 * 1024);
+            if (is_string($smaller) && $smaller !== '') {
+                $picture = $smaller;
+            }
+            $attached = '';
+            $response = $this->sendFace($device, $username, $password, 'POST', $base.'/ISAPI/Intelligent/FDLib/FaceDataRecord?format=json', $userId, $picture, '');
+        }
+        if (! $this->ok($response) && $this->rejectedFace($response)) {
+            $attached = '';
+            $response = $this->sendFace($device, $username, $password, 'PUT', $base.'/ISAPI/Intelligent/FDLib/FDSetUp?format=json', $userId, $picture, '');
+        }
+        if (! $this->ok($response)) {
+            throw new RuntimeException($this->problem($response));
+        }
+        if ($attached === '') {
+            $this->learnFace($device, $userId);
+        }
+    }
+
+    /**
+     * @return array{status: int, body: string}
+     */
+    private function sendFace(Device $device, string $username, string $password, string $method, string $url, string $userId, string $jpeg, string $model): array
+    {
         $record = [
             'faceLibType' => 'blackFD',
             'FDID' => '1',
@@ -511,50 +551,37 @@ class HikvisionEnroll
         if ($model !== '') {
             $record['modelData'] = $model;
         }
-        $jpeg = $this->withinFaceLimit($jpeg);
         if (! str_starts_with($jpeg, "\xFF\xD8\xFF")) {
             if ($model === '') {
                 throw new RuntimeException($device->name.' has no face picture to restore for '.$userId.'.');
             }
-            $response = $this->client->call(
-                'POST',
-                $this->base($device).'/ISAPI/Intelligent/FDLib/FaceDataRecord?format=json',
-                $username,
-                $password,
-                $record,
-            );
-            if (! $this->ok($response)) {
-                throw new RuntimeException($this->problem($response));
-            }
 
-            return;
+            return $this->client->call($method, $url, $username, $password, $record);
         }
+
         $boundary = 'hrms'.bin2hex(random_bytes(8));
-        $encoded = json_encode($record, JSON_UNESCAPED_UNICODE);
+        $encoded = (string) json_encode($record, JSON_UNESCAPED_UNICODE);
         $body = "--{$boundary}\r\n"
             ."Content-Disposition: form-data; name=\"FaceDataRecord\"\r\n"
-            ."Content-Type: application/json\r\n\r\n"
+            ."Content-Type: application/json\r\n"
+            .'Content-Length: '.strlen($encoded)."\r\n\r\n"
             .$encoded."\r\n"
             ."--{$boundary}\r\n"
             ."Content-Disposition: form-data; name=\"FaceImage\"; filename=\"face.jpg\"\r\n"
-            ."Content-Type: image/jpeg\r\n\r\n"
+            ."Content-Type: image/jpeg\r\n"
+            .'Content-Length: '.strlen($jpeg)."\r\n\r\n"
             .$jpeg."\r\n"
             ."--{$boundary}--\r\n";
-        $response = $this->client->call(
-            'POST',
-            $this->base($device).'/ISAPI/Intelligent/FDLib/FaceDataRecord?format=json',
-            $username,
-            $password,
-            $body,
-            20,
-            'multipart/form-data; boundary='.$boundary,
-        );
-        if (! $this->ok($response)) {
-            throw new RuntimeException($this->problem($response));
-        }
-        if ($model === '') {
-            $this->learnFace($device, $userId);
-        }
+
+        return $this->client->call($method, $url, $username, $password, $body, 20, 'multipart/form-data; boundary='.$boundary);
+    }
+
+    /**
+     * @param  array{status: int, body: string}  $response
+     */
+    private function rejectedFace(array $response): bool
+    {
+        return $response['status'] === 400 || str_contains($response['body'], 'saveFacePic');
     }
 
     /**
@@ -609,36 +636,45 @@ class HikvisionEnroll
 
     private function withinFaceLimit(string $jpeg): string
     {
-        $limit = 200 * 1024;
-        if (strlen($jpeg) <= $limit || ! function_exists('imagecreatefromstring') || ! function_exists('imagejpeg')) {
+        if (! str_starts_with($jpeg, "\xFF\xD8\xFF") || strlen($jpeg) <= 200 * 1024) {
             return $jpeg;
+        }
+
+        return $this->shrinkFace($jpeg, 640, 180 * 1024) ?? $jpeg;
+    }
+
+    private function shrinkFace(string $jpeg, int $maxEdge, int $limit): ?string
+    {
+        if (! function_exists('imagecreatefromstring') || ! function_exists('imagejpeg') || ! str_starts_with($jpeg, "\xFF\xD8\xFF")) {
+            return null;
         }
         $image = @imagecreatefromstring($jpeg);
         if ($image === false) {
-            return $jpeg;
+            return null;
         }
         $width = imagesx($image);
         $height = imagesy($image);
-        $max = 800;
-        if ($width > $max || $height > $max) {
-            $scale = $max / max($width, $height);
+        if ($width > $maxEdge || $height > $maxEdge) {
+            $scale = $maxEdge / max($width, $height);
             $scaled = imagecreatetruecolor(max(1, (int) round($width * $scale)), max(1, (int) round($height * $scale)));
             imagecopyresampled($scaled, $image, 0, 0, 0, 0, imagesx($scaled), imagesy($scaled), $width, $height);
             imagedestroy($image);
             $image = $scaled;
         }
-        $fitted = $jpeg;
-        foreach ([85, 70, 55, 40] as $quality) {
+        $fitted = null;
+        foreach ([75, 60, 45, 30] as $quality) {
             ob_start();
             imagejpeg($image, null, $quality);
             $fitted = (string) ob_get_clean();
-            if ($fitted !== '' && strlen($fitted) <= $limit) {
-                break;
+            if ($fitted !== '' && str_starts_with($fitted, "\xFF\xD8\xFF") && strlen($fitted) <= $limit) {
+                imagedestroy($image);
+
+                return $fitted;
             }
         }
         imagedestroy($image);
 
-        return str_starts_with($fitted, "\xFF\xD8\xFF") ? $fitted : $jpeg;
+        return is_string($fitted) && str_starts_with($fitted, "\xFF\xD8\xFF") && strlen($fitted) <= $limit ? $fitted : null;
     }
 
     private function saveFinger(Device $device, string $userId, int $fingerNo, string $data): void

@@ -373,6 +373,52 @@ class HikvisionAttendanceTest extends TestCase
         $this->assertStringContainsString('Copied to Hikvision-(OUT).', $result['message']);
         $this->assertTrue(collect($urls)->contains(fn (string $url) => str_contains($url, '192.168.1.160') && str_contains($url, 'FaceDataRecord')));
         $this->assertSame(0, app(\App\Services\Devices\FaceAccess::class)->gateTerminals($org['company']->id)->count());
+        $this->assertSame(1, \App\Models\EmployeeCredential::query()->where('employee_id', $employee->id)->where('kind', 'face')->count());
+        $this->assertSame('0', \App\Models\EmployeeCredential::query()->where('employee_id', $employee->id)->where('kind', 'face')->value('slot'));
+    }
+
+    public function test_a_terminal_that_refuses_the_picture_still_receives_the_face(): void
+    {
+        config([
+            'hikvision.username' => 'admin',
+            'hikvision.password' => 'secret',
+        ]);
+        $org = $this->makeCompany('HIK');
+        $device = Device::query()->create([
+            'company_id' => $org['company']->id,
+            'name' => 'Hikvision-(OUT)',
+            'register_id' => 'HIK1921681160',
+            'ip_address' => '192.168.1.160',
+            'username' => 'admin',
+            'password' => 'secret',
+            'punch_role' => 'out',
+            'status' => 'online',
+        ]);
+        $posts = 0;
+        $finger = null;
+        $this->app->instance(HikvisionClient::class, new HikvisionClient(function (string $method, string $url, array|string|null $body = null) use (&$posts, &$finger) {
+            if (str_contains($url, 'FingerPrint/SetUp')) {
+                $finger = $body;
+
+                return ['status' => 200, 'body' => json_encode(['statusCode' => 1])];
+            }
+            if (str_contains($url, 'FaceDataRecord') && $method === 'POST') {
+                $posts++;
+                if ($posts === 1) {
+                    return ['status' => 400, 'body' => json_encode(['statusCode' => 6, 'subStatusCode' => 'saveFacePic'])];
+                }
+            }
+
+            return ['status' => 200, 'body' => json_encode(['statusCode' => 1])];
+        }));
+
+        app(\App\Services\Devices\HikvisionEnroll::class)->storeProfile($device, 'PL05', 'Nilesh Rana', null, base64_encode("\xFF\xD8\xFF\xD9"), [
+            ['id' => 3, 'data' => base64_encode('finger-3')],
+        ]);
+
+        $this->assertSame(2, $posts);
+        $this->assertIsArray($finger);
+        $this->assertSame(3, data_get($finger, 'FingerPrintCfg.fingerPrintID'));
     }
 
     public function test_an_out_terminal_keeps_a_raw_photo_when_the_url_capture_is_empty(): void
