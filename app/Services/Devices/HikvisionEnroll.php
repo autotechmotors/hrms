@@ -3,6 +3,7 @@
 namespace App\Services\Devices;
 
 use App\Models\Device;
+use App\Models\DeviceTerminalUser;
 use App\Models\Employee;
 use App\Models\EmployeeCredential;
 use App\Support\StoredImage;
@@ -29,9 +30,13 @@ class HikvisionEnroll
             return;
         }
 
-        $this->ensureUser($device, $userId, $name, null, false);
-        if ($device->readsOut()) {
-            $this->setUserType($device, $userId, $name, 'normal');
+        $linked = DeviceTerminalUser::query()
+            ->where('device_id', $device->id)
+            ->where('user_id', $userId)
+            ->where('employee_id', $employee->id)
+            ->exists();
+        if (! $linked) {
+            $this->ensureUser($device, $userId, $name, null, false);
         }
         if ($kind === 'face') {
             $jpeg = $this->takenFace($device, $userId, $name);
@@ -250,23 +255,23 @@ class HikvisionEnroll
                 $this->xml('CaptureFaceDataCond', '<captureInfrared>false</captureInfrared><dataType>'.$type.'</dataType>'),
                 55,
             );
-            if ($this->ok($response) && $this->faceCaptureReady($response['body'])) {
+            if ($this->faceCaptureReady($response['body'])) {
                 break;
             }
-            if ($this->ok($response) && ! $this->faceCaptureReady($response['body'])) {
-                throw new RuntimeException('Stand in front of '.$device->name.' and look at the camera until the green frame finishes, then try again.');
-            }
-            if (! $this->badFaceDataType($response)) {
+            if (! $this->ok($response) && ! $this->badFaceDataType($response)) {
                 throw new RuntimeException($this->problem($response));
             }
         }
-        if (! $this->ok($response) || ! $this->faceCaptureReady($response['body'])) {
-            throw new RuntimeException($this->ok($response)
-                ? 'Stand in front of '.$device->name.' and look at the camera until the green frame finishes, then try again.'
-                : $this->problem($response));
+        if (! $this->faceCaptureReady($response['body'])) {
+            throw new RuntimeException('Stand in front of '.$device->name.' and look at the camera until the green frame finishes, then try again.');
         }
 
         $inline = $this->value($response['body'], 'faceData');
+        if ($inline === '' && str_starts_with($response['body'], "\xFF\xD8\xFF")) {
+            $this->uploadJpeg($device, $userId, $response['body']);
+
+            return $response['body'];
+        }
         if ($inline !== '') {
             $jpeg = base64_decode($inline, true) ?: '';
             if ($jpeg === '' || ! str_starts_with($jpeg, "\xFF\xD8\xFF")) {
@@ -278,6 +283,9 @@ class HikvisionEnroll
         }
 
         $url = $this->value($response['body'], 'faceDataUrl');
+        if ($url === '') {
+            $url = $this->value($response['body'], 'faceURL');
+        }
         if ($url === '') {
             throw new RuntimeException('Stand in front of '.$device->name.' and look at the camera until the green frame finishes, then try again.');
         }
@@ -332,7 +340,10 @@ class HikvisionEnroll
 
     private function faceCaptureReady(string $body): bool
     {
-        if ($this->value($body, 'faceData') !== '' || $this->value($body, 'faceDataUrl') !== '') {
+        if (str_starts_with($body, "\xFF\xD8\xFF")) {
+            return true;
+        }
+        if ($this->value($body, 'faceData') !== '' || $this->value($body, 'faceDataUrl') !== '' || $this->value($body, 'faceURL') !== '') {
             return true;
         }
         $progress = $this->value($body, 'captureProgress');
@@ -505,8 +516,11 @@ class HikvisionEnroll
             $found = data_get($json, 'CaptureFaceData.'.$tag)
                 ?? data_get($json, 'CaptureFingerPrint.'.$tag)
                 ?? data_get($json, $tag);
-            if (is_string($found) && trim($found) !== '') {
-                return trim($found);
+            if (is_string($found) || is_numeric($found)) {
+                $text = trim((string) $found);
+                if ($text !== '') {
+                    return $text;
+                }
             }
         }
         if (preg_match('/<'.$tag.'>([^<]+)</', $body, $match) === 1) {

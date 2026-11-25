@@ -323,6 +323,43 @@ class HikvisionAttendanceTest extends TestCase
         $this->assertTrue(collect($urls)->contains(fn (string $url) => str_contains($url, 'FaceDataRecord')));
     }
 
+    public function test_an_out_terminal_keeps_a_raw_photo_when_the_url_capture_is_empty(): void
+    {
+        config([
+            'hikvision.username' => 'admin',
+            'hikvision.password' => 'secret',
+        ]);
+        $org = $this->makeCompany('HIK');
+        $employee = $this->makeEmployee($org, 'AT0011');
+        $device = Device::query()->create([
+            'company_id' => $org['company']->id,
+            'name' => 'Hikvision-(OUT)',
+            'register_id' => 'HIK1921681160',
+            'ip_address' => '192.168.1.160',
+            'punch_role' => 'out',
+            'status' => 'online',
+        ]);
+        $jpeg = base64_decode('/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAb/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCwAA//2Q==');
+        $captures = 0;
+        $this->app->instance(HikvisionClient::class, new HikvisionClient(function (string $method, string $url) use (&$captures, $jpeg) {
+            if (str_contains($url, 'CaptureFaceData') && ! str_contains($url, 'capabilities')) {
+                $captures++;
+
+                return $captures === 1
+                    ? ['status' => 200, 'body' => json_encode(['statusCode' => 1, 'CaptureFaceData' => ['captureProgress' => 0]])]
+                    : ['status' => 200, 'body' => $jpeg];
+            }
+
+            return ['status' => 200, 'body' => json_encode(['statusCode' => 1, 'statusString' => 'OK'])];
+        }));
+
+        $result = app(\App\Services\Devices\EmployeePush::class)->collect($employee, 'face', null, $device);
+
+        $this->assertSame(1, $result['devices']);
+        $this->assertSame(2, $captures);
+        $this->assertDatabaseHas('employee_credentials', ['employee_id' => $employee->id, 'kind' => 'face']);
+    }
+
     public function test_a_face_button_opens_the_camera_without_rewriting_an_existing_person(): void
     {
         config([
