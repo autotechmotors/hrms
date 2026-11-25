@@ -421,6 +421,85 @@ class HikvisionAttendanceTest extends TestCase
         $this->assertSame(3, data_get($finger, 'FingerPrintCfg.fingerPrintID'));
     }
 
+    public function test_a_sync_copies_the_working_face_model_and_leaves_fingers_alone(): void
+    {
+        config([
+            'hikvision.host' => '',
+            'hikvision.public_host' => '',
+            'hikvision.password' => 'secret',
+        ]);
+        $org = $this->makeCompany('HIK');
+        $this->makeEmployee($org, '900001');
+        $in = Device::query()->create([
+            'company_id' => $org['company']->id,
+            'name' => 'Hikvision-(IN)',
+            'register_id' => 'HIK1921681156',
+            'ip_address' => '192.168.1.156',
+            'port' => 80,
+            'username' => 'admin',
+            'password' => 'secret',
+            'punch_role' => 'in',
+            'status' => 'online',
+        ]);
+        $out = Device::query()->create([
+            'company_id' => $org['company']->id,
+            'name' => 'Hikvision-(OUT)',
+            'register_id' => 'HIK1921681160',
+            'ip_address' => '192.168.1.160',
+            'port' => 80,
+            'username' => 'admin',
+            'password' => 'secret',
+            'punch_role' => 'out',
+            'status' => 'online',
+        ]);
+        Cache::put('hikvision.roster.'.$out->id, [[
+            'code' => '900001',
+            'name' => 'Nilesh Rana',
+            'faces' => 1,
+            'fingers' => 1,
+        ]], now()->addMinutes(30));
+        $jpeg = "\xFF\xD8\xFF\xD9";
+        $faces = [];
+        $fingers = [];
+        $this->app->instance(HikvisionClient::class, new HikvisionClient(function (string $method, string $url, array|string|null $body = null) use (&$faces, &$fingers, $jpeg) {
+            if (str_contains($url, 'FingerPrint/SetUp') || str_contains($url, 'FingerPrint/Record')) {
+                $fingers[] = $url;
+
+                return ['status' => 200, 'body' => json_encode(['statusCode' => 1])];
+            }
+            if (str_contains($url, 'FDSearch')) {
+                $faceUrl = str_contains($url, '192.168.1.156')
+                    ? 'http://192.168.1.156/face.jpg'
+                    : 'http://192.168.1.160/face.jpg';
+
+                return ['status' => 200, 'body' => json_encode(['MatchList' => [[
+                    'faceURL' => $faceUrl,
+                    'modelData' => str_contains($url, '192.168.1.156') ? 'MODELDATA' : '',
+                ]]])];
+            }
+            if ($method === 'GET') {
+                return ['status' => 200, 'body' => $jpeg];
+            }
+            if (str_contains($url, 'FaceDataRecord') || str_contains($url, 'FDSetUp')) {
+                $faces[] = ['url' => $url, 'body' => $body];
+
+                return ['status' => 200, 'body' => json_encode(['statusCode' => 1])];
+            }
+
+            return ['status' => 200, 'body' => json_encode(['statusCode' => 1])];
+        }));
+
+        $result = app(\App\Services\Devices\DeviceRoster::class)->syncBatch($out, 0, 3);
+
+        $this->assertSame(1, $result['copied']);
+        $this->assertSame(0, $result['failed']);
+        $this->assertCount(1, $faces);
+        $this->assertStringContainsString('192.168.1.160', $faces[0]['url']);
+        $this->assertStringContainsString('MODELDATA', (string) $faces[0]['body']);
+        $this->assertSame([], $fingers);
+        $this->assertNotNull($in->id);
+    }
+
     public function test_an_existing_face_keeps_the_same_model_on_the_other_terminal(): void
     {
         config([

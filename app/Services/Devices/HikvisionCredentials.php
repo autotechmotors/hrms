@@ -7,6 +7,7 @@ use App\Models\DeviceTerminalUser;
 use App\Models\Employee;
 use App\Models\EmployeeCredential;
 use App\Support\StoredImage;
+use Illuminate\Support\Collection;
 use RuntimeException;
 
 class HikvisionCredentials
@@ -115,6 +116,59 @@ class HikvisionCredentials
         }
 
         return ['added' => $added, 'faces' => $savedFaces, 'fingers' => $savedFingers];
+    }
+
+    /**
+     * Put the face model that already matches onto the other terminals.
+     * The IN terminal is the source when it has a model. Fingerprints are not sent.
+     *
+     * @param  iterable<Device>  $devices
+     */
+    public function shareMatchingFace(iterable $devices, string $code, string $name): int
+    {
+        $code = trim($code);
+        $name = trim($name) !== '' ? trim($name) : $code;
+        if ($code === '') {
+            return 0;
+        }
+
+        /** @var Collection<int, Device> $pool */
+        $pool = collect($devices)
+            ->filter(fn ($device) => $device instanceof Device && $device->isHikvision())
+            ->unique('id')
+            ->values();
+        $origin = null;
+        $jpeg = null;
+        $model = '';
+        foreach ($pool->sortBy(fn (Device $device) => $device->punch_role === Device::ROLE_IN ? 0 : 1)->values() as $device) {
+            $found = $this->events->faceTemplate(
+                $device->terminalHost(),
+                $device->terminalUsername(),
+                $device->terminalPassword(),
+                $code,
+            );
+            if ($found['jpeg'] !== null && $found['model'] !== '') {
+                $origin = $device;
+                $jpeg = $found['jpeg'];
+                $model = $found['model'];
+                break;
+            }
+        }
+        if (! $origin instanceof Device || ! is_string($jpeg) || $model === '') {
+            return 0;
+        }
+
+        $enroll = app(HikvisionEnroll::class);
+        $written = 0;
+        foreach ($pool as $device) {
+            if ($device->id === $origin->id) {
+                continue;
+            }
+            $enroll->putSameFace($device, $code, $name, $jpeg, $model);
+            $written++;
+        }
+
+        return $written;
     }
 
     /**

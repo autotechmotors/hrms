@@ -12,7 +12,6 @@ class DeviceRoster
 {
     public function __construct(
         private readonly HikvisionCredentials $credentials,
-        private readonly EmployeePush $push,
     ) {}
 
     /**
@@ -68,16 +67,19 @@ class DeviceRoster
                 continue;
             }
             foreach ($targets as $target) {
-                try {
-                    $this->push->rewrite($target, $employee, (string) $person['code'], (string) $employee->full_name);
-                    DeviceTerminalUser::query()->updateOrCreate(
-                        ['device_id' => $target->id, 'user_id' => (string) $person['code']],
-                        ['name' => (string) $employee->full_name, 'employee_id' => $employee->id, 'dismissed_at' => null],
-                    );
-                    $copied++;
-                } catch (Throwable) {
-                    $failed++;
-                }
+                DeviceTerminalUser::query()->updateOrCreate(
+                    ['device_id' => $target->id, 'user_id' => (string) $person['code']],
+                    ['name' => (string) $employee->full_name, 'employee_id' => $employee->id, 'dismissed_at' => null],
+                );
+            }
+            try {
+                $copied += $this->credentials->shareMatchingFace(
+                    collect([$source])->merge($targets),
+                    (string) $person['code'],
+                    (string) $employee->full_name,
+                );
+            } catch (Throwable) {
+                $failed++;
             }
         }
 
@@ -132,16 +134,19 @@ class DeviceRoster
                 continue;
             }
             foreach ($targets as $target) {
-                try {
-                    $this->push->rewrite($target, $employee, (string) $person->user_id, (string) $employee->full_name);
-                    DeviceTerminalUser::query()->updateOrCreate(
-                        ['device_id' => $target->id, 'user_id' => (string) $person->user_id],
-                        ['name' => (string) $employee->full_name, 'employee_id' => $employee->id, 'dismissed_at' => null],
-                    );
-                    $copied++;
-                } catch (Throwable) {
-                    $failed++;
-                }
+                DeviceTerminalUser::query()->updateOrCreate(
+                    ['device_id' => $target->id, 'user_id' => (string) $person->user_id],
+                    ['name' => (string) $employee->full_name, 'employee_id' => $employee->id, 'dismissed_at' => null],
+                );
+            }
+            try {
+                $copied += $this->credentials->shareMatchingFace(
+                    collect([$source])->merge($targets),
+                    (string) $person->user_id,
+                    (string) $employee->full_name,
+                );
+            } catch (Throwable) {
+                $failed++;
             }
         }
 
