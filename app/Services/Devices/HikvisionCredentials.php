@@ -6,6 +6,7 @@ use App\Models\Device;
 use App\Models\DeviceTerminalUser;
 use App\Models\Employee;
 use App\Models\EmployeeCredential;
+use App\Support\StoredImage;
 use RuntimeException;
 
 class HikvisionCredentials
@@ -114,6 +115,90 @@ class HikvisionCredentials
         }
 
         return ['added' => $added, 'faces' => $savedFaces, 'fingers' => $savedFingers];
+    }
+
+    /**
+     * Copy the face that already matches on one terminal onto another.
+     * The target person is set back to a normal user, then the picture is written.
+     *
+     * @return array{restored: int, missing: int, failed: int, total: int}
+     */
+    public function mirrorFaces(Device $from, Device $to): array
+    {
+        $enroll = app(HikvisionEnroll::class);
+        $fingerCounts = [];
+        try {
+            foreach ($this->listing($from) as $row) {
+                $fingerCounts[$row['code']] = (int) $row['fingers'];
+            }
+        } catch (\Throwable) {
+            $fingerCounts = [];
+        }
+        $people = DeviceTerminalUser::query()
+            ->where('device_id', $to->id)
+            ->whereNull('dismissed_at')
+            ->orderBy('id')
+            ->get();
+        $restored = 0;
+        $missing = 0;
+        $failed = 0;
+        foreach ($people as $person) {
+            $code = trim((string) $person->user_id);
+            if ($code === '') {
+                continue;
+            }
+            $template = $this->events->faceTemplate(
+                $from->terminalHost(),
+                $from->terminalUsername(),
+                $from->terminalPassword(),
+                $code,
+            );
+            $jpeg = $template['jpeg'];
+            $model = $template['model'];
+            if ($jpeg === null && $person->employee_id) {
+                $stored = EmployeeCredential::query()
+                    ->where('employee_id', $person->employee_id)
+                    ->where('kind', 'face')
+                    ->orderBy('slot')
+                    ->value('content');
+                $bytes = is_string($stored) ? StoredImage::bytes($stored) : null;
+                if (is_string($bytes) && str_starts_with($bytes, "\xFF\xD8\xFF")) {
+                    $jpeg = $bytes;
+                }
+            }
+            if ($jpeg === null && $model === '') {
+                $missing++;
+
+                continue;
+            }
+            $prints = [];
+            if (($fingerCounts[$code] ?? 0) > 0) {
+                try {
+                    $prints = $this->events->fingerprints(
+                        $from->terminalHost(),
+                        $from->terminalUsername(),
+                        $from->terminalPassword(),
+                        $code,
+                        (int) $fingerCounts[$code],
+                    );
+                } catch (\Throwable) {
+                    $prints = [];
+                }
+            }
+            try {
+                $enroll->restoreFace($to, $code, trim((string) ($person->name ?: $code)), (string) $jpeg, $model, $prints);
+                $restored++;
+            } catch (\Throwable) {
+                $failed++;
+            }
+        }
+
+        return [
+            'restored' => $restored,
+            'missing' => $missing,
+            'failed' => $failed,
+            'total' => $people->count(),
+        ];
     }
 
     private function dismissed(Device $device, string $code): bool

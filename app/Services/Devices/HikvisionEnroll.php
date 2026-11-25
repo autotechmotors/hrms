@@ -76,7 +76,9 @@ class HikvisionEnroll
      */
     public function storeProfile(Device $device, string $userId, string $name, ?string $password, ?string $face, array $prints, bool $enabled = true): void
     {
-        $this->ensureUser($device, $userId, $name, $password, true, $enabled);
+        // Modify replaces the whole person and drops the face already on the
+        // machine. Create only when missing, then write the face on top.
+        $this->ensureUser($device, $userId, $name, $password, false, $enabled);
         $jpeg = $this->jpegBytes($face);
         if ($jpeg !== null) {
             $this->uploadJpeg($device, $userId, $jpeg);
@@ -129,9 +131,34 @@ class HikvisionEnroll
         throw new RuntimeException($this->problem($response));
     }
 
-    public function replaceFace(Device $device, string $userId, string $jpeg): void
+    public function replaceFace(Device $device, string $userId, string $jpeg, string $model = ''): void
     {
-        $this->uploadJpeg($device, $userId, $jpeg);
+        $this->uploadJpeg($device, $userId, $jpeg, $model);
+    }
+
+    /**
+     * Put a person back to a normal user and write the face after that.
+     * Modify clears the face and fingers, so both are sent again in the same step.
+     *
+     * @param  list<array{id: int, data: string}>  $prints
+     */
+    public function restoreFace(Device $device, string $userId, string $name, string $jpeg, string $model = '', array $prints = []): void
+    {
+        $name = trim($name) !== '' ? trim($name) : $userId;
+        $this->ensureUser($device, $userId, $name, null, false);
+        $this->setUserType($device, $userId, $name, 'normal');
+        $this->uploadJpeg($device, $userId, $jpeg, $model);
+        foreach ($prints as $print) {
+            $fingerNo = (int) ($print['id'] ?? 0);
+            $data = trim((string) ($print['data'] ?? ''));
+            if ($fingerNo < 1 || $fingerNo > 10 || $data === '') {
+                continue;
+            }
+            try {
+                $this->saveFinger($device, $userId, $fingerNo, $data);
+            } catch (\Throwable) {
+            }
+        }
     }
 
     public function published(Device $device): bool
@@ -471,19 +498,40 @@ class HikvisionEnroll
         $this->uploadJpeg($device, $userId, $jpeg);
     }
 
-    private function uploadJpeg(Device $device, string $userId, string $jpeg): void
+    private function uploadJpeg(Device $device, string $userId, string $jpeg, string $model = ''): void
     {
         [$username, $password] = $this->login($device);
-        $boundary = 'hrms'.bin2hex(random_bytes(8));
-        $record = json_encode([
+        $record = [
             'faceLibType' => 'blackFD',
             'FDID' => '1',
             'FPID' => $userId,
-        ], JSON_UNESCAPED_UNICODE);
+        ];
+        if ($model !== '') {
+            $record['modelData'] = $model;
+        }
+        if (! str_starts_with($jpeg, "\xFF\xD8\xFF")) {
+            if ($model === '') {
+                throw new RuntimeException($device->name.' has no face picture to restore for '.$userId.'.');
+            }
+            $response = $this->client->call(
+                'POST',
+                $this->base($device).'/ISAPI/Intelligent/FDLib/FaceDataRecord?format=json',
+                $username,
+                $password,
+                $record,
+            );
+            if (! $this->ok($response)) {
+                throw new RuntimeException($this->problem($response));
+            }
+
+            return;
+        }
+        $boundary = 'hrms'.bin2hex(random_bytes(8));
+        $encoded = json_encode($record, JSON_UNESCAPED_UNICODE);
         $body = "--{$boundary}\r\n"
             ."Content-Disposition: form-data; name=\"FaceDataRecord\"\r\n"
             ."Content-Type: application/json\r\n\r\n"
-            .$record."\r\n"
+            .$encoded."\r\n"
             ."--{$boundary}\r\n"
             ."Content-Disposition: form-data; name=\"FaceImage\"; filename=\"face.jpg\"\r\n"
             ."Content-Type: image/jpeg\r\n\r\n"

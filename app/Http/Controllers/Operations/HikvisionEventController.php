@@ -34,7 +34,7 @@ class HikvisionEventController extends Controller
             return response()->json(['saved' => 0, 'ignored' => true]);
         }
 
-        $device = $this->device($scan['ip'], (string) ($scan['device_name'] ?? ''));
+        $device = $this->device($scan['ip'], (string) ($scan['device_name'] ?? ''), (string) ($scan['attendance'] ?? ''));
         if (! $device) {
             return response()->json([
                 'saved' => 0,
@@ -134,31 +134,124 @@ class HikvisionEventController extends Controller
         }
     }
 
-    private function device(string $ip, string $name = ''): ?Device
+    private function device(string $ip, string $name = '', string $attendance = ''): ?Device
     {
         $devices = Device::query()->get()->filter(fn (Device $device) => $device->isHikvision())->values();
+        $match = null;
         if ($ip !== '') {
-            $match = $devices->first(fn (Device $device) => $this->sameAddress($device->lan_ip, $ip) || $this->sameAddress($device->ip_address, $ip));
-            if ($match) {
-                return $match;
+            $byAddress = $devices->filter(fn (Device $device) => $this->sameAddress($device->lan_ip, $ip) || $this->sameAddress($device->ip_address, $ip));
+            if ($byAddress->count() === 1) {
+                $match = $byAddress->first();
             }
         }
-        if ($name !== '') {
+        if (! $match && $ip !== '') {
+            $match = $this->deviceForRegister($devices, $ip);
+        }
+        if (! $match && $ip !== '') {
+            $match = $this->deviceForOfficeIp($devices, $ip);
+        }
+        if (! $match && $name !== '') {
             $match = $devices->first(fn (Device $device) => strcasecmp(trim((string) $device->name), $name) === 0);
-            if ($match) {
-                return $match;
+        }
+        if (! $match && $devices->count() === 1) {
+            $match = $devices->first();
+        }
+        if (! $match && $devices->count() < 2) {
+            $registerId = trim((string) config('hikvision.register_id'));
+            if ($registerId !== '') {
+                $match = $devices->first(fn (Device $device) => strcasecmp((string) $device->register_id, $registerId) === 0);
             }
         }
-        if ($devices->count() === 1) {
-            return $devices->first();
+        if (! $match) {
+            $match = $this->deviceForAttendance($devices, $ip, $attendance);
+        }
+        if ($match && $this->isPrivate($ip) && trim((string) $match->lan_ip) === '') {
+            try {
+                $match->forceFill(['lan_ip' => $ip])->save();
+            } catch (\Throwable) {
+            }
         }
 
-        $registerId = trim((string) config('hikvision.register_id'));
-        if ($registerId !== '' && $devices->count() < 2) {
-            return $devices->first(fn (Device $device) => strcasecmp((string) $device->register_id, $registerId) === 0);
+        return $match;
+    }
+
+    /**
+     * Register ids are the office address with the dots removed, so a scan from
+     * 192.168.1.156 still finds HIK1921681156 when the row stores the public IP.
+     */
+    private function deviceForRegister($devices, string $ip): ?Device
+    {
+        $digits = preg_replace('/\D/', '', $ip) ?? '';
+        if (strlen($digits) < 7) {
+            return null;
+        }
+
+        $matched = $devices->filter(function (Device $device) use ($digits): bool {
+            $register = preg_replace('/\D/', '', (string) $device->register_id) ?? '';
+
+            return $register !== '' && $register === $digits;
+        });
+
+        return $matched->count() === 1 ? $matched->first() : null;
+    }
+
+    private function deviceForOfficeIp($devices, string $ip): ?Device
+    {
+        $inHost = $this->host((string) config('hikvision.terminals.in.host'));
+        $outHost = $this->host((string) config('hikvision.terminals.out.host'));
+        if ($inHost !== '' && $outHost !== '' && strcasecmp($inHost, $outHost) === 0) {
+            return null;
+        }
+        if ($inHost !== '' && strcasecmp($inHost, $ip) === 0) {
+            $matched = $devices->filter(fn (Device $device): bool => $device->punch_role === Device::ROLE_IN);
+
+            return $matched->count() === 1 ? $matched->first() : null;
+        }
+        if ($outHost !== '' && strcasecmp($outHost, $ip) === 0) {
+            $matched = $devices->filter(fn (Device $device): bool => $device->punch_role === Device::ROLE_OUT);
+
+            return $matched->count() === 1 ? $matched->first() : null;
         }
 
         return null;
+    }
+
+    /**
+     * Both doors share one public address. The attendance status says which door it was.
+     */
+    private function deviceForAttendance($devices, string $ip, string $attendance): ?Device
+    {
+        $public = $this->host((string) (config('hikvision.public_host') ?: config('hikvision.host')));
+        $shared = $ip === '' || ($public !== '' && strcasecmp($public, $ip) === 0);
+        if (! $shared) {
+            return null;
+        }
+        $role = match ($attendance) {
+            'checkout', 'breakout', 'overtimeout' => Device::ROLE_OUT,
+            'checkin', 'breakin', 'overtimein' => Device::ROLE_IN,
+            default => null,
+        };
+        if ($role === null) {
+            return null;
+        }
+        $matched = $devices->filter(fn (Device $device): bool => $device->punch_role === $role);
+
+        return $matched->count() === 1 ? $matched->first() : null;
+    }
+
+    private function host(string $host): string
+    {
+        $host = trim((string) preg_replace('#^https?://#', '', trim($host)));
+        $host = explode('/', $host)[0];
+
+        return str_contains($host, ':') ? explode(':', $host)[0] : $host;
+    }
+
+    private function isPrivate(string $ip): bool
+    {
+        return str_starts_with($ip, '10.')
+            || str_starts_with($ip, '192.168.')
+            || (bool) preg_match('/^172\.(1[6-9]|2\d|3[0-1])\./', $ip);
     }
 
     private function sameAddress(?string $saved, string $reported): bool

@@ -72,6 +72,11 @@ Route::post('hikvision-events/{token}/people', [HikvisionEventController::class,
 Route::match(['get', 'post'], 'hikvision-events/{token}', HikvisionEventController::class)
     ->where('token', '[A-Za-z0-9]+')
     ->middleware('throttle:120,1')
+    ->withoutMiddleware([
+        \Illuminate\Session\Middleware\StartSession::class,
+        \Illuminate\View\Middleware\ShareErrorsFromSession::class,
+        \Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class,
+    ])
     ->name('hikvision-events.store');
 Route::get('two-factor/recovery', [TwoFactorController::class, 'recovery'])->middleware('auth')->name('two-factor.recovery');
 

@@ -1102,6 +1102,197 @@ class HikvisionAttendanceTest extends TestCase
         $this->assertSame('18:10:00', substr((string) $day->punch_out, 0, 8));
     }
 
+    public function test_only_out_terminal_people_remain_and_their_face_stays(): void
+    {
+        $this->app->instance(\App\Services\Devices\HikvisionClient::class, new \App\Services\Devices\HikvisionClient(function () {
+            return ['status' => 200, 'body' => json_encode(['statusCode' => 1])];
+        }));
+        $org = $this->makeCompany('KEEP');
+        $kept = $this->makeEmployee($org, 'OUT1');
+        $extra = $this->makeEmployee($org, 'OLD9');
+        \App\Models\EmployeeCredential::query()->create([
+            'employee_id' => $kept->id,
+            'kind' => 'face',
+            'slot' => '0',
+            'content' => base64_encode('face'),
+        ]);
+        $out = Device::query()->create([
+            'company_id' => $org['company']->id,
+            'name' => 'Hikvision-(OUT)',
+            'register_id' => 'HIKOUT',
+            'ip_address' => '192.168.1.160',
+            'punch_role' => 'out',
+            'status' => 'online',
+        ]);
+        $in = Device::query()->create([
+            'company_id' => $org['company']->id,
+            'name' => 'HIK1921681156',
+            'register_id' => 'HIKIN',
+            'ip_address' => '192.168.1.156',
+            'punch_role' => 'in',
+            'status' => 'online',
+        ]);
+        \App\Models\DeviceTerminalUser::query()->create([
+            'device_id' => $out->id,
+            'user_id' => 'OUT1',
+            'name' => 'Kept',
+            'employee_id' => $kept->id,
+        ]);
+        \App\Models\DeviceTerminalUser::query()->create([
+            'device_id' => $in->id,
+            'user_id' => 'OLD9',
+            'name' => 'Extra',
+            'employee_id' => $extra->id,
+        ]);
+
+        $result = app(\App\Services\Devices\KeepOutRoster::class)->run(true);
+
+        $this->assertSame(1, $result['kept']);
+        $this->assertSame(1, $result['removed']);
+        $this->assertSame([], $result['duplicates']);
+        $this->assertDatabaseHas('employees', ['id' => $kept->id]);
+        $this->assertDatabaseMissing('employees', ['id' => $extra->id]);
+        $this->assertDatabaseHas('employee_credentials', ['employee_id' => $kept->id, 'kind' => 'face']);
+        $this->assertDatabaseMissing('device_terminal_users', ['user_id' => 'OLD9']);
+    }
+
+    public function test_a_scan_from_the_office_address_is_saved_when_the_row_stores_the_public_ip(): void
+    {
+        config([
+            'devices.forward_token' => 'secrettoken',
+            'hikvision.public_host' => '103.214.226.146',
+            'hikvision.host' => '103.214.226.146',
+        ]);
+        $org = $this->makeCompany('HIK');
+        $employee = $this->makeEmployee($org, '900001');
+        $in = Device::query()->create([
+            'company_id' => $org['company']->id,
+            'name' => 'Hikvision-(IN)',
+            'register_id' => 'HIK1921681156',
+            'ip_address' => '103.214.226.146',
+            'port' => 18080,
+            'punch_role' => 'in',
+            'status' => 'online',
+        ]);
+        $out = Device::query()->create([
+            'company_id' => $org['company']->id,
+            'name' => 'Hikvision-(OUT)',
+            'register_id' => 'HIK1921681160',
+            'ip_address' => '103.214.226.146',
+            'port' => 18081,
+            'punch_role' => 'out',
+            'status' => 'online',
+        ]);
+
+        $this->postJson('/hikvision-events/secrettoken', [
+            'ipAddress' => '192.168.1.156',
+            'dateTime' => '2026-11-25T10:54:00+05:30',
+            'eventType' => 'AccessControllerEvent',
+            'AccessControllerEvent' => [
+                'subEventType' => 75,
+                'employeeNoString' => '900001',
+                'name' => 'New Person',
+                'serialNo' => 501,
+                'currentVerifyMode' => 'face',
+                'attendanceStatus' => 'checkIn',
+            ],
+        ])->assertOk()->assertJson(['saved' => 1]);
+
+        $this->postJson('/hikvision-events/secrettoken', [
+            'ipAddress' => '103.214.226.146',
+            'dateTime' => '2026-11-25T18:10:00+05:30',
+            'eventType' => 'AccessControllerEvent',
+            'AccessControllerEvent' => [
+                'subEventType' => 75,
+                'employeeNoString' => '900001',
+                'name' => 'New Person',
+                'serialNo' => 502,
+                'currentVerifyMode' => 'face',
+                'attendanceStatus' => 'checkOut',
+            ],
+        ])->assertOk()->assertJson(['saved' => 1]);
+
+        $punches = AttendancePunch::query()->orderBy('id')->get();
+        $this->assertCount(2, $punches);
+        $this->assertSame($in->id, $punches[0]->device_id);
+        $this->assertSame('in', $punches[0]->direction);
+        $this->assertSame($employee->id, $punches[0]->employee_id);
+        $this->assertSame($out->id, $punches[1]->device_id);
+        $this->assertSame('out', $punches[1]->direction);
+        $this->assertSame('192.168.1.156', $in->fresh()->lan_ip);
+    }
+
+    public function test_the_out_terminal_receives_the_face_that_matches_on_the_in_terminal(): void
+    {
+        config([
+            'hikvision.host' => '192.168.1.156',
+            'hikvision.public_host' => '',
+            'hikvision.password' => 'secret',
+        ]);
+        $org = $this->makeCompany('HIK');
+        $employee = $this->makeEmployee($org, '900001');
+        $in = Device::query()->create([
+            'company_id' => $org['company']->id,
+            'name' => 'Hikvision-(IN)',
+            'register_id' => 'HIK1921681156',
+            'ip_address' => '192.168.1.156',
+            'port' => 80,
+            'username' => 'admin',
+            'password' => 'secret',
+            'punch_role' => 'in',
+            'status' => 'online',
+        ]);
+        $out = Device::query()->create([
+            'company_id' => $org['company']->id,
+            'name' => 'Hikvision-(OUT)',
+            'register_id' => 'HIK1921681160',
+            'ip_address' => '192.168.1.160',
+            'port' => 80,
+            'username' => 'admin',
+            'password' => 'secret',
+            'punch_role' => 'out',
+            'status' => 'online',
+        ]);
+        \App\Models\DeviceTerminalUser::query()->create([
+            'device_id' => $out->id,
+            'user_id' => '900001',
+            'name' => 'New Person',
+            'employee_id' => $employee->id,
+        ]);
+        $jpeg = "\xFF\xD8\xFF\xD9";
+        $bodies = [];
+        $this->app->instance(\App\Services\Devices\HikvisionClient::class, new \App\Services\Devices\HikvisionClient(function (string $method, string $url, $body) use (&$bodies, $jpeg) {
+            $bodies[] = ['method' => $method, 'url' => $url, 'body' => $body];
+            if (str_contains($url, 'FDSearch')) {
+                return ['status' => 200, 'body' => json_encode(['MatchList' => [[
+                    'faceURL' => 'http://192.168.1.156/face.jpg',
+                    'modelData' => 'MODELDATA',
+                ]]])];
+            }
+            if ($method === 'GET') {
+                return ['status' => 200, 'body' => $jpeg];
+            }
+
+            return ['status' => 200, 'body' => json_encode(['statusCode' => 1])];
+        }));
+
+        $result = app(\App\Services\Devices\HikvisionCredentials::class)->mirrorFaces($in, $out);
+
+        $this->assertSame(1, $result['restored']);
+        $this->assertSame(0, $result['failed']);
+        $face = collect($bodies)->first(fn (array $call) => str_contains($call['url'], 'FaceDataRecord'));
+        $this->assertNotNull($face);
+        $this->assertStringContainsString('MODELDATA', (string) $face['body']);
+        $this->assertStringContainsString($jpeg, (string) $face['body']);
+        $modifyAt = collect($bodies)->search(fn (array $call) => str_contains($call['url'], 'UserInfo/Modify'));
+        $faceAt = collect($bodies)->search(fn (array $call) => str_contains($call['url'], 'FaceDataRecord'));
+        $this->assertIsInt($modifyAt);
+        $this->assertIsInt($faceAt);
+        $this->assertLessThan($faceAt, $modifyAt);
+        $photo = collect($bodies)->first(fn (array $call) => $call['method'] === 'GET');
+        $this->assertSame('http://192.168.1.156/face.jpg', $photo['url']);
+    }
+
     private function postScan(string $ip, string $at, int $serial): \Illuminate\Testing\TestResponse
     {
         return $this->postJson('/hikvision-events/secrettoken', [

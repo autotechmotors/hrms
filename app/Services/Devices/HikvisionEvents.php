@@ -18,7 +18,7 @@ class HikvisionEvents
      * A face or finger scan posted by the terminal itself. Heartbeats, door
      * events, and failed reads return null.
      *
-     * @return array{serial: string, user_id: string, name: string, utc: int, type: string, image: ?string, ip: string, device_name: string}|null
+     * @return array{serial: string, user_id: string, name: string, utc: int, type: string, image: ?string, ip: string, device_name: string, attendance: string}|null
      */
     public function fromPush(string $body): ?array
     {
@@ -103,6 +103,7 @@ class HikvisionEvents
             'image' => $image,
             'ip' => trim((string) ($payload['ipAddress'] ?? '')),
             'device_name' => trim((string) ($event['deviceName'] ?? $payload['deviceName'] ?? '')),
+            'attendance' => strtolower(trim((string) ($row['attendanceStatus'] ?? ''))),
         ];
     }
 
@@ -566,6 +567,61 @@ class HikvisionEvents
         }
 
         return array_values($found);
+    }
+
+    /**
+     * The face picture and the device model from the terminal that already matches.
+     *
+     * @return array{jpeg: ?string, model: string}
+     */
+    public function faceTemplate(string $host, string $username, string $password, string $userId): array
+    {
+        $base = $this->baseUrl($host);
+        $empty = ['jpeg' => null, 'model' => ''];
+        try {
+            $response = $this->client->call('POST', $base.'/ISAPI/Intelligent/FDLib/FDSearch?format=json', $username, $password, [
+                'searchResultPosition' => 0,
+                'maxResults' => 1,
+                'faceLibType' => 'blackFD',
+                'FDID' => '1',
+                'FPID' => $userId,
+            ]);
+        } catch (\Throwable) {
+            return $empty;
+        }
+        $json = json_decode($response['body'], true);
+        $row = is_array($json) ? data_get($json, 'MatchList.0') : null;
+        if (! is_array($row)) {
+            return $empty;
+        }
+        $model = trim((string) ($row['modelData'] ?? ''));
+        $url = trim((string) ($row['faceURL'] ?? ''));
+        $jpeg = null;
+        if ($url !== '') {
+            if (str_starts_with($url, '/')) {
+                $url = $base.$url;
+            } elseif (preg_match('#^https?://#', $url) === 1) {
+                $pathAt = strpos($url, '/', 8);
+                $url = $pathAt === false ? $base : $base.substr($url, $pathAt);
+            }
+            try {
+                $photo = $this->client->call('GET', $url, $username, $password);
+            } catch (\Throwable) {
+                $photo = null;
+            }
+            if (is_array($photo) && (int) ($photo['status'] ?? 0) === 200) {
+                $body = (string) ($photo['body'] ?? '');
+                if (! str_starts_with($body, "\xFF\xD8\xFF")) {
+                    $decoded = base64_decode($body, true);
+                    $body = is_string($decoded) ? $decoded : '';
+                }
+                if (str_starts_with($body, "\xFF\xD8\xFF") && strlen($body) <= 2_000_000) {
+                    $jpeg = $body;
+                }
+            }
+        }
+
+        return ['jpeg' => $jpeg, 'model' => $model];
     }
 
     public function facePhoto(string $host, string $username, string $password, string $userId, string $faceUrl = ''): ?string
