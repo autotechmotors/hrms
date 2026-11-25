@@ -624,6 +624,21 @@ class HikvisionAttendanceTest extends TestCase
         $this->assertFalse(collect($urls)->contains(fn (string $url) => str_contains($url, '192.168.1.156')));
     }
 
+    public function test_a_private_office_address_is_dialed_through_the_open_firewall_port(): void
+    {
+        config([
+            'hikvision.public_host' => '103.214.226.146',
+            'hikvision.host' => '192.168.1.156',
+            'hikvision.port' => 18080,
+            'hikvision.terminals.out.port' => 18081,
+        ]);
+        $in = new Device(['ip_address' => '192.168.1.156', 'port' => 80, 'punch_role' => 'in']);
+        $out = new Device(['ip_address' => '192.168.1.160', 'port' => 80, 'punch_role' => 'out']);
+
+        $this->assertSame('103.214.226.146:18080', $in->terminalHost());
+        $this->assertSame('103.214.226.146:18081', $out->terminalHost());
+    }
+
     public function test_saving_an_employee_asks_the_office_link_when_the_server_cannot_see_the_terminal(): void
     {
         config([

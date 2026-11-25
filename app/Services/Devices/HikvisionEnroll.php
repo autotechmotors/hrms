@@ -480,36 +480,7 @@ class HikvisionEnroll
      */
     private function endpoint(Device $device): array
     {
-        $configured = trim((string) $device->ip_address);
-        $port = (int) $device->port;
-        if ($configured === '' || $port < 1) {
-            $configured = trim((string) config('hikvision.host'));
-            $port = is_numeric(config('hikvision.port')) ? (int) config('hikvision.port') : 0;
-        }
-        if ($configured !== '' && $port > 0) {
-            $configured = (string) preg_replace('#^https?://#', '', $configured);
-            $configured = explode('/', $configured)[0];
-            if (str_contains($configured, ':')) {
-                [$configured, $written] = explode(':', $configured, 2);
-                $port = (int) $written;
-            }
-
-            return [$configured, $port];
-        }
-
-        $host = trim((string) $device->ip_address);
-        if ($host === '') {
-            $host = $configured;
-        }
-        $host = (string) preg_replace('#^https?://#', '', $host);
-        $host = explode('/', $host)[0];
-        $devicePort = 80;
-        if (str_contains($host, ':')) {
-            [$host, $written] = explode(':', $host, 2);
-            $devicePort = (int) $written;
-        }
-
-        return [$host, $devicePort > 0 ? $devicePort : 80];
+        return $device->dialAddress();
     }
 
     private function xml(string $root, string $inner): string

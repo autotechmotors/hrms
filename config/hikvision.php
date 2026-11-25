@@ -22,6 +22,7 @@ return [
     */
     'pull' => filter_var(env('HIKVISION_IN_PULL', env('HIKVISION_PULL', false)), FILTER_VALIDATE_BOOL)
         || filter_var(env('HIKVISION_OUT_PULL', env('HIKVISION_OUT_ULL', false)), FILTER_VALIDATE_BOOL),
+    'public_host' => env('HIKVISION_HOST', ''),
     'host' => $inHost,
     'port' => $inPort !== null && $inPort !== '' ? (int) $inPort : null,
     'register_id' => $inRegister,

@@ -238,33 +238,48 @@ class EmployeePush
             ->where('company_id', $employee->company_id)
             ->get()
             ->filter(fn (Device $device) => $device->isHikvision());
+        $reached = 0;
+        $failure = null;
         foreach ($devices as $device) {
-            if ($credential->kind === 'face') {
-                $remaining = EmployeeCredential::query()
-                    ->where('employee_id', $employee->id)
-                    ->where('kind', 'face')
-                    ->whereKeyNot($credential->id)
-                    ->orderByDesc('id')
-                    ->get();
-                if ($remaining->isEmpty()) {
-                    $this->hikvision->deleteFace($device, $userId);
-                } else {
-                    $bytes = StoredImage::bytes((string) $remaining->first()->content);
-                    if (! is_string($bytes) || ! str_starts_with($bytes, "\xFF\xD8\xFF")) {
-                        throw new \RuntimeException('The remaining face could not be sent back to '.$device->name.'.');
-                    }
-                    $this->hikvision->replaceFace($device, $userId, $bytes);
-                }
+            try {
+                $this->removeFromDevice($device, $employee, $credential, $userId);
+                $reached++;
+            } catch (\Throwable $exception) {
+                $failure = $exception->getMessage();
             }
-            if ($credential->kind === 'finger') {
-                $this->hikvision->deleteFinger($device, $userId, (int) $credential->slot);
-            }
+        }
+        if ($reached === 0 && $failure !== null) {
+            throw new \RuntimeException($failure);
         }
 
         $credential->delete();
         $label = $credential->kind === 'finger' ? 'Finger' : 'Face';
 
-        return ['devices' => $devices->count(), 'message' => $label.' removed from HRMS and the face terminal.'];
+        return ['devices' => $reached, 'message' => $label.' removed from HRMS and the face terminal.'];
+    }
+
+    private function removeFromDevice(Device $device, Employee $employee, EmployeeCredential $credential, string $userId): void
+    {
+        if ($credential->kind === 'face') {
+            $remaining = EmployeeCredential::query()
+                ->where('employee_id', $employee->id)
+                ->where('kind', 'face')
+                ->whereKeyNot($credential->id)
+                ->orderByDesc('id')
+                ->get();
+            if ($remaining->isEmpty()) {
+                $this->hikvision->deleteFace($device, $userId);
+            } else {
+                $bytes = StoredImage::bytes((string) $remaining->first()->content);
+                if (! is_string($bytes) || ! str_starts_with($bytes, "\xFF\xD8\xFF")) {
+                    throw new \RuntimeException('The remaining face could not be sent back to '.$device->name.'.');
+                }
+                $this->hikvision->replaceFace($device, $userId, $bytes);
+            }
+        }
+        if ($credential->kind === 'finger') {
+            $this->hikvision->deleteFinger($device, $userId, (int) $credential->slot);
+        }
     }
 
     public function drop(Collection $devices, string $userId): void

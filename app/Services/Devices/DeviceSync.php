@@ -333,7 +333,7 @@ class DeviceSync
             ->first();
         if ($kept?->source === 'manual') {
             $this->calculator->recalculate($employee, $date);
-            app(FaceAccess::class)->sync($employee);
+            $this->syncFace($employee);
 
             return;
         }
@@ -454,7 +454,19 @@ class DeviceSync
             'status' => $day->status ?: 'absent',
         ])->save();
         $this->calculator->recalculate($employee, $date);
-        app(FaceAccess::class)->sync($employee);
+        $this->syncFace($employee);
+    }
+
+    private function syncFace($employee): void
+    {
+        if (! app()->runningInConsole()) {
+            return;
+        }
+
+        try {
+            app(FaceAccess::class)->sync($employee);
+        } catch (\Throwable) {
+        }
     }
 
     private function storeSelfie(Device $device): bool

@@ -52,20 +52,90 @@ class Device extends Model
 
     public function terminalHost(): string
     {
-        $ip = trim((string) preg_replace('#^https?://#', '', (string) $this->ip_address));
-        $ip = explode('/', $ip)[0];
+        [$host, $port] = $this->dialAddress();
+        if ($host === '') {
+            return '';
+        }
+
+        return $port === 80 ? $host : $host.':'.$port;
+    }
+
+    /**
+     * Address the server can actually open. A private office IP is kept on the
+     * office network. From the live server it is replaced by the public host
+     * and the open firewall port.
+     *
+     * @return array{0: string, 1: int}
+     */
+    public function dialAddress(): array
+    {
+        $ip = $this->cleanHost((string) $this->ip_address);
         $port = (int) $this->port;
-        if ($ip !== '' && $port > 0) {
-            return $port === 80 ? $ip : $ip.':'.$port;
+        $public = $this->publicHost();
+        if ($ip !== '' && ! $this->isPrivateAddress($ip)) {
+            return [$ip, $port > 0 ? $port : 80];
+        }
+        if ($public !== '') {
+            return [$public, $this->publishedPort($port)];
+        }
+        if ($ip !== '') {
+            return [$ip, $port > 0 ? $port : 80];
         }
 
-        $configured = trim((string) config('hikvision.host'));
-        $configPort = is_numeric(config('hikvision.port')) ? (int) config('hikvision.port') : 0;
-        if ($this->isHikvision() && $configured !== '' && $configPort > 0) {
-            return $configPort === 80 ? $configured : $configured.':'.$configPort;
+        $fallback = $this->cleanHost((string) config('hikvision.host'));
+        $fallbackPort = is_numeric(config('hikvision.port')) ? (int) config('hikvision.port') : 80;
+
+        return [$fallback, $port > 0 ? $port : ($fallbackPort > 0 ? $fallbackPort : 80)];
+    }
+
+    private function publicHost(): string
+    {
+        foreach ([config('hikvision.public_host'), config('hikvision.host')] as $candidate) {
+            $host = $this->cleanHost((string) $candidate);
+            if ($host !== '' && ! $this->isPrivateAddress($host)) {
+                return $host;
+            }
         }
 
-        return $ip !== '' ? $ip : $configured;
+        return '';
+    }
+
+    private function publishedPort(int $devicePort): int
+    {
+        if ($devicePort > 80) {
+            return $devicePort;
+        }
+        $rolePort = $this->punch_role === self::ROLE_OUT
+            ? config('hikvision.terminals.out.port')
+            : (config('hikvision.terminals.in.port') ?: config('hikvision.port'));
+        if (is_numeric($rolePort) && (int) $rolePort > 0) {
+            return (int) $rolePort;
+        }
+
+        return 80;
+    }
+
+    private function cleanHost(string $host): string
+    {
+        $host = trim((string) preg_replace('#^https?://#', '', $host));
+        $host = explode('/', $host)[0];
+        if (str_contains($host, ':')) {
+            $host = explode(':', $host)[0];
+        }
+
+        return trim($host);
+    }
+
+    private function isPrivateAddress(string $host): bool
+    {
+        if ($host === '' || $host === 'localhost') {
+            return true;
+        }
+        if (! filter_var($host, FILTER_VALIDATE_IP)) {
+            return false;
+        }
+
+        return filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false;
     }
 
     public function users(): HasMany
