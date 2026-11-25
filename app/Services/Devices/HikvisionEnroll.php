@@ -247,14 +247,16 @@ class HikvisionEnroll
         $types = $this->faceDataTypes($device);
         $plans = [];
         foreach ($types as $type) {
-            $plans[] = [$type, false];
+            $plans[] = $type;
         }
-        $plans[] = ['binary', true];
+        if (! in_array('binary', $plans, true)) {
+            $plans[] = 'binary';
+        }
         $response = ['status' => 0, 'body' => ''];
-        foreach ($plans as [$type, $withReader]) {
+        foreach ($plans as $type) {
             $inner = '<captureInfrared>false</captureInfrared><dataType>'.$type.'</dataType>';
-            if ($withReader) {
-                $inner .= '<readerID>1</readerID>';
+            if ($type === 'binary') {
+                $inner .= '<readerID>1</readerID><employeeNo>'.htmlspecialchars($userId, ENT_XML1).'</employeeNo>';
             }
             $response = $this->client->call(
                 'POST',
@@ -283,6 +285,12 @@ class HikvisionEnroll
             $url = $this->value($response['body'], 'faceURL');
         }
         if ($url === '') {
+            $saved = $this->waitForSavedFace($userId, $username, $password, $base);
+            if ($saved !== null) {
+                $this->uploadJpeg($device, $userId, $saved);
+
+                return $saved;
+            }
             $progress = $this->value($response['body'], 'captureProgress');
             $detail = $progress === '' ? 'no photo' : 'progress '.$progress;
 
@@ -333,6 +341,50 @@ class HikvisionEnroll
             || str_contains($body, 'invalid content')
             || str_contains($body, 'invalid operation')
             || str_contains($body, 'notsupport');
+    }
+
+    private function waitForSavedFace(string $userId, string $username, string $password, string $base): ?string
+    {
+        $deadline = microtime(true) + 16;
+        do {
+            $jpeg = $this->savedFace($userId, $username, $password, $base);
+            if ($jpeg !== null) {
+                return $jpeg;
+            }
+            if (microtime(true) >= $deadline) {
+                break;
+            }
+            usleep(1500000);
+        } while (true);
+
+        return null;
+    }
+
+    private function savedFace(string $userId, string $username, string $password, string $base): ?string
+    {
+        try {
+            $found = $this->client->call('POST', $base.'/ISAPI/Intelligent/FDLib/FDSearch?format=json', $username, $password, [
+                'searchResultPosition' => 0,
+                'maxResults' => 1,
+                'faceLibType' => 'blackFD',
+                'FDID' => '1',
+                'FPID' => $userId,
+            ], 8);
+        } catch (\Throwable) {
+            return null;
+        }
+        $json = json_decode($found['body'], true);
+        $url = trim((string) (is_array($json) ? data_get($json, 'MatchList.0.faceURL') : ''));
+        if ($url === '') {
+            return null;
+        }
+        try {
+            $photo = $this->client->call('GET', $this->publicPhotoUrl($url, $base), $username, $password, null, 12);
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return $photo['status'] === 200 && str_starts_with($photo['body'], "\xFF\xD8\xFF") ? $photo['body'] : null;
     }
 
     private function jpegIn(string $body): ?string
@@ -557,7 +609,7 @@ class HikvisionEnroll
                 }
             }
         }
-        if (preg_match('/<'.$tag.'>([^<]+)</', $body, $match) === 1) {
+        if (preg_match('/<'.$tag.'\b[^>]*>\s*(?:<!\[CDATA\[)?\s*([^<\]]+)/i', $body, $match) === 1) {
             return trim($match[1]);
         }
 

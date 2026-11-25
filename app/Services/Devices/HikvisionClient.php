@@ -27,7 +27,7 @@ class HikvisionClient
             throw new RuntimeException('PHP curl is required to reach the Hikvision device.');
         }
 
-        $headers = ['Accept: application/json'];
+        $headers = [is_string($body) ? 'Accept: */*' : 'Accept: application/json'];
         $ch = curl_init($url);
         $options = [
             CURLOPT_RETURNTRANSFER => true,
