@@ -323,6 +323,57 @@ class HikvisionAttendanceTest extends TestCase
         $this->assertTrue(collect($urls)->contains(fn (string $url) => str_contains($url, 'FaceDataRecord')));
     }
 
+    public function test_a_face_added_on_one_terminal_is_copied_to_the_other(): void
+    {
+        config([
+            'hikvision.public_host' => '',
+            'hikvision.host' => '192.168.1.156',
+            'hikvision.port' => null,
+            'hikvision.terminals.in.port' => null,
+            'hikvision.terminals.out.port' => null,
+            'hikvision.username' => 'admin',
+            'hikvision.password' => 'secret',
+        ]);
+        $org = $this->makeCompany('HIK');
+        $employee = $this->makeEmployee($org, 'AT0008');
+        $in = Device::query()->create([
+            'company_id' => $org['company']->id,
+            'name' => 'HIK1921681156',
+            'register_id' => 'HIK1921681156',
+            'ip_address' => '192.168.1.156',
+            'punch_role' => 'in',
+            'status' => 'online',
+        ]);
+        Device::query()->create([
+            'company_id' => $org['company']->id,
+            'name' => 'Hikvision-(OUT)',
+            'register_id' => 'HIK1921681160',
+            'ip_address' => '192.168.1.160',
+            'punch_role' => 'out',
+            'gate_kind' => 'attendance',
+            'status' => 'online',
+        ]);
+        $jpeg = base64_decode('/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAb/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCwAA//2Q==');
+        $urls = [];
+        $this->app->instance(HikvisionClient::class, new HikvisionClient(function (string $method, string $url) use (&$urls, $jpeg) {
+            $urls[] = $url;
+            if (str_contains($url, 'CaptureFaceData') && ! str_contains($url, 'capabilities')) {
+                return ['status' => 200, 'body' => json_encode(['CaptureFaceData' => ['faceDataUrl' => 'http://192.168.1.156/face.jpg', 'captureProgress' => 100]])];
+            }
+            if ($method === 'GET') {
+                return ['status' => 200, 'body' => $jpeg];
+            }
+
+            return ['status' => 200, 'body' => json_encode(['statusCode' => 1, 'statusString' => 'OK'])];
+        }));
+
+        $result = app(\App\Services\Devices\EmployeePush::class)->collect($employee, 'face', null, $in);
+
+        $this->assertStringContainsString('Copied to Hikvision-(OUT).', $result['message']);
+        $this->assertTrue(collect($urls)->contains(fn (string $url) => str_contains($url, '192.168.1.160') && str_contains($url, 'FaceDataRecord')));
+        $this->assertSame(0, app(\App\Services\Devices\FaceAccess::class)->gateTerminals($org['company']->id)->count());
+    }
+
     public function test_an_out_terminal_keeps_a_raw_photo_when_the_url_capture_is_empty(): void
     {
         config([

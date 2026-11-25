@@ -55,10 +55,7 @@ class FaceAccess
         }
 
         $allow = $this->allowsFace($employee, $at ?? now()->timezone('Asia/Kolkata'));
-        $devices = Device::query()
-            ->where('company_id', $employee->company_id)
-            ->get()
-            ->filter(fn (Device $device) => $device->isHikvision() && $device->isGate());
+        $devices = $this->gateTerminals((int) $employee->company_id);
 
         foreach ($devices as $device) {
             $key = 'face-pic.'.$device->id.'.'.$employee->id;
@@ -69,6 +66,20 @@ class FaceAccess
             $this->push->faceAccess($employee, $device, $allow);
             Cache::put($key, $next, now()->addDays(2));
         }
+    }
+
+    /**
+     * Attendance IN and OUT terminals are never blocklisted. Only a gate terminal is.
+     *
+     * @return \Illuminate\Support\Collection<int, Device>
+     */
+    public function gateTerminals(int $companyId): \Illuminate\Support\Collection
+    {
+        return Device::query()
+            ->where('company_id', $companyId)
+            ->get()
+            ->filter(fn (Device $device) => $device->isHikvision() && $device->isGate())
+            ->values();
     }
 
     public function syncOpen(): int

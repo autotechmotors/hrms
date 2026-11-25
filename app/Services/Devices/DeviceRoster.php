@@ -21,7 +21,7 @@ class DeviceRoster
      */
     public function sync(Device $source): array
     {
-        $imported = $this->credentials->import($source);
+        $imported = $this->credentials->import($source, true);
         $targets = Device::query()
             ->where('company_id', $source->company_id)
             ->where('id', '!=', $source->id)

@@ -146,10 +146,20 @@ class EmployeePush
             return ['devices' => 0, 'message' => $hikvisionError ?: 'Add a Hikvision device before collecting a credential.'];
         }
 
-        if ($hikvision && $hikvision->readsOut()) {
-            try {
-                app(FaceAccess::class)->sync($employee);
-            } catch (\Throwable) {
+        $copied = [];
+        $missed = [];
+        if (in_array($kind, ['face', 'finger'], true) && $hikvision instanceof Device) {
+            foreach ($this->otherTerminals($employee, $hikvision) as $other) {
+                try {
+                    $this->placeOnTerminal($other, $employee, $userId, $name, false);
+                    DeviceTerminalUser::query()->updateOrCreate(
+                        ['device_id' => $other->id, 'user_id' => $userId],
+                        ['name' => $name, 'employee_id' => $employee->id, 'dismissed_at' => null, 'synced_at' => now()],
+                    );
+                    $copied[] = $other->name;
+                } catch (\Throwable) {
+                    $missed[] = $other->name;
+                }
             }
         }
 
@@ -160,6 +170,12 @@ class EmployeePush
             'card' => $target.' adds a face or a finger. Stand at that terminal and use those buttons.',
             default => 'Password sent to '.$target.'.',
         };
+        if ($copied !== []) {
+            $message .= ' Copied to '.implode(', ', $copied).'.';
+        }
+        if ($missed !== []) {
+            $message .= ' Not copied to '.implode(', ', $missed).'.';
+        }
 
         return ['devices' => $queued, 'message' => $message];
     }
@@ -308,7 +324,7 @@ class EmployeePush
     /**
      * @return Collection<int, Device>
      */
-    private function placeOnTerminal(Device $device, Employee $employee, string $userId, string $name): void
+    private function placeOnTerminal(Device $device, Employee $employee, string $userId, string $name, bool $wait = true): void
     {
         $pin = $this->storedPin($employee);
         $face = $this->facePayload($employee);
@@ -317,6 +333,9 @@ class EmployeePush
             $this->hikvision->storeProfile($device, $userId, $name, $pin, $face, $prints, true);
 
             return;
+        }
+        if (! $wait) {
+            throw new \RuntimeException($device->name.' is offline ('.$device->terminalHost().').');
         }
 
         $result = $this->jobs->dispatchAndWait([
@@ -437,31 +456,28 @@ class EmployeePush
         return is_string($bytes) && str_starts_with($bytes, "\xFF\xD8\xFF") ? $bytes : null;
     }
 
+    /**
+     * @return Collection<int, Device>
+     */
+    private function otherTerminals(Employee $employee, Device $source): Collection
+    {
+        return Device::query()
+            ->where('company_id', $employee->company_id)
+            ->where('id', '!=', $source->id)
+            ->orderBy('id')
+            ->get()
+            ->filter(fn (Device $device) => $device->isHikvision())
+            ->values();
+    }
+
     private function facePayload(Employee $employee): ?string
     {
-        $face = $this->faceFromPhotograph($employee);
-        if ($face) {
-            EmployeeCredential::query()->updateOrCreate(
-                ['employee_id' => $employee->id, 'kind' => 'face', 'slot' => '0'],
-                ['content' => $face],
-            );
-
-            return $face;
-        }
-
         $stored = $this->faceFromCredential($employee);
-        $bytes = is_string($stored) ? base64_decode($stored, true) : false;
-        $face = is_string($bytes) && $bytes !== ''
-            ? StoredImage::normalize(base64_encode($this->deviceJpeg($bytes)))
-            : null;
-        if ($face) {
-            EmployeeCredential::query()->updateOrCreate(
-                ['employee_id' => $employee->id, 'kind' => 'face', 'slot' => '0'],
-                ['content' => $face],
-            );
+        if (is_string($stored) && $stored !== '') {
+            return $stored;
         }
 
-        return $face;
+        return $this->faceFromPhotograph($employee);
     }
 
     private function faceFromPhotograph(Employee $employee): ?string

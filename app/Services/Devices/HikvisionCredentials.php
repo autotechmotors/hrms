@@ -26,7 +26,7 @@ class HikvisionCredentials
     /**
      * @return array{added: int, faces: int, fingers: int}
      */
-    public function import(Device $device): array
+    public function import(Device $device, bool $preferTerminal = false): array
     {
         $password = $device->terminalPassword();
         if ($password === '') {
@@ -56,7 +56,7 @@ class HikvisionCredentials
                 ['device_id' => $device->id, 'user_id' => $person['code']],
                 ['name' => $person['name'], 'employee_id' => $employee->id, 'dismissed_at' => null],
             );
-            if ($person['faces'] > 0 && ! $this->stored($employee, 'face')) {
+            if ($person['faces'] > 0 && ($preferTerminal || ! $this->stored($employee, 'face'))) {
                 $photo = $this->events->facePhoto($host, $device->terminalUsername(), $password, $person['code']);
                 if (is_string($photo) && $photo !== '') {
                     $this->people->storeItem($employee, ['PhotoData' => [$photo]]);
