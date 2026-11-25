@@ -492,6 +492,8 @@ class HikvisionEnroll
             'faceURL' => $url,
         ]);
         if ($this->ok($linked)) {
+            $this->learnFace($device, $userId);
+
             return;
         }
 
@@ -509,6 +511,7 @@ class HikvisionEnroll
         if ($model !== '') {
             $record['modelData'] = $model;
         }
+        $jpeg = $this->withinFaceLimit($jpeg);
         if (! str_starts_with($jpeg, "\xFF\xD8\xFF")) {
             if ($model === '') {
                 throw new RuntimeException($device->name.' has no face picture to restore for '.$userId.'.');
@@ -549,6 +552,93 @@ class HikvisionEnroll
         if (! $this->ok($response)) {
             throw new RuntimeException($this->problem($response));
         }
+        if ($model === '') {
+            $this->learnFace($device, $userId);
+        }
+    }
+
+    /**
+     * The person page shows a picture even when the terminal has no face model.
+     * IN can match because it stored the model at capture. OUT then only has the
+     * picture and keeps asking to adjust the face. This asks OUT to build the model.
+     */
+    private function learnFace(Device $device, string $userId): void
+    {
+        [$username, $password] = $this->login($device);
+        $base = $this->base($device);
+        $id = rawurlencode($userId);
+        foreach (['FPID', 'PID'] as $key) {
+            try {
+                $started = $this->client->call(
+                    'GET',
+                    $base.'/ISAPI/Intelligent/FDLib/manualModeling?format=json&FDID=1&'.$key.'='.$id,
+                    $username,
+                    $password,
+                    null,
+                    20,
+                );
+            } catch (\Throwable) {
+                continue;
+            }
+            if ($this->modelingFailed($started['body'])) {
+                throw new RuntimeException($device->name.' has the picture for '.$userId.', but it could not learn that face.');
+            }
+            if ($started['status'] === 200) {
+                return;
+            }
+        }
+    }
+
+    private function modelingFailed(string $body): bool
+    {
+        if (preg_match('/<status>\s*failed\s*<\/status>/i', $body) === 1) {
+            return true;
+        }
+        $json = json_decode($body, true);
+        if (! is_array($json)) {
+            return false;
+        }
+        $status = strtolower(trim((string) (
+            data_get($json, 'ModelingStatus.status')
+            ?? data_get($json, 'modelingStatus')
+            ?? ''
+        )));
+
+        return $status === 'failed';
+    }
+
+    private function withinFaceLimit(string $jpeg): string
+    {
+        $limit = 200 * 1024;
+        if (strlen($jpeg) <= $limit || ! function_exists('imagecreatefromstring') || ! function_exists('imagejpeg')) {
+            return $jpeg;
+        }
+        $image = @imagecreatefromstring($jpeg);
+        if ($image === false) {
+            return $jpeg;
+        }
+        $width = imagesx($image);
+        $height = imagesy($image);
+        $max = 800;
+        if ($width > $max || $height > $max) {
+            $scale = $max / max($width, $height);
+            $scaled = imagecreatetruecolor(max(1, (int) round($width * $scale)), max(1, (int) round($height * $scale)));
+            imagecopyresampled($scaled, $image, 0, 0, 0, 0, imagesx($scaled), imagesy($scaled), $width, $height);
+            imagedestroy($image);
+            $image = $scaled;
+        }
+        $fitted = $jpeg;
+        foreach ([85, 70, 55, 40] as $quality) {
+            ob_start();
+            imagejpeg($image, null, $quality);
+            $fitted = (string) ob_get_clean();
+            if ($fitted !== '' && strlen($fitted) <= $limit) {
+                break;
+            }
+        }
+        imagedestroy($image);
+
+        return str_starts_with($fitted, "\xFF\xD8\xFF") ? $fitted : $jpeg;
     }
 
     private function saveFinger(Device $device, string $userId, int $fingerNo, string $data): void

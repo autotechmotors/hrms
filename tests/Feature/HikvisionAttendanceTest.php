@@ -321,6 +321,7 @@ class HikvisionAttendanceTest extends TestCase
         $this->assertStringContainsString('<CaptureFaceDataCond', $capture);
         $this->assertStringContainsString('<dataType>url</dataType>', $capture);
         $this->assertTrue(collect($urls)->contains(fn (string $url) => str_contains($url, 'FaceDataRecord')));
+        $this->assertTrue(collect($urls)->contains(fn (string $url) => str_contains($url, 'manualModeling')));
     }
 
     public function test_a_face_added_on_one_terminal_is_copied_to_the_other(): void

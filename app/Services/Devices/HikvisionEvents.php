@@ -589,7 +589,7 @@ class HikvisionEvents
         } catch (\Throwable) {
             return $empty;
         }
-        $json = json_decode($response['body'], true);
+        $json = $this->jsonObject($response['body']);
         $row = is_array($json) ? data_get($json, 'MatchList.0') : null;
         if (! is_array($row)) {
             return $empty;
