@@ -154,7 +154,7 @@
                                 <span class="visually-hidden">Actions</span>
                                 <a class="ib" href="{{ route('devices.show', $device) }}" title="Open"><x-i name="eye" :size="15" /></a>
                                 @if ($canEdit)
-                                    <form method="post" action="{{ route('devices.sync', $device) }}" data-confirm="{{ __('Read everyone on this terminal into HRMS and copy them onto the other terminals? This can take several minutes.') }}">
+                                    <form method="post" action="{{ route('devices.sync', $device) }}" data-sync="1" data-confirm="{{ __('Read everyone on this terminal into HRMS and copy them onto the other terminals? This can take several minutes.') }}">
                                         @csrf
                                         <button class="ib" type="submit" title="Sync people"><x-i name="reset" :size="15" /></button>
                                     </form>
@@ -218,3 +218,5 @@
         @endforeach
     @endif
 @endsection
+
+@include('operations.devices._sync')

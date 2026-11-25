@@ -13,7 +13,7 @@
             <p>{{ $device->place ?: 'No place' }} · {{ $device->model ?: 'No model' }}</p>
         </div>
         @if ($canEdit ?? false)
-            <form method="post" action="{{ route('devices.sync', $device) }}" data-confirm="{{ __('Read everyone on this terminal into HRMS and copy them onto the other terminals? This can take several minutes.') }}">
+            <form method="post" action="{{ route('devices.sync', $device) }}" data-sync="1" data-confirm="{{ __('Read everyone on this terminal into HRMS and copy them onto the other terminals? This can take several minutes.') }}">
                 @csrf
                 <button class="btn pr" type="submit">Sync people</button>
             </form>
@@ -268,6 +268,8 @@
         </div>
     @endif
 @endsection
+
+@include('operations.devices._sync')
 
 @push('scripts')
     <script>

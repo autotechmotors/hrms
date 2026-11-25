@@ -10,11 +10,12 @@ use App\Models\DeviceUser;
 use App\Services\Devices\DeviceRoster;
 use App\Services\Devices\EmployeePush;
 use App\Services\Devices\LocalPcServer;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
-use RuntimeException;
+use Throwable;
 
 class DeviceController extends Controller
 {
@@ -68,22 +69,30 @@ class DeviceController extends Controller
         return back()->with($result['ok'] ? 'success' : 'error', $result['message']);
     }
 
-    public function sync(Device $device, DeviceRoster $roster): RedirectResponse
+    public function sync(Request $request, Device $device, DeviceRoster $roster): JsonResponse|RedirectResponse
     {
         $this->authorizeDevices();
         abort_unless((int) $device->company_id === $this->companyId(), 404);
-        set_time_limit(0);
+        set_time_limit(55);
+        $offset = max(0, (int) $request->input('offset', 0));
 
         try {
-            $result = $roster->sync($device);
-        } catch (RuntimeException $exception) {
+            $result = $roster->syncBatch($device, $offset);
+        } catch (Throwable $exception) {
+            if ($request->ajax() || $request->expectsJson()) {
+                return response()->json(['message' => $exception->getMessage()], 422);
+            }
+
             return back()->with('error', $exception->getMessage());
         }
 
-        $message = 'Employees added: '.$result['added'].'. Faces saved: '.$result['faces'].'. Fingers saved: '.$result['fingers'].'. Copied to other terminals: '.$result['copied'].'.';
-        if ($result['failed'] > 0) {
-            $message .= ' '.$result['failed'].' copies did not reach a terminal.';
+        if ($request->ajax() || $request->expectsJson()) {
+            return response()->json($result);
         }
+
+        $message = $result['done']
+            ? 'Employees added: '.$result['added'].'. Faces saved: '.$result['faces'].'. Fingers saved: '.$result['fingers'].'. Copied to other terminals: '.$result['copied'].'.'
+            : 'Read '.$result['offset'].' of '.$result['total'].'. Press Sync people again to continue.';
 
         return back()->with('success', $message);
     }
