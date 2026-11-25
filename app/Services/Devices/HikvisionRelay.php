@@ -72,12 +72,6 @@ class HikvisionRelay
         if ($kind === 'face-access') {
             $enabled = (bool) ($job['enabled'] ?? true);
             $this->enroll->setUserType($device, $code, $name, $enabled ? 'normal' : 'blackList');
-            if ($enabled && is_string($job['face'] ?? null) && $job['face'] !== '') {
-                $jpeg = base64_decode($job['face'], true);
-                if (is_string($jpeg) && str_starts_with($jpeg, "\xFF\xD8\xFF")) {
-                    $this->enroll->replaceFace($device, $code, $jpeg);
-                }
-            }
 
             return [];
         }

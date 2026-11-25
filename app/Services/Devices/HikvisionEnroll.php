@@ -270,8 +270,8 @@ class HikvisionEnroll
     }
 
     /**
-     * OUT terminal person type. blackList is the device "Blocklist" user.
-     * normal is a regular user who can match for the out window or an approved pass.
+     * OUT terminal person type. blackList cannot scan. normal can.
+     * SetUp changes only that type. Modify would drop the face and the fingerprint.
      */
     public function setUserType(Device $device, string $userId, string $name, string $userType): void
     {
@@ -279,13 +279,16 @@ class HikvisionEnroll
         [$username, $secret] = $this->login($device);
         $body = $this->userBody($userId, $name, null, true, $userType);
         $base = $this->base($device);
-        $updated = $this->client->call('PUT', $base.'/ISAPI/AccessControl/UserInfo/Modify?format=json', $username, $secret, $body);
+        $updated = $this->client->call('PUT', $base.'/ISAPI/AccessControl/UserInfo/SetUp?format=json', $username, $secret, $body);
         if ($this->ok($updated)) {
             return;
         }
+        if (! $this->missing($updated)) {
+            throw new RuntimeException($this->problem($updated));
+        }
         $created = $this->client->call('POST', $base.'/ISAPI/AccessControl/UserInfo/Record?format=json', $username, $secret, $body);
         if (! $this->ok($created) && ! $this->exists($created)) {
-            throw new RuntimeException($this->problem($updated));
+            throw new RuntimeException($this->problem($created));
         }
     }
 

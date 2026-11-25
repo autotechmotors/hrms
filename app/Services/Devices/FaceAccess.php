@@ -69,7 +69,8 @@ class FaceAccess
     }
 
     /**
-     * Attendance IN and OUT terminals are never blocklisted. Only a gate terminal is.
+     * The OUT attendance terminal is blocked after IN. A gate terminal is too.
+     * The IN terminal stays open.
      *
      * @return \Illuminate\Support\Collection<int, Device>
      */
@@ -78,7 +79,7 @@ class FaceAccess
         return Device::query()
             ->where('company_id', $companyId)
             ->get()
-            ->filter(fn (Device $device) => $device->isHikvision() && $device->isGate())
+            ->filter(fn (Device $device) => $device->isHikvision() && ($device->isGate() || $device->punch_role === Device::ROLE_OUT))
             ->values();
     }
 

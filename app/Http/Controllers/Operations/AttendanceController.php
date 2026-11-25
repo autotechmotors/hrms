@@ -424,7 +424,7 @@ class AttendanceController extends Controller
         $face = $employee->credentials->first(fn (EmployeeCredential $item) => $item->kind === 'face' && StoredImage::mimeOf($item->content));
         $faceUrl = $face ? route('attendance.credential.photo', $face) : null;
         $punches = AttendancePunch::query()
-            ->select(['id', 'employee_id', 'punched_at', 'direction'])
+            ->select(['id', 'employee_id', 'gate_pass_id', 'punched_at', 'direction'])
             ->selectRaw('(CASE WHEN image IS NOT NULL THEN 1 ELSE 0 END) as has_image')
             ->where('employee_id', $employee->id)
             ->whereBetween('punched_at', [$start->copy()->startOfDay(), $end->copy()->endOfDay()])
@@ -456,6 +456,7 @@ class AttendanceController extends Controller
 
         $days = $punches->keys()->merge($storedDays->keys())->merge($passes->keys())->unique()->sortDesc()->values()->map(function (string $date) use ($employee, $punches, $storedDays, $passes, $shots, $faceUrl) {
             $list = app(DeviceSync::class)->collapse($punches->get($date, collect())->values());
+            $dayPasses = $passes->get($date, collect());
             $day = $storedDays->get($date);
             $inPunch = $list->firstWhere('direction', 'in') ?? $list->first();
             $status = $this->dayStatus($day);
@@ -466,8 +467,8 @@ class AttendanceController extends Controller
                 'label' => Carbon::parse($date)->format('D, d M'),
                 'in' => $day?->punch_in ? Clock::time($day->punch_in) : ($inPunch ? Clock::time($inPunch->punched_at) : null),
                 'out' => $shiftOut = $this->shiftClockOut($day?->punch_out, $passes->get($date, collect())),
-                'passes' => $this->gateCardList($passes->get($date, collect()), $shots),
-                'overtime' => app(PayDayMath::class)->overtimeLabel($employee, Carbon::parse($date), $day, $passes->get($date, collect())),
+                'passes' => $this->gateCardList($dayPasses, $shots),
+                'overtime' => app(PayDayMath::class)->overtimeLabel($employee, Carbon::parse($date), $day, $dayPasses),
                 'worked' => $shiftOut ? $this->workedLabel($day?->minutes_worked) : null,
                 'status' => $status['label'],
                 'status_class' => $status['class'],
@@ -478,7 +479,7 @@ class AttendanceController extends Controller
                 'out_input' => $shiftOut ? Clock::input($day?->punch_out) : '',
                 'punches' => $list->map(fn (AttendancePunch $punch) => [
                     'time' => Clock::time($punch->punched_at),
-                    'direction' => $punch->direction === 'out' ? 'Out' : 'In',
+                    'direction' => $this->punchLabel($punch, $dayPasses),
                 ])->values()->all(),
             ];
         })->values()->all();
@@ -672,6 +673,21 @@ class AttendanceController extends Controller
             ->max('updated_at');
 
         return md5($employee->id.'|'.$start->toDateString().'|'.$day.'|'.$punch.'|'.$pass);
+    }
+
+    /**
+     * @param  Collection<int, GatePass>  $passes
+     */
+    protected function punchLabel(AttendancePunch $punch, Collection $passes): string
+    {
+        $pass = $punch->gate_pass_id ? $passes->firstWhere('id', (int) $punch->gate_pass_id) : null;
+        if (! $pass instanceof GatePass) {
+            return $punch->direction === 'out' ? 'Out' : 'In';
+        }
+
+        $kind = $pass->isOfficeWork() ? 'Company' : 'Personal';
+
+        return $kind.' '.($punch->direction === 'out' ? 'out' : 'in');
     }
 
     /**

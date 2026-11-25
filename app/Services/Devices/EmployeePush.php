@@ -224,12 +224,8 @@ class EmployeePush
             return;
         }
 
-        $jpeg = $enabled ? $this->faceJpeg($employee) : null;
         if ($this->hikvision->reachable($device)) {
             $this->hikvision->setUserType($device, $userId, $name, $enabled ? 'normal' : 'blackList');
-            if ($enabled && $jpeg !== null) {
-                $this->hikvision->replaceFace($device, $userId, $jpeg);
-            }
 
             return;
         }
@@ -241,7 +237,6 @@ class EmployeePush
             'code' => $userId,
             'name' => $name,
             'enabled' => $enabled,
-            'face' => $jpeg !== null ? base64_encode($jpeg) : null,
         ], 25);
         if (($result['status'] ?? '') !== 'done') {
             throw new \RuntimeException($result['message'] ?: 'The office link to the face terminal is not running.');

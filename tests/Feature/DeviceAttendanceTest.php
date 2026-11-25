@@ -325,4 +325,65 @@ class DeviceAttendanceTest extends TestCase
             ->assertJsonPath('days.0.passes.0.leave', 'Early leave')
             ->assertJsonPath('days.0.passes.0.out', '03:10 PM');
     }
+
+    public function test_a_gate_pass_scan_is_labelled_apart_from_the_shift_clock(): void
+    {
+        $org = $this->makeCompany('LBL');
+        $hr = $this->makeUser('hr-admin', $org['company']);
+        $employee = $this->makeEmployee($org, 'LB1');
+        $personal = GatePass::query()->create([
+            'company_id' => $org['company']->id,
+            'number' => 'GP-LBL-1',
+            'employee_id' => $employee->id,
+            'date' => '2026-10-20',
+            'out_time' => '11:00:00',
+            'duration_minutes' => 30,
+            'work_type' => 'personal',
+            'reason' => 'Bank',
+            'status' => 'approved',
+            'expires_at' => '2026-10-20 11:30:00',
+            'out_at' => '2026-10-20 11:05:00',
+            'in_at' => '2026-10-20 11:25:00',
+        ]);
+        $office = GatePass::query()->create([
+            'company_id' => $org['company']->id,
+            'number' => 'GP-LBL-2',
+            'employee_id' => $employee->id,
+            'date' => '2026-10-20',
+            'out_time' => '15:00:00',
+            'duration_minutes' => 60,
+            'work_type' => 'office',
+            'reason' => 'Delivery',
+            'status' => 'approved',
+            'expires_at' => '2026-10-20 16:00:00',
+            'out_at' => '2026-10-20 15:02:00',
+            'in_at' => '2026-10-20 15:40:00',
+        ]);
+        foreach ([
+            ['2026-10-20 09:02:00', 'in', null],
+            ['2026-10-20 11:05:00', 'out', $personal->id],
+            ['2026-10-20 11:25:00', 'in', $personal->id],
+            ['2026-10-20 15:02:00', 'out', $office->id],
+            ['2026-10-20 15:40:00', 'in', $office->id],
+            ['2026-10-20 18:05:00', 'out', null],
+        ] as [$at, $direction, $passId]) {
+            AttendancePunch::query()->create([
+                'employee_id' => $employee->id,
+                'punched_at' => $at,
+                'direction' => $direction,
+                'gate_pass_id' => $passId,
+                'external_key' => 'lbl|'.$at,
+            ]);
+        }
+
+        $this->actingAsScoped($hr)
+            ->getJson(route('attendance.employee.feed', ['employee' => $employee, 'month' => '2026-10']))
+            ->assertOk()
+            ->assertJsonPath('days.0.punches.0.direction', 'In')
+            ->assertJsonPath('days.0.punches.1.direction', 'Personal out')
+            ->assertJsonPath('days.0.punches.2.direction', 'Personal in')
+            ->assertJsonPath('days.0.punches.3.direction', 'Company out')
+            ->assertJsonPath('days.0.punches.4.direction', 'Company in')
+            ->assertJsonPath('days.0.punches.5.direction', 'Out');
+    }
 }

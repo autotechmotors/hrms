@@ -56,7 +56,7 @@
                             min="0"
                             max="240"
                         />
-                        <p class="form-text">A machine scan becomes OUT only inside this many minutes before the scheduled end, or with an approved gate pass. An earlier scan stays an in. IN can be at any time. Late minutes are still cut after grace.</p>
+                        <p class="form-text">After the morning IN, that person stays blocked on the OUT device until this many minutes before the shift end. Shift end 6:00 and 5 minutes opens OUT at 5:55. An approved gate pass opens OUT at the time written on the pass. Company work still counts in pay. Personal work outside the break does not.</p>
                     </div>
                 </div>
             </form>

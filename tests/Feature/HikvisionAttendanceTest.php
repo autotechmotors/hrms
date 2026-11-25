@@ -372,7 +372,9 @@ class HikvisionAttendanceTest extends TestCase
 
         $this->assertStringContainsString('Copied to Hikvision-(OUT).', $result['message']);
         $this->assertTrue(collect($urls)->contains(fn (string $url) => str_contains($url, '192.168.1.160') && str_contains($url, 'FaceDataRecord')));
-        $this->assertSame(0, app(\App\Services\Devices\FaceAccess::class)->gateTerminals($org['company']->id)->count());
+        $blocked = app(\App\Services\Devices\FaceAccess::class)->gateTerminals($org['company']->id);
+        $this->assertCount(1, $blocked);
+        $this->assertSame('out', $blocked->first()->punch_role);
         $this->assertSame(1, \App\Models\EmployeeCredential::query()->where('employee_id', $employee->id)->where('kind', 'face')->count());
         $this->assertSame('0', \App\Models\EmployeeCredential::query()->where('employee_id', $employee->id)->where('kind', 'face')->value('slot'));
     }
@@ -498,6 +500,97 @@ class HikvisionAttendanceTest extends TestCase
         $this->assertStringContainsString('MODELDATA', (string) $faces[0]['body']);
         $this->assertSame([], $fingers);
         $this->assertNotNull($in->id);
+    }
+
+    public function test_a_newer_face_model_is_not_written_onto_the_older_terminal(): void
+    {
+        config([
+            'hikvision.host' => '',
+            'hikvision.public_host' => '',
+            'hikvision.password' => 'secret',
+        ]);
+        $org = $this->makeCompany('HIK');
+        $in = Device::query()->create([
+            'company_id' => $org['company']->id,
+            'name' => 'Hikvision-(IN)',
+            'register_id' => 'HIK1921681156',
+            'ip_address' => '192.168.1.156',
+            'port' => 80,
+            'username' => 'admin',
+            'password' => 'secret',
+            'punch_role' => 'in',
+            'status' => 'online',
+        ]);
+        $out = Device::query()->create([
+            'company_id' => $org['company']->id,
+            'name' => 'Hikvision-(OUT)',
+            'register_id' => 'HIK1921681160',
+            'ip_address' => '192.168.1.160',
+            'port' => 80,
+            'username' => 'admin',
+            'password' => 'secret',
+            'punch_role' => 'out',
+            'status' => 'online',
+        ]);
+        $writes = [];
+        $this->app->instance(HikvisionClient::class, new HikvisionClient(function (string $method, string $url) use (&$writes) {
+            if (str_contains($url, 'FDSearch')) {
+                $model = str_contains($url, '192.168.1.156')
+                    ? base64_encode('FR800006'.str_repeat('A', 16))
+                    : base64_encode('FR700006'.str_repeat('B', 16));
+
+                return ['status' => 200, 'body' => json_encode(['MatchList' => [[
+                    'faceURL' => 'http://192.168.1.156/face.jpg',
+                    'modelData' => $model,
+                ]]])];
+            }
+            if ($method === 'GET') {
+                return ['status' => 200, 'body' => "\xFF\xD8\xFF\xD9"];
+            }
+            if (str_contains($url, 'FaceDataRecord') || str_contains($url, 'FDSetUp')) {
+                $writes[] = $url;
+            }
+
+            return ['status' => 200, 'body' => json_encode(['statusCode' => 1])];
+        }));
+
+        $written = app(\App\Services\Devices\HikvisionCredentials::class)->shareMatchingFace(
+            [$in, $out],
+            'ATX057',
+            'Nilesh',
+        );
+
+        $this->assertSame(0, $written);
+        $this->assertSame([], $writes);
+    }
+
+    public function test_blocking_an_out_user_changes_only_the_person_type(): void
+    {
+        config(['hikvision.password' => 'secret']);
+        $org = $this->makeCompany('HIK');
+        $device = Device::query()->create([
+            'company_id' => $org['company']->id,
+            'name' => 'Hikvision-(OUT)',
+            'register_id' => 'HIK1921681160',
+            'ip_address' => '192.168.1.160',
+            'port' => 80,
+            'username' => 'admin',
+            'password' => 'secret',
+            'punch_role' => 'out',
+            'status' => 'online',
+        ]);
+        $urls = [];
+        $this->app->instance(HikvisionClient::class, new HikvisionClient(function (string $method, string $url) use (&$urls) {
+            $urls[] = $method.' '.$url;
+
+            return ['status' => 200, 'body' => json_encode(['statusCode' => 1])];
+        }));
+
+        app(\App\Services\Devices\HikvisionEnroll::class)->setUserType($device, 'ATX057', 'Nilesh', 'blackList');
+
+        $this->assertTrue(collect($urls)->contains(fn (string $url) => str_contains($url, 'UserInfo/SetUp')));
+        $this->assertFalse(collect($urls)->contains(fn (string $url) => str_contains($url, 'UserInfo/Modify')));
+        $this->assertFalse(collect($urls)->contains(fn (string $url) => str_contains($url, 'FaceDataRecord') || str_contains($url, 'FingerPrint')));
     }
 
     public function test_an_existing_face_keeps_the_same_model_on_the_other_terminal(): void

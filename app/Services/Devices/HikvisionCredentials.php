@@ -164,6 +164,15 @@ class HikvisionCredentials
             if ($device->id === $origin->id) {
                 continue;
             }
+            $current = $this->events->faceTemplate(
+                $device->terminalHost(),
+                $device->terminalUsername(),
+                $device->terminalPassword(),
+                $code,
+            );
+            if (! $this->sameFaceEngine($model, $current['model'])) {
+                continue;
+            }
             $enroll->putSameFace($device, $code, $name, $jpeg, $model);
             $written++;
         }
@@ -205,6 +214,17 @@ class HikvisionCredentials
 
                 continue;
             }
+            $current = $this->events->faceTemplate(
+                $to->terminalHost(),
+                $to->terminalUsername(),
+                $to->terminalPassword(),
+                $code,
+            );
+            if (! $this->sameFaceEngine($model, $current['model'])) {
+                $missing++;
+
+                continue;
+            }
             try {
                 $enroll->putSameFace($to, $code, trim((string) ($person['name'] ?: $code)), $jpeg, $model);
                 $restored++;
@@ -219,6 +239,27 @@ class HikvisionCredentials
             'failed' => $failed,
             'total' => count($people),
         ];
+    }
+
+    private function sameFaceEngine(string $left, string $right): bool
+    {
+        $from = $this->faceEngine($left);
+        $to = $this->faceEngine($right);
+        if ($from === '' || $to === '') {
+            return true;
+        }
+
+        return $from === $to;
+    }
+
+    private function faceEngine(string $model): string
+    {
+        $raw = base64_decode($model, true);
+        if (! is_string($raw) || preg_match('/^FR(\d)/', $raw, $match) !== 1) {
+            return '';
+        }
+
+        return $match[1];
     }
 
     private function dismissed(Device $device, string $code): bool
