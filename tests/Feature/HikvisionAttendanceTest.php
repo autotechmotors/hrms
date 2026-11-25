@@ -1390,6 +1390,18 @@ class HikvisionAttendanceTest extends TestCase
         $this->postScan('192.168.1.156', '2026-11-25T09:05:00+05:30', 11)->assertJson(['saved' => 1]);
         $this->postJson('/hikvision-events/secrettoken', [
             'ipAddress' => '192.168.1.160',
+            'dateTime' => '2026-11-25T16:53:08+05:30',
+            'eventType' => 'AccessControllerEvent',
+            'AccessControllerEvent' => [
+                'subEventType' => 6,
+                'employeeNoString' => '900001',
+                'name' => 'New Person',
+                'serialNo' => 13,
+                'currentVerifyMode' => 'cardOrFaceOrFp',
+            ],
+        ])->assertJson(['saved' => 0, 'ignored' => true]);
+        $this->postJson('/hikvision-events/secrettoken', [
+            'ipAddress' => '192.168.1.160',
             'dateTime' => '2026-11-25T18:20:00+05:30',
             'eventType' => 'AccessControllerEvent',
             'AccessControllerEvent' => [

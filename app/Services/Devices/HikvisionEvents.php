@@ -9,9 +9,6 @@ use RuntimeException;
 
 class HikvisionEvents
 {
-    /** Face authentication failed, and the nearby face-failure codes. */
-    private const FACE_FAILURES = [76, 77, 78, 79, 80];
-
     public function __construct(private readonly HikvisionClient $client) {}
 
     /**
@@ -318,42 +315,21 @@ class HikvisionEvents
      */
     private function passed(array $row): bool
     {
-        if ($this->facePassed($row)) {
-            return true;
-        }
-
         $minor = (int) ($row['minor'] ?? -1);
-        if ($minor === 39) {
+        $mode = strtolower((string) ($row['currentVerifyMode'] ?? ''));
+        if (str_contains($mode, 'fail') || str_contains($mode, 'invalid')) {
             return false;
         }
-        if ($minor === 38) {
+        if (in_array($minor, [6, 7, 8, 9, 39, 76, 77, 78, 79, 80], true)) {
+            return false;
+        }
+        if ($minor === 75 || $minor === 38) {
             return true;
         }
-
-        $mode = strtolower((string) ($row['currentVerifyMode'] ?? ''));
 
         return $minor === 1
             && $mode !== ''
-            && (str_contains($mode, 'finger') || preg_match('/(^|[^a-z])fp([^a-z]|$)/', $mode) === 1)
-            && ! str_contains($mode, 'fail');
-    }
-
-    /**
-     * @param  array<string, mixed>  $row
-     */
-    private function facePassed(array $row): bool
-    {
-        $minor = (int) ($row['minor'] ?? -1);
-        if (in_array($minor, self::FACE_FAILURES, true)) {
-            return false;
-        }
-        if ($minor === 75) {
-            return true;
-        }
-
-        $mode = strtolower((string) ($row['currentVerifyMode'] ?? ''));
-
-        return $mode !== '' && str_contains($mode, 'face') && ! str_contains($mode, 'fail');
+            && (str_contains($mode, 'finger') || preg_match('/(^|[^a-z])fp([^a-z]|$)/', $mode) === 1);
     }
 
     /**
