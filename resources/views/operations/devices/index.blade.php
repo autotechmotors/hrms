@@ -142,7 +142,7 @@
                                         <h4>{{ $device->name }}</h4>
                                         <span class="b {{ $statusClass }}">{{ ucfirst($device->status) }}</span>
                                     </div>
-                                    <p>{{ $device->place ?: 'No place' }} · {{ $device->brandLabel() }} · {{ $device->isGate() ? 'Gate OUT (pass only)' : 'Attendance IN / OUT' }} · {{ trim($device->model.' '.$device->serial) ?: 'No model' }}</p>
+                                    <p>{{ $device->place ?: 'No place' }} · {{ $device->brandLabel() }} · {{ $device->roleLabel() }} · {{ $device->port ? 'Port '.$device->port : 'Port 80' }}</p>
                                     <div class="dv-tile-meta">
                                         <span>{{ $device->users_count }} enrolled</span>
                                         <span>ID {{ $device->register_id ?: config('devices.register_id') }}</span>
@@ -154,6 +154,10 @@
                                 <span class="visually-hidden">Actions</span>
                                 <a class="ib" href="{{ route('devices.show', $device) }}" title="Open"><x-i name="eye" :size="15" /></a>
                                 @if ($canEdit)
+                                    <form method="post" action="{{ route('devices.sync', $device) }}" data-confirm="{{ __('Read everyone on this terminal into HRMS and copy them onto the other terminals? This can take several minutes.') }}">
+                                        @csrf
+                                        <button class="ib" type="submit" title="Sync people"><x-i name="reset" :size="15" /></button>
+                                    </form>
                                     <button class="ib" type="button" title="Edit" data-bs-toggle="modal" data-bs-target="#editDevice{{ $device->id }}">
                                         <x-i name="pen" :size="15" />
                                     </button>

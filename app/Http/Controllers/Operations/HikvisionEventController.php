@@ -34,7 +34,7 @@ class HikvisionEventController extends Controller
             return response()->json(['saved' => 0, 'ignored' => true]);
         }
 
-        $device = $this->device($scan['ip']);
+        $device = $this->device($scan['ip'], (string) ($scan['device_name'] ?? ''));
         if (! $device) {
             return response()->json([
                 'saved' => 0,
@@ -134,24 +134,38 @@ class HikvisionEventController extends Controller
         }
     }
 
-    private function device(string $ip): ?Device
+    private function device(string $ip, string $name = ''): ?Device
     {
         $devices = Device::query()->get()->filter(fn (Device $device) => $device->isHikvision())->values();
         if ($ip !== '') {
-            $match = $devices->first(fn (Device $device) => trim((string) $device->ip_address) === $ip);
+            $match = $devices->first(fn (Device $device) => $this->sameAddress($device->lan_ip, $ip) || $this->sameAddress($device->ip_address, $ip));
             if ($match) {
                 return $match;
             }
+        }
+        if ($name !== '') {
+            $match = $devices->first(fn (Device $device) => strcasecmp(trim((string) $device->name), $name) === 0);
+            if ($match) {
+                return $match;
+            }
+        }
+        if ($devices->count() === 1) {
+            return $devices->first();
         }
 
         $registerId = trim((string) config('hikvision.register_id'));
-        if ($registerId !== '') {
-            $match = $devices->first(fn (Device $device) => strcasecmp((string) $device->register_id, $registerId) === 0);
-            if ($match) {
-                return $match;
-            }
+        if ($registerId !== '' && $devices->count() < 2) {
+            return $devices->first(fn (Device $device) => strcasecmp((string) $device->register_id, $registerId) === 0);
         }
 
-        return $devices->count() === 1 ? $devices->first() : null;
+        return null;
+    }
+
+    private function sameAddress(?string $saved, string $reported): bool
+    {
+        $saved = trim((string) $saved);
+        $reported = trim($reported);
+
+        return $saved !== '' && strcasecmp($saved, $reported) === 0;
     }
 }

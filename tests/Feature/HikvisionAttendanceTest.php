@@ -868,6 +868,74 @@ class HikvisionAttendanceTest extends TestCase
         $this->artisan('hikvision:pull')->assertFailed();
     }
 
+    public function test_in_and_out_terminals_keep_their_own_scans_and_an_enrollment_terminal_does_not(): void
+    {
+        config(['devices.forward_token' => 'secrettoken']);
+        $org = $this->makeCompany('HIK');
+        $employee = $this->makeEmployee($org, '900001');
+        Device::query()->create([
+            'company_id' => $org['company']->id,
+            'name' => 'Door IN',
+            'register_id' => 'HIKIN',
+            'ip_address' => '103.214.226.146',
+            'lan_ip' => '192.168.1.156',
+            'port' => 18080,
+            'punch_role' => 'in',
+            'status' => 'online',
+        ]);
+        $out = Device::query()->create([
+            'company_id' => $org['company']->id,
+            'name' => 'Door OUT',
+            'register_id' => 'HIKOUT',
+            'ip_address' => '103.214.226.146',
+            'lan_ip' => '192.168.1.200',
+            'port' => 18081,
+            'punch_role' => 'out',
+            'status' => 'online',
+        ]);
+        Device::query()->create([
+            'company_id' => $org['company']->id,
+            'name' => 'Enrollment',
+            'register_id' => 'HIKENROLL',
+            'ip_address' => '192.168.1.210',
+            'punch_role' => 'enroll',
+            'status' => 'online',
+        ]);
+
+        $this->postScan('192.168.1.156', '2026-11-25T09:05:00+05:30', 1);
+        $this->postScan('192.168.1.200', '2026-11-25T18:10:00+05:30', 2);
+        $this->postScan('192.168.1.210', '2026-11-25T18:11:00+05:30', 3)
+            ->assertJson(['saved' => 0, 'pending' => false]);
+
+        $punches = AttendancePunch::query()->where('employee_id', $employee->id)->orderBy('punched_at')->get();
+        $this->assertCount(2, $punches);
+        $this->assertSame('in', $punches[0]->direction);
+        $this->assertSame('out', $punches[1]->direction);
+        $this->assertSame($out->id, $punches[1]->device_id);
+
+        app(DeviceSync::class)->rebuild($employee, \Carbon\Carbon::parse('2026-11-25', 'Asia/Kolkata'));
+        $day = \App\Models\AttendanceDay::query()->where('employee_id', $employee->id)->whereDate('work_date', '2026-11-25')->first();
+        $this->assertSame('09:05:00', substr((string) $day->punch_in, 0, 8));
+        $this->assertSame('18:10:00', substr((string) $day->punch_out, 0, 8));
+    }
+
+    private function postScan(string $ip, string $at, int $serial): \Illuminate\Testing\TestResponse
+    {
+        return $this->postJson('/hikvision-events/secrettoken', [
+            'ipAddress' => $ip,
+            'dateTime' => $at,
+            'eventType' => 'AccessControllerEvent',
+            'AccessControllerEvent' => [
+                'subEventType' => 75,
+                'employeeNoString' => '900001',
+                'name' => 'New Person',
+                'serialNo' => $serial,
+                'currentVerifyMode' => 'face',
+                'attendanceStatus' => 'checkIn',
+            ],
+        ]);
+    }
+
     private function attendance(callable $request): HikvisionAttendance
     {
         return new HikvisionAttendance(

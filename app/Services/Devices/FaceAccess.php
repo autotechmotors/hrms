@@ -58,7 +58,7 @@ class FaceAccess
         $devices = Device::query()
             ->where('company_id', $employee->company_id)
             ->get()
-            ->filter(fn (Device $device) => $device->isHikvision() && $device->readsOut());
+            ->filter(fn (Device $device) => $device->isHikvision() && $device->isGate());
 
         foreach ($devices as $device) {
             $key = 'face-pic.'.$device->id.'.'.$employee->id;

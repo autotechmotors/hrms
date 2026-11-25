@@ -20,7 +20,14 @@ class HikvisionCredentials
      */
     public function copyMissing(): array
     {
-        $device = $this->device();
+        return $this->import($this->device());
+    }
+
+    /**
+     * @return array{added: int, faces: int, fingers: int}
+     */
+    public function import(Device $device): array
+    {
         $password = $device->terminalPassword();
         if ($password === '') {
             throw new RuntimeException('Set the face terminal password in Devices before copying credentials.');

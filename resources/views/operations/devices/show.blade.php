@@ -12,6 +12,12 @@
             <h1>{{ $device->name }}</h1>
             <p>{{ $device->place ?: 'No place' }} · {{ $device->model ?: 'No model' }}</p>
         </div>
+        @if ($canEdit ?? false)
+            <form method="post" action="{{ route('devices.sync', $device) }}" data-confirm="{{ __('Read everyone on this terminal into HRMS and copy them onto the other terminals? This can take several minutes.') }}">
+                @csrf
+                <button class="btn pr" type="submit">Sync people</button>
+            </form>
+        @endif
     </div>
 
     @include('operations.errors')
@@ -25,7 +31,7 @@
                     <span class="b {{ $statusClass }}">{{ ucfirst($device->status) }}</span>
                 </div>
                 <h2>{{ $device->name }}</h2>
-                <p>{{ $device->brandLabel() }} · {{ $device->isGate() ? 'Gate OUT (pass only)' : 'Attendance IN / OUT' }} · Register ID {{ $registerId }}</p>
+                <p>{{ $device->brandLabel() }} · {{ $device->roleLabel() }} · Register ID {{ $registerId }}</p>
             </div>
         </div>
         <div class="ed-hero-meta">
@@ -36,6 +42,10 @@
             <div>
                 <small>IP address</small>
                 <b>{{ $device->ip_address ? $device->ip_address.($device->port ? ':'.$device->port : '') : '—' }}</b>
+            </div>
+            <div>
+                <small>Office IP</small>
+                <b>{{ $device->lan_ip ?: '—' }}</b>
             </div>
             <div>
                 <small>Serial</small>

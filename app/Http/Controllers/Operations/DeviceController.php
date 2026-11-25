@@ -7,6 +7,7 @@ use App\Http\Controllers\Operations\Concerns\UsesWorkspace;
 use App\Models\Device;
 use App\Models\DeviceTerminalUser;
 use App\Models\DeviceUser;
+use App\Services\Devices\DeviceRoster;
 use App\Services\Devices\EmployeePush;
 use App\Services\Devices\LocalPcServer;
 use Illuminate\Http\RedirectResponse;
@@ -65,6 +66,26 @@ class DeviceController extends Controller
         $result = $pc->stopNow();
 
         return back()->with($result['ok'] ? 'success' : 'error', $result['message']);
+    }
+
+    public function sync(Device $device, DeviceRoster $roster): RedirectResponse
+    {
+        $this->authorizeDevices();
+        abort_unless((int) $device->company_id === $this->companyId(), 404);
+        set_time_limit(0);
+
+        try {
+            $result = $roster->sync($device);
+        } catch (RuntimeException $exception) {
+            return back()->with('error', $exception->getMessage());
+        }
+
+        $message = 'Employees added: '.$result['added'].'. Faces saved: '.$result['faces'].'. Fingers saved: '.$result['fingers'].'. Copied to other terminals: '.$result['copied'].'.';
+        if ($result['failed'] > 0) {
+            $message .= ' '.$result['failed'].' copies did not reach a terminal.';
+        }
+
+        return back()->with('success', $message);
     }
 
     public function store(Request $request): RedirectResponse
@@ -245,15 +266,16 @@ class DeviceController extends Controller
             'serial' => ['nullable', 'string', 'max:120'],
             'register_id' => [$creating ? 'nullable' : 'required', 'string', 'max:64'],
             'ip_address' => ['nullable', 'ip'],
+            'lan_ip' => ['nullable', 'ip'],
             'username' => ['nullable', 'string', 'max:64'],
             'password' => ['nullable', 'string', 'max:64'],
             'port' => ['nullable', 'integer', 'min:1', 'max:65535'],
             'place' => ['nullable', 'string', 'max:120'],
-            'gate_kind' => ['nullable', Rule::in(['attendance', 'in', 'out', 'gate'])],
+            'gate_kind' => ['nullable', Rule::in(['attendance', 'in', 'out', 'enroll', 'gate'])],
             'status' => [$creating ? 'nullable' : 'required', Rule::in(['unknown', 'online', 'offline'])],
         ]);
         $choice = $data['gate_kind'] ?? Device::KIND_ATTENDANCE;
-        if ($choice === Device::ROLE_IN || $choice === Device::ROLE_OUT) {
+        if (in_array($choice, [Device::ROLE_IN, Device::ROLE_OUT, Device::ROLE_ENROLL], true)) {
             $data['gate_kind'] = Device::KIND_ATTENDANCE;
             $data['punch_role'] = $choice;
         } elseif ($choice === Device::KIND_GATE) {
@@ -264,6 +286,7 @@ class DeviceController extends Controller
             $data['punch_role'] = Device::ROLE_BOTH;
         }
         $data['register_id'] = trim((string) ($data['register_id'] ?? '')) ?: config('devices.register_id');
+        $data['lan_ip'] = trim((string) ($data['lan_ip'] ?? '')) ?: null;
         $data['username'] = trim((string) ($data['username'] ?? '')) ?: null;
         $data['port'] = ($data['port'] ?? null) ?: null;
         if (trim((string) ($data['password'] ?? '')) === '') {

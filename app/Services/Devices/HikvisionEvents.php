@@ -18,7 +18,7 @@ class HikvisionEvents
      * A face or finger scan posted by the terminal itself. Heartbeats, door
      * events, and failed reads return null.
      *
-     * @return array{serial: string, user_id: string, name: string, utc: int, type: string, image: ?string, ip: string}|null
+     * @return array{serial: string, user_id: string, name: string, utc: int, type: string, image: ?string, ip: string, device_name: string}|null
      */
     public function fromPush(string $body): ?array
     {
@@ -102,6 +102,7 @@ class HikvisionEvents
             'type' => $this->type($row),
             'image' => $image,
             'ip' => trim((string) ($payload['ipAddress'] ?? '')),
+            'device_name' => trim((string) ($event['deviceName'] ?? $payload['deviceName'] ?? '')),
         ];
     }
 

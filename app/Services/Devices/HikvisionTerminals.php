@@ -29,34 +29,27 @@ class HikvisionTerminals
                 continue;
             }
 
-            $device = Device::query()->get()->first(function (Device $row) use ($registerId, $host): bool {
-                return strcasecmp((string) $row->register_id, $registerId) === 0
-                    || trim((string) $row->ip_address) === $host;
-            });
-            $values = [
-                'ip_address' => $host,
-                'username' => trim((string) ($terminal['username'] ?? 'admin')) ?: 'admin',
-                'password' => $password,
-                'punch_role' => $role === 'out' ? Device::ROLE_OUT : Device::ROLE_IN,
-                'gate_kind' => Device::KIND_ATTENDANCE,
-                'port' => 80,
-            ];
-            if ($device) {
-                if (strcasecmp((string) $device->register_id, $registerId) !== 0 && trim((string) $device->register_id) === '') {
-                    $values['register_id'] = $registerId;
-                }
-                $device->update($values);
-
+            $exists = Device::query()->get()->contains(
+                fn (Device $row) => strcasecmp((string) $row->register_id, $registerId) === 0,
+            );
+            if ($exists) {
                 continue;
             }
+
+            $port = is_numeric($terminal['port'] ?? null) ? (int) $terminal['port'] : 0;
 
             Device::query()->create([
                 'company_id' => $companyId,
                 'name' => $role === 'out' ? 'Hikvision-(OUT)' : 'Hikvision-(IN)',
                 'model' => 'Hikvision',
                 'register_id' => $registerId,
+                'ip_address' => $host,
+                'username' => trim((string) ($terminal['username'] ?? 'admin')) ?: 'admin',
+                'password' => $password,
+                'punch_role' => $role === 'out' ? Device::ROLE_OUT : Device::ROLE_IN,
+                'gate_kind' => Device::KIND_ATTENDANCE,
+                'port' => $port > 0 ? $port : null,
                 'status' => 'offline',
-                ...$values,
             ]);
         }
     }

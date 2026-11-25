@@ -156,6 +156,10 @@ class DeviceSync
      */
     private function importEventFile(Device $device, array $data, string $seq, bool $knownOnly = false, ?string $image = null): int
     {
+        if (! $device->recordsAttendance()) {
+            return 0;
+        }
+
         $saved = 0;
         foreach ($data['NotifyInfo']['Events'] as $event) {
             if (! is_array($event) || ($event['Code'] ?? '') !== 'AccessControl') {
@@ -223,16 +227,6 @@ class DeviceSync
             );
             if ($punch->wasRecentlyCreated) {
                 $access = app(GatePassAccess::class);
-                if ($direction === 'out' && ! $device->isGate() && ! $access->outAllowed($employee, $at)) {
-                    $punch->delete();
-                    DeviceLog::moment('out denied '.$employee->employee_code, [
-                        'device' => $device->register_id,
-                        'employee_id' => $employee->id,
-                        'at' => $at->toDateTimeString(),
-                    ]);
-
-                    continue;
-                }
                 $allowed = $access->attachPunch($employee, $punch, $device);
                 if (! $allowed) {
                     $punch->delete();
@@ -394,7 +388,7 @@ class DeviceSync
                 continue;
             }
             if ($onlyOut) {
-                if ($waitingForOut && $access->outAllowed($employee, $at, $start)) {
+                if ($waitingForOut) {
                     foreach ($punches as $punch) {
                         if ($punch->direction !== 'out') {
                             $punch->update(['direction' => 'out']);

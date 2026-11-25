@@ -22,6 +22,9 @@
     <label>IP address
         <input class="in" name="ip_address" value="{{ $field('ip_address') }}" placeholder="192.168.1.10" maxlength="45">
     </label>
+    <label>Office IP
+        <input class="in" name="lan_ip" value="{{ $field('lan_ip') }}" placeholder="192.168.1.156" maxlength="45">
+    </label>
     <label>Port
         <input class="in" name="port" value="{{ $field('port') }}" placeholder="80" inputmode="numeric" maxlength="5">
     </label>
@@ -38,11 +41,11 @@
         @php
             $machineRole = ($current?->gate_kind ?? 'attendance') === 'gate'
                 ? 'gate'
-                : (in_array($current?->punch_role, ['in', 'out'], true) ? $current->punch_role : 'attendance');
+                : (in_array($current?->punch_role, ['in', 'out', 'enroll'], true) ? $current->punch_role : 'attendance');
             $machineRole = $bindOld ? old('gate_kind', $machineRole) : $machineRole;
         @endphp
         <select class="in" name="gate_kind" data-native required>
-            @foreach (['attendance' => 'Attendance, either door', 'in' => 'IN machine', 'out' => 'OUT machine', 'gate' => 'Gate OUT (pass only)'] as $kind => $label)
+            @foreach (['attendance' => 'Attendance, either door', 'in' => 'IN machine', 'out' => 'OUT machine', 'enroll' => 'Enrollment only', 'gate' => 'Gate OUT (pass only)'] as $kind => $label)
                 <option value="{{ $kind }}" @selected($machineRole === $kind)>{{ $label }}</option>
             @endforeach
         </select>
