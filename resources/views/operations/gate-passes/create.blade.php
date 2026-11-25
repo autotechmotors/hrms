@@ -91,8 +91,22 @@
                         </div>
 
                         <div id="durationWrap">
-                            <x-text-field name="duration_time" label="Duration" type="time" :value="old('duration_time', $defaultDuration)" required />
-                            <small class="gp-hint">Minimum 15 minutes. Hours and minutes only.</small>
+                            @php
+                                $durationValue = (string) old('duration_time', $defaultDuration);
+                                [$durationHours, $durationMinutes] = array_pad(explode(':', $durationValue), 2, '0');
+                            @endphp
+                            <label class="form-label">Duration <span class="text-danger">*</span></label>
+                            <div class="g c2">
+                                <div>
+                                    <input class="in w-100" type="number" name="duration_hours" min="0" max="24" step="1" inputmode="numeric" required value="{{ (int) $durationHours }}" aria-label="Duration hours">
+                                    <small class="gp-hint">Hours</small>
+                                </div>
+                                <div>
+                                    <input class="in w-100" type="number" name="duration_minutes" min="0" max="59" step="1" inputmode="numeric" required value="{{ (int) $durationMinutes }}" aria-label="Duration minutes">
+                                    <small class="gp-hint">Minutes</small>
+                                </div>
+                            </div>
+                            <small class="gp-hint">How long they may stay out. Minimum 15 minutes. This is not a clock time.</small>
                         </div>
                         <p class="gp-hint" id="earlyLeaveNote" hidden>Not returning today. Pass stays valid until end of day.</p>
                     </div>
@@ -125,7 +139,7 @@
     const grid = document.getElementById('leaveTypeGrid');
     const workGrid = document.getElementById('workTypeGrid');
     const durationWrap = document.getElementById('durationWrap');
-    const durationInput = durationWrap.querySelector('[name="duration_time"]');
+    const durationInputs = durationWrap.querySelectorAll('input');
     const note = document.getElementById('earlyLeaveNote');
 
     function mark(el) {
@@ -138,7 +152,7 @@
         const type = document.querySelector('input[name="leave_type"]:checked')?.value;
         const early = type === 'early_leave';
         durationWrap.hidden = early;
-        if (durationInput) durationInput.required = !early;
+        durationInputs.forEach(function (input) { input.required = !early; });
         note.hidden = !early;
         mark(grid);
         mark(workGrid);

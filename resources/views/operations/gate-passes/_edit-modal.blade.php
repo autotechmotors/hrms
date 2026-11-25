@@ -23,8 +23,17 @@
                 <input class="in w-100" type="time" name="out_time" required>
                 <div id="gateEditDuration">
                     <label class="form-label">{{ __('Duration') }}</label>
-                    <input class="in w-100" type="time" name="duration_time" required>
-                    <small class="gp-hint">{{ __('Minimum 15 minutes.') }}</small>
+                    <div class="g c2">
+                        <div>
+                            <input class="in w-100" type="number" name="duration_hours" min="0" max="24" step="1" inputmode="numeric" required aria-label="{{ __('Hours') }}">
+                            <small class="gp-hint">{{ __('Hours') }}</small>
+                        </div>
+                        <div>
+                            <input class="in w-100" type="number" name="duration_minutes" min="0" max="59" step="1" inputmode="numeric" required aria-label="{{ __('Minutes') }}">
+                            <small class="gp-hint">{{ __('Minutes') }}</small>
+                        </div>
+                    </div>
+                    <small class="gp-hint">{{ __('How long they may stay out. Minimum 15 minutes.') }}</small>
                 </div>
                 <label class="form-label">{{ __('Reason') }}</label>
                 <textarea class="in w-100" name="reason" required minlength="3" maxlength="1000" rows="3"></textarea>
@@ -48,9 +57,10 @@
         function syncLeave() {
             const early = form.querySelector('[name="leave_type"]').value === 'early_leave';
             const wrap = document.getElementById('gateEditDuration');
-            const input = form.querySelector('[name="duration_time"]');
             if (wrap) wrap.hidden = early;
-            if (input) input.required = !early;
+            form.querySelectorAll('[name="duration_hours"], [name="duration_minutes"]').forEach(function (input) {
+                input.required = !early;
+            });
         }
 
         modal.addEventListener('show.bs.modal', function (event) {
@@ -58,7 +68,9 @@
             if (!btn || !btn.hasAttribute('data-gp-edit')) return;
             form.action = btn.getAttribute('data-action') || '#';
             form.querySelector('[name="out_time"]').value = btn.getAttribute('data-out') || '';
-            form.querySelector('[name="duration_time"]').value = btn.getAttribute('data-duration') || '01:00';
+            const duration = (btn.getAttribute('data-duration') || '01:00').split(':');
+            form.querySelector('[name="duration_hours"]').value = String(parseInt(duration[0] || '0', 10));
+            form.querySelector('[name="duration_minutes"]').value = String(parseInt(duration[1] || '0', 10));
             form.querySelector('[name="reason"]').value = btn.getAttribute('data-reason') || '';
             form.querySelector('[name="work_type"]').value = btn.getAttribute('data-work') || 'personal';
             form.querySelector('[name="leave_type"]').value = btn.getAttribute('data-leave') || 'return';

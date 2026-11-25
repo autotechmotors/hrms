@@ -18,13 +18,14 @@ class StoreGatePassRequest extends FormRequest
     {
         $early = $this->input('leave_type') === 'early_leave';
         $out = $this->normalizeTime((string) $this->input('out_time', ''));
-        $minutes = $early ? $this->minutesUntilEndOfDay($out) : $this->minutesFromClock((string) $this->input('duration_time', ''));
+        $clock = $this->durationClock();
+        $minutes = $early ? $this->minutesUntilEndOfDay($out) : $this->minutesFromClock($clock);
 
         $this->merge([
             'out_time' => $out ?: $this->input('out_time'),
             'is_early_leave' => $early,
             'duration_minutes' => $minutes,
-            'duration_time' => $minutes ? sprintf('%02d:%02d', intdiv($minutes, 60), $minutes % 60) : $this->input('duration_time'),
+            'duration_time' => $minutes ? sprintf('%02d:%02d', intdiv($minutes, 60), $minutes % 60) : $clock,
         ]);
     }
 
@@ -44,6 +45,18 @@ class StoreGatePassRequest extends FormRequest
             'duration_minutes' => ['required', 'integer', 'min:15', Rule::when(! $this->boolean('is_early_leave'), ['max:'.$max])],
             'reason' => ['required', 'string', 'min:3', 'max:1000'],
         ];
+    }
+
+    protected function durationClock(): string
+    {
+        if ($this->exists('duration_hours') || $this->exists('duration_minutes')) {
+            $hours = max(0, (int) $this->input('duration_hours', 0));
+            $mins = max(0, min(59, (int) $this->input('duration_minutes', 0)));
+
+            return sprintf('%02d:%02d', $hours, $mins);
+        }
+
+        return $this->normalizeTime((string) $this->input('duration_time', ''));
     }
 
     protected function normalizeTime(string $value): string

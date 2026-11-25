@@ -276,7 +276,12 @@ class DeviceSync
         foreach ($punches as $punch) {
             $at = $punch->punched_at->copy()->timezone('Asia/Kolkata');
             $last = count($clusters) - 1;
-            if ($last >= 0 && ($at->getTimestamp() - $clusters[$last]['end']->getTimestamp()) < self::SAME_VISIT_SECONDS) {
+            $previous = $last >= 0 ? $clusters[$last]['punches'][0] : null;
+            $sameVisit = $previous instanceof AttendancePunch
+                && ($at->getTimestamp() - $clusters[$last]['end']->getTimestamp()) < self::SAME_VISIT_SECONDS
+                && (int) ($previous->gate_pass_id ?? 0) === (int) ($punch->gate_pass_id ?? 0)
+                && $previous->direction === $punch->direction;
+            if ($sameVisit) {
                 $clusters[$last]['punches'][] = $punch;
                 $clusters[$last]['end'] = $at;
 

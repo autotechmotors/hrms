@@ -190,11 +190,11 @@ class GatePassAccess
         $device ??= $punch->device;
         $at = $punch->punched_at->copy()->timezone('Asia/Kolkata');
         $open = $this->openOuting($employee);
+        $comingBack = $open && $device?->punch_role !== Device::ROLE_OUT && ($device?->readsIn() || $device?->punch_role === null);
 
-        if ($open) {
+        if ($comingBack) {
             $open->update(['in_at' => $at]);
             $punch->update(['gate_pass_id' => $open->id, 'direction' => 'in']);
-            $this->revoke($open, 'Returned. Clock-in starts from '.$at->format('h:i A').'.');
 
             return true;
         }
@@ -212,7 +212,16 @@ class GatePassAccess
         }
 
         if ($isGate || $device?->punch_role === Device::ROLE_OUT || ! $hasGate) {
-            $pass->update(['out_at' => $at]);
+            $changes = [];
+            if ($pass->out_at === null) {
+                $changes['out_at'] = $at;
+            }
+            if ($pass->in_at !== null) {
+                $changes['in_at'] = null;
+            }
+            if ($changes !== []) {
+                $pass->update($changes);
+            }
             $punch->update(['gate_pass_id' => $pass->id, 'direction' => 'out']);
 
             return true;

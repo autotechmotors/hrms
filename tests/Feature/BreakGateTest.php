@@ -6,6 +6,7 @@ use App\Models\AttendanceDay;
 use App\Models\AttendancePunch;
 use App\Models\CompanySetting;
 use App\Models\DepartmentWorkHour;
+use App\Models\Device;
 use App\Models\Employee;
 use App\Models\GatePass;
 use App\Services\Devices\DeviceSync;
@@ -152,6 +153,86 @@ class BreakGateTest extends TestCase
         $this->assertSame('half_day', $day->status);
         $this->assertSame('13:00:00', $day->punch_out);
         $this->assertSame(240, $this->early($employee, $day->fresh()));
+    }
+
+    public function test_a_short_return_stays_on_the_pass_until_it_ends(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-11-18 16:06:00', 'Asia/Kolkata'));
+        [$employee] = $this->person();
+        $this->day($employee, '09:00:00', null);
+        $pass = GatePass::query()->create([
+            'company_id' => $employee->company_id,
+            'number' => 'GP-AGAIN',
+            'employee_id' => $employee->id,
+            'date' => '2026-11-18',
+            'out_time' => '16:00:00',
+            'duration_minutes' => 15,
+            'work_type' => 'personal',
+            'reason' => 'Forgot something',
+            'status' => GatePass::STATUS_APPROVED,
+            'expires_at' => Carbon::parse('2026-11-18 16:15:00', 'Asia/Kolkata'),
+            'machine_status' => 'ready',
+        ]);
+        $outDevice = Device::query()->create([
+            'company_id' => $employee->company_id,
+            'name' => 'OUT',
+            'register_id' => 'HIKOUT',
+            'ip_address' => '192.168.1.160',
+            'punch_role' => 'out',
+        ]);
+        $inDevice = Device::query()->create([
+            'company_id' => $employee->company_id,
+            'name' => 'IN',
+            'register_id' => 'HIKIN',
+            'ip_address' => '192.168.1.156',
+            'punch_role' => 'in',
+        ]);
+        $access = app(GatePassAccess::class);
+
+        $left = AttendancePunch::query()->create([
+            'employee_id' => $employee->id,
+            'device_id' => $outDevice->id,
+            'punched_at' => '2026-11-18 16:01:00',
+            'direction' => 'out',
+            'external_key' => 'again-out-1',
+        ]);
+        $access->attachPunch($employee, $left, $outDevice);
+
+        $back = AttendancePunch::query()->create([
+            'employee_id' => $employee->id,
+            'device_id' => $inDevice->id,
+            'punched_at' => '2026-11-18 16:05:00',
+            'direction' => 'in',
+            'external_key' => 'again-in',
+        ]);
+        $access->attachPunch($employee, $back, $inDevice);
+
+        $again = AttendancePunch::query()->create([
+            'employee_id' => $employee->id,
+            'device_id' => $outDevice->id,
+            'punched_at' => '2026-11-18 16:06:00',
+            'direction' => 'out',
+            'external_key' => 'again-out-2',
+        ]);
+        $access->attachPunch($employee, $again, $outDevice);
+
+        $left->refresh();
+        $back->refresh();
+        $again->refresh();
+        $pass->refresh();
+        $faces = app(FaceAccess::class);
+
+        $this->assertSame($pass->id, $left->gate_pass_id);
+        $this->assertSame('out', $left->direction);
+        $this->assertSame($pass->id, $back->gate_pass_id);
+        $this->assertSame('in', $back->direction);
+        $this->assertSame($pass->id, $again->gate_pass_id);
+        $this->assertSame('out', $again->direction);
+        $this->assertNull($pass->in_at);
+        $this->assertSame('16:01:00', $pass->out_at->timezone('Asia/Kolkata')->format('H:i:s'));
+        $this->assertSame('ready', $pass->machine_status);
+        $this->assertTrue($faces->allowsFace($employee, Carbon::parse('2026-11-18 16:06:00', 'Asia/Kolkata')));
+        $this->assertFalse($faces->allowsFace($employee, Carbon::parse('2026-11-18 16:16:00', 'Asia/Kolkata')));
     }
 
     public function test_a_manual_day_stays_when_the_terminal_is_rebuilt(): void

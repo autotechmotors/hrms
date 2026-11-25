@@ -53,7 +53,12 @@ class AttendanceCalculator
         $out = $day->punch_out ? Carbon::parse($date->toDateString().' '.$day->punch_out) : null;
         $open = $passes->first(fn (GatePass $pass) => $pass->isOpenOuting());
         $officeStillOut = (bool) ($open?->isOfficeWork() && $open->out_at);
-        if ($in && ! $out && $open?->out_at && ! $officeStillOut) {
+        $passStillOpen = $open
+            && ! $open->isEarlyLeave()
+            && $open->isApproved()
+            && $open->expires_at
+            && $open->expires_at->greaterThan(now());
+        if ($in && ! $out && $open?->out_at && ! $officeStillOut && ! $passStillOpen) {
             $out = $open->out_at->copy()->timezone('Asia/Kolkata');
         }
         if ($in && $out && $out->lessThanOrEqualTo($in)) {
