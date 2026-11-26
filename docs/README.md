@@ -49,6 +49,7 @@ Start at `docs/prompts/HRMS-SYSTEM.md`. Then open only the module file for the s
 | `salary` | `SHEETS.md` | Generate a salary sheet for a department, people, and date range |
 | `advances` | `DEDUCTIONS.md` | Advances and deductions |
 | `devices` | `TERMINALS.md` | Device hub (Hikvision) |
+| `devices` | `IN-OUT-MACHINES.md` | IN and OUT door wiring, which scans count, and what must not change |
 | `reports` | `ANALYTICS.md` | Reports |
 | `bank` | `TRANSFERS.md` | Bank accounts and transfer batches |
 | `users` | `ACCOUNTS.md` | Logins are created from the employee |
