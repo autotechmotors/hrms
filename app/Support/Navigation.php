@@ -38,10 +38,8 @@ class Navigation
                 self::link('Departments', 'departments.index', ['departments.*'], 'building', ['departments.view'], 'departments'),
                 self::link('Designations', 'designations.index', ['designations.*', 'employee-types.*'], 'users', ['designations.view'], 'designations'),
                 self::link('Statuses', 'employment-statuses.index', ['employment-statuses.*'], 'set', ['employment_statuses.view'], 'statuses'),
-                self::link('Financial years', 'financial-years.index', ['financial-years.*'], 'cal', ['financial_years.view'], 'financial years'),
                 self::link('Work calendars', 'work-calendars.index', ['work-calendars.*'], 'cal', ['work_calendars.view'], 'work calendars'),
                 self::link('Custom fields', 'custom-fields.index', ['custom-fields.*'], 'set', ['custom_fields.view'], 'custom fields'),
-                self::link('Branding', 'branding.edit', ['branding.*'], 'set', ['branding.edit'], 'branding'),
                 self::link('Audit Logs', 'audit-logs.index', ['audit-logs.*'], 'log', ['audit_logs.view'], 'audit logs'),
             ],
         ];

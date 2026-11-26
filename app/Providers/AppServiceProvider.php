@@ -9,7 +9,6 @@ use App\Models\Employee;
 use App\Models\EmployeeCustomField;
 use App\Models\EmployeeType;
 use App\Models\EmploymentStatus;
-use App\Models\FinancialYear;
 use App\Models\User;
 use App\Models\WorkCalendar;
 use App\Services\AccessScope;
@@ -77,7 +76,6 @@ class AppServiceProvider extends ServiceProvider
         $this->bindVisible('designation', Designation::class);
         $this->bindVisible('employee_type', EmployeeType::class);
         $this->bindVisible('employment_status', EmploymentStatus::class);
-        $this->bindVisible('financialYear', FinancialYear::class);
         $this->bindVisible('workCalendar', WorkCalendar::class);
         $this->bindVisible('customField', EmployeeCustomField::class);
         $this->bindVisible('employee', Employee::class);

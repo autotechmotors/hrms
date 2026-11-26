@@ -4,6 +4,8 @@ Keep the current employee record working: identity, email, phone, department, de
 
 Super Admin and HR Admin can edit, update, and delete a profile. Anyone else can open only their own row and the people assigned under them, and cannot edit those profiles.
 
+Deleting a person removes their related rows across the system: attendance, punches, credentials, documents and files, bank accounts, exits, employment events, leave, gate passes, advances, salaries, hours, shift spans, holidays, salary-sheet lines, payroll items, payment lines, device links, photograph, and their staff login (roles, scopes, notifications). People who reported to them keep their rows with an empty parent. The last active Super Admin cannot be deleted. Device faces are dropped after the database commit (`EmployeeRemover`).
+
 Do not add a second employee screen. Fill the holes on the existing Identity, Contact, and Placement cards.
 
 ## Fields on the form
@@ -22,6 +24,7 @@ These are on the employee form and are saved with the employee.
 - `app/Models/Employee.php`
 - `app/Http/Requests/EmployeeRequest.php`
 - `app/Services/Employees/EmployeeService.php`
+- `app/Services/Employees/EmployeeRemover.php`
 
 Import and export column lists stay stable. Add a column only if a current import file would otherwise drop a value the form can now save. Do not rename existing columns.
 

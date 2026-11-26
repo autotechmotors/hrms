@@ -153,7 +153,7 @@ return new class extends Migration
         Schema::create('payroll_items', function (Blueprint $table) {
             $table->id();
             $table->foreignId('payroll_run_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('employee_id')->constrained()->restrictOnDelete();
+            $table->foreignId('employee_id')->constrained()->cascadeOnDelete();
             $table->decimal('paid_days', 6, 1)->default(0);
             $table->decimal('lop_days', 6, 1)->default(0);
             $table->decimal('gross', 12, 2)->default(0);
@@ -225,7 +225,7 @@ return new class extends Migration
         Schema::create('payment_batch_lines', function (Blueprint $table) {
             $table->id();
             $table->foreignId('payment_batch_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('employee_id')->constrained()->restrictOnDelete();
+            $table->foreignId('employee_id')->constrained()->cascadeOnDelete();
             $table->decimal('amount', 12, 2);
             $table->string('account_last4', 4)->nullable();
             $table->timestamps();

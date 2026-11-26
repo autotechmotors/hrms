@@ -28,14 +28,14 @@ use App\Http\Controllers\Operations\LeaveController;
 use App\Http\Controllers\Operations\ReportController;
 use App\Http\Controllers\Operations\SalarySheetController;
 use App\Http\Controllers\Operations\ShiftController;
-use App\Http\Controllers\Organization\BrandingController;
+// use App\Http\Controllers\Organization\BrandingController;
 use App\Http\Controllers\Organization\CompanyController;
 use App\Http\Controllers\Organization\CustomFieldController;
 use App\Http\Controllers\Organization\DepartmentController;
 use App\Http\Controllers\Organization\DesignationController;
 use App\Http\Controllers\Organization\EmployeeTypeController;
 use App\Http\Controllers\Organization\EmploymentStatusController;
-use App\Http\Controllers\Organization\FinancialYearController;
+// use App\Http\Controllers\Organization\FinancialYearController;
 use App\Http\Controllers\Organization\WorkCalendarController;
 use Illuminate\Support\Facades\Route;
 
@@ -190,12 +190,12 @@ Route::middleware(['auth', 'mfa'])->group(function (): void {
     Route::resource('designations', DesignationController::class)->except(['show']);
     Route::resource('employee-types', EmployeeTypeController::class)->except(['show']);
     Route::resource('employment-statuses', EmploymentStatusController::class)->except(['show']);
-    Route::resource('financial-years', FinancialYearController::class)->parameters(['financial-years' => 'financialYear'])->except(['show']);
+    // Route::resource('financial-years', FinancialYearController::class)->parameters(['financial-years' => 'financialYear'])->except(['show']);
     Route::resource('work-calendars', WorkCalendarController::class)->parameters(['work-calendars' => 'workCalendar'])->except(['show']);
     Route::resource('custom-fields', CustomFieldController::class)->parameters(['custom-fields' => 'customField'])->except(['show']);
 
-    Route::get('branding', [BrandingController::class, 'edit'])->name('branding.edit');
-    Route::put('branding/{company}', [BrandingController::class, 'update'])->name('branding.update');
+    // Route::get('branding', [BrandingController::class, 'edit'])->name('branding.edit');
+    // Route::put('branding/{company}', [BrandingController::class, 'update'])->name('branding.update');
 
     Route::get('employees/export', [EmployeeController::class, 'export'])->name('employees.export');
     Route::get('employees/import', [EmployeeController::class, 'importForm'])->name('employees.import');

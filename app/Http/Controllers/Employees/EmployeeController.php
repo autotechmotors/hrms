@@ -20,6 +20,7 @@ use App\Services\AccessScope;
 use App\Services\Devices\EmployeePush;
 use App\Services\Employees\EmployeeExporter;
 use App\Services\Employees\EmployeeImporter;
+use App\Services\Employees\EmployeeRemover;
 use App\Services\Employees\EmployeeService;
 use App\Services\Operations\WorkHourResolver;
 use App\Services\Workspace;
@@ -44,6 +45,7 @@ class EmployeeController extends Controller
         private readonly EmployeeService $employees,
         private readonly EmployeeImporter $importer,
         private readonly EmployeeExporter $exporter,
+        private readonly EmployeeRemover $remover,
         private readonly WorkHourResolver $hours,
     ) {}
 
@@ -308,42 +310,29 @@ class EmployeeController extends Controller
     {
         $this->authorize('delete', $employee);
 
-        $push = app(EmployeePush::class);
-        $linked = $push->linked($employee);
-        $userId = trim((string) $employee->employee_code);
-
         try {
-            DB::transaction(function () use ($employee, $linked, $userId): void {
-                $kept = [];
-                foreach ($linked as $device) {
-                    $row = DeviceTerminalUser::query()->updateOrCreate(
-                        ['device_id' => $device->id, 'user_id' => $userId],
-                        ['name' => $employee->full_name, 'employee_id' => $employee->id],
-                    );
-                    $kept[] = $row->id;
-                }
-                if ($employee->photograph_path) {
-                    Storage::disk('local')->delete($employee->photograph_path);
-                }
-                $employee->delete();
-                if ($kept !== []) {
-                    DeviceTerminalUser::query()->whereIn('id', $kept)->update(['dismissed_at' => now()]);
-                }
-            });
-            $push->drop($linked, $userId);
-        } catch (QueryException) {
-            if ($request->ajax()) {
-                return response()->json(['message' => 'This employee has history or documents and cannot be deleted.'], 422);
+            $this->remover->delete($employee);
+        } catch (ValidationException $exception) {
+            $message = collect($exception->errors())->flatten()->first() ?: 'This employee cannot be deleted.';
+            if ($request->ajax() || $request->expectsJson()) {
+                return response()->json(['message' => $message], 422);
             }
 
-            return back()->with('error', 'This employee has history or documents and cannot be deleted.');
+            return back()->with('error', $message);
+        } catch (QueryException) {
+            $message = 'This employee could not be deleted because related records are still locked.';
+            if ($request->ajax() || $request->expectsJson()) {
+                return response()->json(['message' => $message], 422);
+            }
+
+            return back()->with('error', $message);
         }
 
-        if ($request->ajax()) {
-            return response()->json(['message' => 'Employee deleted.']);
+        if ($request->ajax() || $request->expectsJson()) {
+            return response()->json(['message' => 'Employee deleted. Related attendance, leave, pay, and login data were removed.']);
         }
 
-        return redirect()->route('employees.index')->with('success', 'Employee deleted.');
+        return redirect()->route('employees.index')->with('success', 'Employee deleted. Related attendance, leave, pay, and login data were removed.');
     }
 
     public function export(Request $request): StreamedResponse

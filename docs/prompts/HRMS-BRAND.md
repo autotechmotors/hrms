@@ -22,4 +22,4 @@ Move the brand accent off purple onto the icon red. Keep `--ok`, `--wn`, and `--
 
 Inter stays. Radii stay in the current 8–16px range. No second font. No dark theme.
 
-The letter tile in `.logo` becomes this mark. Login and two-factor use the same mark and the same red accent. Company branding upload is a different topic: `docs/organization/BRANDING.md`.
+The letter tile in `.logo` becomes this mark. Login and two-factor use the same mark and the same red accent. There is no separate Branding screen. Company name and logo stay on the Companies master if needed.

@@ -9,7 +9,6 @@ use App\Models\Employee;
 use App\Models\EmployeeCustomField;
 use App\Models\EmployeeType;
 use App\Models\EmploymentStatus;
-use App\Models\FinancialYear;
 use App\Models\NumberSequence;
 use App\Models\Role;
 use App\Models\User;
@@ -47,12 +46,6 @@ class DemoDataSeeder extends Seeder
             $confirmed = EmploymentStatus::query()->updateOrCreate(['company_id' => $company->id, 'code' => 'CONF'], ['name' => 'Confirmed', 'is_exit' => false, 'is_active' => true]);
             EmploymentStatus::query()->updateOrCreate(['company_id' => $company->id, 'code' => 'PROB'], ['name' => 'Probation', 'is_exit' => false, 'is_active' => true]);
             EmploymentStatus::query()->updateOrCreate(['company_id' => $company->id, 'code' => 'RES'], ['name' => 'Resigned', 'is_exit' => true, 'is_active' => true]);
-
-            FinancialYear::query()->updateOrCreate(['company_id' => $company->id, 'name' => 'FY 2026-27'], [
-                'starts_on' => '2026-04-01',
-                'ends_on' => '2027-03-31',
-                'is_current' => true,
-            ]);
 
             $calendar = WorkCalendar::query()->updateOrCreate(['company_id' => $company->id, 'name' => 'Head office week'], [
                 'effective_from' => '2026-04-01',

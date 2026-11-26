@@ -25,6 +25,6 @@ Module folders, and only these:
 
 `employees` `attendance` `shifts` `leave` `holidays` `payroll` `salary` `advances` `devices` `reports` `bank` `users` `roles` `organization` `auth`
 
-`organization` covers departments, designations, statuses, financial years, work calendars, custom fields, and branding. Do not recreate branch or location notes.
+`organization` covers departments, designations, statuses, work calendars, and custom fields. Do not recreate branch, location, financial years, or branding notes.
 
 Do not put a module note in `docs/prompts/` or `docs/brand/`. Do not append a new topic onto an existing file. Create the module folder if it is not there yet.

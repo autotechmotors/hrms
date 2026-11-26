@@ -19,7 +19,6 @@ class PermissionCatalog
             'designations' => 'Designations',
             'employee_types' => 'Employee types',
             'employment_statuses' => 'Employment statuses',
-            'financial_years' => 'Financial years',
             'work_calendars' => 'Work calendars',
             'custom_fields' => 'Custom fields',
             'users' => 'Users',
@@ -35,7 +34,6 @@ class PermissionCatalog
 
         $permissions = [
             ['group' => 'dashboard', 'name' => 'View dashboard', 'slug' => 'dashboard.view'],
-            ['group' => 'branding', 'name' => 'Edit branding', 'slug' => 'branding.edit'],
             ['group' => 'settings', 'name' => 'Manage system settings', 'slug' => 'settings.manage'],
             ['group' => 'audit_logs', 'name' => 'View audit logs', 'slug' => 'audit_logs.view'],
         ];

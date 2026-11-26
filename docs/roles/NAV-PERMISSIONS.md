@@ -13,7 +13,7 @@ A screen shows only when both are true:
 | People | Employees, Attendance, Leave, Gate Pass, Holidays | `docs/employees/PROFILE.md`, `docs/attendance/REGISTER.md`, `docs/attendance/GATE-PASS.md`, `docs/leave/REQUESTS.md`, `docs/holidays/CALENDAR.md`. Shifts stay out of the menu. |
 | Payroll | Hours & pay, Salary sheets, Advances | `docs/salary/HOURS-AND-PAY.md`, `docs/salary/SHEETS.md`, `docs/advances/DEDUCTIONS.md`. The Payroll run screen and Salary Structures screen are gone. |
 | Operations | Devices, Reports, Bank | `docs/devices/TERMINALS.md`, `docs/reports/ANALYTICS.md`, `docs/bank/TRANSFERS.md` |
-| Administration | Settings, Roles, Departments, Designations, Statuses, Financial years, Work calendars, Custom fields, Branding, Audit logs | Settings: `docs/employees/AUTO-BLOCK.md`. The rest: `docs/organization/`. Logins are on the employee, not a Users screen. `docs/users/ACCOUNTS.md`. |
+| Administration | Settings, Roles, Departments, Designations, Statuses, Work calendars, Custom fields, Audit logs | Settings: `docs/employees/AUTO-BLOCK.md`. The rest: `docs/organization/`. Logins are on the employee, not a Users screen. `docs/users/ACCOUNTS.md`. Financial years and Branding screens are removed. |
 
 `app/Support/Navigation.php` shows each item only when that person has one of its permissions. A group is hidden when every item in it is hidden. The slugs below are already in `app/Support/PermissionCatalog.php`. Do not add them again.
 

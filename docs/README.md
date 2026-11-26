@@ -57,10 +57,10 @@ Start at `docs/prompts/HRMS-SYSTEM.md`. Then open only the module file for the s
 | `organization` | `DEPARTMENTS.md` | Departments |
 | `organization` | `DESIGNATIONS.md` | Designations and employee types |
 | `organization` | `STATUSES.md` | Employment statuses |
-| `organization` | `FINANCIAL-YEARS.md` | Financial years |
+<!-- | `organization` | `FINANCIAL-YEARS.md` | Financial years | -->
 | `organization` | `WORK-CALENDARS.md` | Work calendars |
 | `organization` | `CUSTOM-FIELDS.md` | Custom fields |
-| `organization` | `BRANDING.md` | Company branding screen |
+<!-- | `organization` | `BRANDING.md` | Company branding screen | -->
 | `organization` | `AUDIT-LOGS.md` | Read-only audit log |
 
 Allowed module folders: `employees`, `attendance`, `shifts`, `leave`, `holidays`, `payroll`, `salary`, `advances`, `devices`, `reports`, `bank`, `users`, `roles`, `organization`, `auth`.

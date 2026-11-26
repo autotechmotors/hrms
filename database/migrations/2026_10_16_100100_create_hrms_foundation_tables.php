@@ -144,17 +144,6 @@ return new class extends Migration
             $table->unique(['company_id', 'code']);
         });
 
-        Schema::create('financial_years', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('company_id')->constrained()->restrictOnDelete();
-            $table->string('name');
-            $table->date('starts_on');
-            $table->date('ends_on');
-            $table->boolean('is_current')->default(false);
-            $table->timestamps();
-            $table->index(['company_id', 'is_current']);
-        });
-
         Schema::create('work_calendars', function (Blueprint $table) {
             $table->id();
             $table->foreignId('company_id')->constrained()->restrictOnDelete();
@@ -249,7 +238,7 @@ return new class extends Migration
 
         Schema::create('employee_documents', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('employee_id')->constrained()->restrictOnDelete();
+            $table->foreignId('employee_id')->constrained()->cascadeOnDelete();
             $table->string('title');
             $table->string('file_path');
             $table->string('original_name');
@@ -261,7 +250,7 @@ return new class extends Migration
 
         Schema::create('employment_events', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('employee_id')->constrained()->restrictOnDelete();
+            $table->foreignId('employee_id')->constrained()->cascadeOnDelete();
             $table->string('event_type', 40);
             $table->date('effective_date');
             $table->string('reason');
@@ -280,7 +269,7 @@ return new class extends Migration
 
         Schema::create('employee_exits', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('employee_id')->constrained()->restrictOnDelete();
+            $table->foreignId('employee_id')->constrained()->cascadeOnDelete();
             $table->date('resignation_date');
             $table->date('last_working_date');
             $table->string('reason');
@@ -293,7 +282,7 @@ return new class extends Migration
 
         Schema::create('employee_bank_accounts', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('employee_id')->constrained()->restrictOnDelete();
+            $table->foreignId('employee_id')->constrained()->cascadeOnDelete();
             $table->string('beneficiary_name');
             $table->string('bank_name');
             $table->text('account_number');
@@ -340,7 +329,6 @@ return new class extends Migration
         Schema::dropIfExists('employee_custom_fields');
         Schema::dropIfExists('work_calendar_days');
         Schema::dropIfExists('work_calendars');
-        Schema::dropIfExists('financial_years');
         Schema::dropIfExists('employment_statuses');
         Schema::dropIfExists('employee_types');
         Schema::dropIfExists('designations');
