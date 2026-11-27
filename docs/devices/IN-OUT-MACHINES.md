@@ -4,6 +4,8 @@ Two Hikvision face terminals at the office door. The device screens are `docs/de
 
 The live site is `https://hrms.autotechmotors.com`. A scan is stored only after the site accepts it. The attendance page already refreshes about every 1.5 seconds. A late row means the punch was not saved yet.
 
+Both doors take the application timezone (`config/app.php`, `Asia/Kolkata`) and the server clock. `hikvision:pull` checks IN and OUT every minute and writes the terminal clock when it is off by more than 20 seconds, or the zone is not that offset. These terminals store `+05:30` as `CST-5:30:00`. The mode stays manual, so a device NTP server does not pull the clock away.
+
 ## Doors
 
 | Door | Office address | Public forward | Register id | Firmware | Face engine |
@@ -58,7 +60,7 @@ Block and unblock change only the person type, `blackList` or `normal`, with `PU
 
 Do not copy a fingerprint onto a second person. The terminal rejects it as a duplicate of the first person. Do not run `hikvision:keep-out --apply`. Do not start a live face capture.
 
-After the first IN of the day, that person is blocklist on the OUT terminal until an approved gate pass covers the moment, or until shift end minus Settings “Minutes before out” (`company_settings.out_inactive_minutes`, default 10, from 0 to 240). The IN terminal is never blocklisted. Coming back before the pass ends does not close OUT. Leaving again before the end is another out of the same type. OUT blocks when the pass time is over. `faces:sync` applies this once a minute. Labels and pay stay in `docs/attendance/GATE-PASS.md`.
+After the first IN of the day, that person is blocklist on the OUT terminal until an approved gate pass covers the moment, or until shift end minus Settings “Minutes before out” (`company_settings.out_inactive_minutes`, default 10, from 0 to 240). Out Door Closed on the employee list keeps them blocked on OUT even inside that window. Suspend on that list blocks them on the IN terminal. Both use SetUp. Coming back before the pass ends does not close OUT. Leaving again before the end is another out of the same type. OUT blocks when the pass time is over. `faces:sync` applies this once a minute. Labels and pay stay in `docs/attendance/GATE-PASS.md`.
 
 Do not run a full people sync onto the doors to repair a face. A sync must not rewrite a face that has no model, and it must not send fingerprints.
 

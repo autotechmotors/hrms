@@ -45,6 +45,9 @@ class Employee extends Model
         'notice_period_days',
         'salary_type',
         'is_blocked',
+        'block_inactive_days',
+        'in_suspended',
+        'out_door_closed',
     ];
 
     public const SALARY_HOURS = 'hours';
@@ -58,6 +61,9 @@ class Employee extends Model
             'joining_date' => 'date',
             'confirmation_date' => 'date',
             'is_blocked' => 'boolean',
+            'block_inactive_days' => 'integer',
+            'in_suspended' => 'boolean',
+            'out_door_closed' => 'boolean',
         ];
     }
 

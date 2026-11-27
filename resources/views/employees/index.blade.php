@@ -255,6 +255,34 @@
                 input.prop('disabled', false);
             });
         });
+
+        results.find('.el-door-toggle').off('change.elDoor').on('change.elDoor', function () {
+            const input = $(this);
+            const on = input.is(':checked');
+            const field = input.data('field');
+            const row = input.closest('[data-employee-row]');
+            const payload = { _token: csrf, _method: 'PATCH' };
+            payload[field] = on ? 1 : 0;
+            input.prop('disabled', true);
+
+            $.ajax({
+                url: input.data('url'),
+                method: 'POST',
+                data: payload,
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            }).done(function (res) {
+                const checked = !!(res && res[field]);
+                input.prop('checked', checked);
+                input.closest('.el-block-switch').find('.el-block-label').text(checked ? input.data('on') : input.data('off'));
+                if (window.toast && res && res.message) toast(res.message, 'ok');
+            }).fail(function (xhr) {
+                input.prop('checked', !on);
+                if (window.toast) toast((xhr.responseJSON && xhr.responseJSON.message) || 'Could not update the door.', 'er');
+            }).always(function () {
+                input.prop('disabled', false);
+                row.find('.el-door-toggle').prop('disabled', false);
+            });
+        });
     }
 
     document.getElementById('confirmButton')?.addEventListener('click', function () {

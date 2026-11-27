@@ -18,6 +18,7 @@ use App\Models\EmploymentStatus;
 use App\Models\Role;
 use App\Services\AccessScope;
 use App\Services\Devices\EmployeePush;
+use App\Services\Devices\FaceAccess;
 use App\Services\Employees\EmployeeExporter;
 use App\Services\Employees\EmployeeImporter;
 use App\Services\Employees\EmployeeRemover;
@@ -304,6 +305,51 @@ class EmployeeController extends Controller
         }
 
         return back()->with('success', $employee->is_blocked ? 'Employee blocked.' : 'Employee unblocked.');
+    }
+
+    public function toggleSuspended(Request $request, Employee $employee, FaceAccess $faces): JsonResponse|RedirectResponse
+    {
+        return $this->toggleDoor($request, $employee, $faces, 'in_suspended', true);
+    }
+
+    public function toggleOutDoor(Request $request, Employee $employee, FaceAccess $faces): JsonResponse|RedirectResponse
+    {
+        return $this->toggleDoor($request, $employee, $faces, 'out_door_closed', false);
+    }
+
+    private function toggleDoor(Request $request, Employee $employee, FaceAccess $faces, string $field, bool $inDoor): JsonResponse|RedirectResponse
+    {
+        $this->authorize('update', $employee);
+
+        $previous = (bool) $employee->{$field};
+        $next = $request->boolean($field, ! $previous);
+        $employee->update([$field => $next]);
+
+        try {
+            $inDoor ? $faces->syncIn($employee) : $faces->sync($employee);
+        } catch (\Throwable $exception) {
+            $employee->update([$field => $previous]);
+
+            if ($request->ajax() || $request->expectsJson()) {
+                return response()->json(['message' => $exception->getMessage() ?: 'The face terminal did not update.'], 422);
+            }
+
+            return back()->with('error', $exception->getMessage() ?: 'The face terminal did not update.');
+        }
+
+        $message = match ($field) {
+            'in_suspended' => $employee->in_suspended ? 'Suspended on the IN device.' : 'IN device opened.',
+            default => $employee->out_door_closed ? 'OUT door closed for this person.' : 'OUT door follows the shift again.',
+        };
+
+        if ($request->ajax() || $request->expectsJson()) {
+            return response()->json([
+                'message' => $message,
+                $field => (bool) $employee->{$field},
+            ]);
+        }
+
+        return back()->with('success', $message);
     }
 
     public function destroy(Request $request, Employee $employee): RedirectResponse|JsonResponse

@@ -4,7 +4,6 @@ namespace App\Services\Devices;
 
 use App\Support\StoredImage;
 use Carbon\Carbon;
-use Illuminate\Support\Facades\Cache;
 use RuntimeException;
 
 class HikvisionEvents
@@ -440,42 +439,77 @@ class HikvisionEvents
 
     public function alignClock(string $host, string $username, string $password): void
     {
-        $key = 'hikvision.clock.'.sha1($host);
-        if (Cache::get($key)) {
-            return;
-        }
-
+        $zone = $this->clockZone();
+        $local = now()->timezone($zone['php'])->format('Y-m-d\TH:i:sP');
         $base = $this->baseUrl($host);
         try {
             $response = $this->client->call('GET', $base.'/ISAPI/System/time', $username, $password);
         } catch (\Throwable) {
             return;
         }
-        if ($response['status'] !== 200 || ! preg_match('/<localTime>([^<]+)<\/localTime>/', $response['body'], $match)) {
-            return;
-        }
-        try {
-            $deviceNow = Carbon::parse($match[1]);
-        } catch (\Throwable) {
-            return;
-        }
-        if (abs($deviceNow->getTimestamp() - now()->getTimestamp()) <= 20) {
-            Cache::put($key, 1, now()->addHours(6));
-
+        if ($response['status'] !== 200) {
             return;
         }
 
-        $local = now()->timezone('Asia/Kolkata')->format('Y-m-d\TH:i:sP');
+        $deviceZone = '';
+        $deviceTime = '';
+        if (preg_match('/<timeZone>([^<]*)<\/timeZone>/', $response['body'], $zoneMatch)) {
+            $deviceZone = trim($zoneMatch[1]);
+        }
+        if (preg_match('/<localTime>([^<]+)<\/localTime>/', $response['body'], $timeMatch)) {
+            $deviceTime = $timeMatch[1];
+        }
+        $close = false;
+        if ($deviceTime !== '') {
+            try {
+                $close = abs(Carbon::parse($deviceTime)->getTimestamp() - now()->getTimestamp()) <= 20;
+            } catch (\Throwable) {
+                $close = false;
+            }
+        }
+        if ($close && $this->sameClockZone($deviceZone, $zone['device'])) {
+            return;
+        }
+
         $xml = '<Time version="2.0" xmlns="http://www.isapi.org/ver20/XMLSchema">'
-            .'<timeMode>manual</timeMode><localTime>'.$local.'</localTime><timeZone>CST-5:30:00</timeZone></Time>';
+            .'<timeMode>manual</timeMode><localTime>'.$local.'</localTime><timeZone>'.$zone['device'].'</timeZone></Time>';
         try {
-            $saved = $this->client->call('PUT', $base.'/ISAPI/System/time', $username, $password, $xml);
+            $this->client->call('PUT', $base.'/ISAPI/System/time', $username, $password, $xml, 12, 'application/xml');
         } catch (\Throwable) {
             return;
         }
-        if ($saved['status'] === 200) {
-            Cache::put($key, 1, now()->addHours(6));
-        }
+    }
+
+    /**
+     * The application timezone, and the same offset in the terminal's own zone text.
+     * These terminals store +05:30 as CST-5:30:00.
+     *
+     * @return array{php: string, device: string}
+     */
+    public function clockZone(): array
+    {
+        $php = (string) config('app.timezone', 'Asia/Kolkata');
+        $minutes = now()->timezone($php)->offsetMinutes;
+        $sign = $minutes >= 0 ? '-' : '+';
+        $abs = abs($minutes);
+
+        return [
+            'php' => $php,
+            'device' => sprintf('CST%s%d:%02d:00', $sign, intdiv($abs, 60), $abs % 60),
+        ];
+    }
+
+    private function sameClockZone(string $device, string $wanted): bool
+    {
+        $normal = function (string $value): string {
+            if (! preg_match('/^CST([+-])(\d+):(\d+)/', trim($value), $match)) {
+                return trim($value);
+            }
+
+            return sprintf('CST%s%d:%02d', $match[1], (int) $match[2], (int) $match[3]);
+        };
+
+        return $normal($device) === $normal($wanted);
     }
 
     /**

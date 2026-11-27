@@ -1633,6 +1633,32 @@ class HikvisionAttendanceTest extends TestCase
         $this->assertSame('http://192.168.1.156/face.jpg', $photo['url']);
     }
 
+    public function test_a_drifted_door_clock_is_set_to_the_application_time(): void
+    {
+        \Carbon\Carbon::setTestNow(\Carbon\Carbon::parse('2026-11-27 10:30:00', 'Asia/Kolkata'));
+        config(['app.timezone' => 'Asia/Kolkata']);
+        $puts = [];
+        $events = new HikvisionEvents(new HikvisionClient(function (string $method, string $url, array|string|null $body) use (&$puts) {
+            if ($method === 'PUT') {
+                $puts[] = (string) $body;
+
+                return ['status' => 200, 'body' => '<statusCode>1</statusCode>'];
+            }
+
+            return [
+                'status' => 200,
+                'body' => '<Time><timeMode>manual</timeMode><localTime>2020-01-01T00:00:00+05:30</localTime><timeZone>CST-0:00:00</timeZone></Time>',
+            ];
+        }));
+
+        $events->alignClock('192.168.1.160', 'admin', 'secret');
+
+        $this->assertCount(1, $puts);
+        $this->assertStringContainsString('<timeZone>CST-5:30:00</timeZone>', $puts[0]);
+        $this->assertStringContainsString('2026-11-27T10:30', $puts[0]);
+        \Carbon\Carbon::setTestNow();
+    }
+
     private function postScan(string $ip, string $at, int $serial): \Illuminate\Testing\TestResponse
     {
         return $this->postJson('/hikvision-events/secrettoken', [

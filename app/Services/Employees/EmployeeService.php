@@ -321,7 +321,7 @@ class EmployeeService
      */
     private function nullBlanks(array $data): array
     {
-        foreach (['email', 'phone', 'alternate_phone', 'address', 'city', 'state', 'postal_code', 'middle_name', 'role_id', 'reporting_manager_id', 'confirmation_date', 'date_of_birth', 'probation_days', 'notice_period_days'] as $key) {
+        foreach (['email', 'phone', 'alternate_phone', 'address', 'city', 'state', 'postal_code', 'middle_name', 'role_id', 'reporting_manager_id', 'confirmation_date', 'date_of_birth', 'probation_days', 'notice_period_days', 'block_inactive_days'] as $key) {
             if (array_key_exists($key, $data) && $data[$key] === '') {
                 $data[$key] = null;
             }

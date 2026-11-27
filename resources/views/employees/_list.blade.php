@@ -17,6 +17,8 @@
                     <th>{{ __('Checklist') }}</th>
                     <th>{{ __('Access Credentials') }}</th>
                     <th>{{ __('Blocked') }}</th>
+                    <th>{{ __('Suspend') }}</th>
+                    <th>{{ __('Out Door Closed') }}</th>
                     <th class="el-act">Actions</th>
                 </tr>
             </thead>
@@ -29,6 +31,8 @@
                     $hasBank = (int) ($employee->active_bank_accounts_count ?? 0) > 0;
                     $pending = ! $hasDocs || ! $hasBank;
                     $blocked = (bool) $employee->is_blocked;
+                    $suspended = (bool) $employee->in_suspended;
+                    $outClosed = (bool) $employee->out_door_closed;
                     $today = now()->toDateString();
                     $spanKind = $employee->shiftSpans->first(function ($span) use ($today) {
                         return $span->starts_on->toDateString() <= $today
@@ -67,11 +71,31 @@
                             <label class="el-block-switch" title="{{ $blocked ? 'Blocked — click to unblock' : 'Active — click to block' }}">
                                 <input type="checkbox" class="el-block-toggle" data-url="{{ route('employees.blocked', $employee) }}" @checked($blocked)>
                                 <span class="el-switch-ui" aria-hidden="true"></span>
-                                <span class="el-block-label">{{ $blocked ? 'Blocked' : 'Active' }}</span>
-                            </label>
+                            <span class="el-block-label">{{ $blocked ? 'Blocked' : 'Active' }}</span>
+                        </label>
                         @else
                             <span class="b {{ $blocked ? 'er' : 'ok' }}">{{ $blocked ? 'Blocked' : 'Active' }}</span>
                         @endif
+                    </td>
+                    <td class="el-door">
+                        @include('employees._door-switch', [
+                            'checked' => $suspended,
+                            'field' => 'in_suspended',
+                            'url' => route('employees.suspended', $employee),
+                            'on' => 'Suspended',
+                            'off' => 'Open',
+                            'title' => $suspended ? 'Suspended on the IN device — click to open' : 'Open on the IN device — click to suspend',
+                        ])
+                    </td>
+                    <td class="el-door">
+                        @include('employees._door-switch', [
+                            'checked' => $outClosed,
+                            'field' => 'out_door_closed',
+                            'url' => route('employees.out-door', $employee),
+                            'on' => 'Closed',
+                            'off' => 'Open',
+                            'title' => $outClosed ? 'OUT door closed — click to follow the shift again' : 'OUT door follows the shift — click to close it',
+                        ])
                     </td>
                     <td class="el-act">
                         <div class="el-ops">
@@ -93,7 +117,7 @@
                 </tr>
             @empty
                 <tr data-list-empty>
-                    <td colspan="8" class="el-empty">No employees match your filters</td>
+                    <td colspan="10" class="el-empty">No employees match your filters</td>
                 </tr>
             @endforelse
             </tbody>
@@ -109,6 +133,8 @@
                 $hasBank = (int) ($employee->active_bank_accounts_count ?? 0) > 0;
                 $pending = ! $hasDocs || ! $hasBank;
                 $blocked = (bool) $employee->is_blocked;
+                $suspended = (bool) $employee->in_suspended;
+                $outClosed = (bool) $employee->out_door_closed;
                 $today = now()->toDateString();
                 $spanKind = $employee->shiftSpans->first(function ($span) use ($today) {
                     return $span->starts_on->toDateString() <= $today
@@ -150,6 +176,22 @@
                             <span class="el-switch-ui" aria-hidden="true"></span>
                             <span class="el-block-label">{{ $blocked ? 'Blocked' : 'Active' }}</span>
                         </label>
+                        @include('employees._door-switch', [
+                            'checked' => $suspended,
+                            'field' => 'in_suspended',
+                            'url' => route('employees.suspended', $employee),
+                            'on' => 'Suspended',
+                            'off' => 'Open',
+                            'title' => $suspended ? 'Suspended on the IN device — click to open' : 'Open on the IN device — click to suspend',
+                        ])
+                        @include('employees._door-switch', [
+                            'checked' => $outClosed,
+                            'field' => 'out_door_closed',
+                            'url' => route('employees.out-door', $employee),
+                            'on' => 'Closed',
+                            'off' => 'Open',
+                            'title' => $outClosed ? 'OUT door closed — click to follow the shift again' : 'OUT door follows the shift — click to close it',
+                        ])
                     @else
                         <span class="b {{ $blocked ? 'er' : 'ok' }}">{{ $blocked ? 'Blocked' : 'Active' }}</span>
                     @endif

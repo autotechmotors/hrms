@@ -47,6 +47,7 @@ class HikvisionAttendance
      */
     private function pullUnlocked(string $password, bool $full): array
     {
+        $this->alignClocks();
         $imported = $full ? $this->importHeld() : ['stored' => 0, 'added' => 0];
         $stored = $imported['stored'];
         $held = 0;
@@ -151,7 +152,6 @@ class HikvisionAttendance
             return ['stored' => 0, 'held' => 0, 'added' => 0, 'paused' => true];
         }
 
-        $this->events->alignClock($host, $username, $password);
         $from = $this->cursor($registerId);
         $to = now();
         try {
@@ -338,6 +338,23 @@ class HikvisionAttendance
         return trim((string) config('hikvision.password'));
     }
 
+    private function alignClocks(): void
+    {
+        foreach ($this->targets() as $registerId => $host) {
+            $device = Device::query()->get()->first(fn (Device $row) => strcasecmp((string) $row->register_id, (string) $registerId) === 0);
+            $username = $device && trim((string) $device->username) !== '' ? $device->terminalUsername() : (string) config('hikvision.username');
+            $secret = $device && trim((string) $device->password) !== '' ? $device->terminalPassword() : $this->secret();
+            if ($username === '' || $secret === '' || $host === '') {
+                continue;
+            }
+            try {
+                $this->events->alignClock($host, $username, $secret);
+            } catch (\Throwable) {
+                // A clock miss must not stop the punch import.
+            }
+        }
+    }
+
     /**
      * @return array<string, string>
      */
@@ -352,10 +369,16 @@ class HikvisionAttendance
                     $rows[(string) $device->register_id] = $host;
                 }
             });
-        $host = trim((string) config('hikvision.host'));
-        $registerId = trim((string) config('hikvision.register_id'));
-        if ($host !== '' && $registerId !== '' && ! array_key_exists($registerId, $rows)) {
-            $port = is_numeric(config('hikvision.port')) ? (int) config('hikvision.port') : 0;
+        foreach (config('hikvision.terminals', []) as $terminal) {
+            if (! is_array($terminal)) {
+                continue;
+            }
+            $registerId = trim((string) ($terminal['register_id'] ?? ''));
+            $host = trim((string) ($terminal['host'] ?? ''));
+            if ($registerId === '' || $host === '' || array_key_exists($registerId, $rows)) {
+                continue;
+            }
+            $port = is_numeric($terminal['port'] ?? null) ? (int) $terminal['port'] : 0;
             $rows[$registerId] = $port > 80 ? $host.':'.$port : $host;
         }
 

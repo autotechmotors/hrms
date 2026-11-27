@@ -186,13 +186,14 @@
                             <x-text-field name="confirmation_date" label="Confirmation date" type="date" :value="optional($employee?->confirmation_date)->toDateString()" />
                             <x-text-field name="probation_days" label="Probation days" type="number" :value="$employee->probation_days ?? ''" />
                             <x-text-field name="notice_period_days" label="Notice period days" type="number" :value="$employee->notice_period_days ?? ''" />
+                            <x-text-field name="block_inactive_days" label="Days without in / out" type="number" min="1" max="365" :value="old('block_inactive_days', $employee?->block_inactive_days ?? '')" />
                             <x-select-field name="salary_type" label="Salary type" required>
                                 <option value="">Select</option>
                                 <option value="hours" @selected(old('salary_type', $employee->salary_type ?? '') === 'hours')>Hours based</option>
                                 <option value="piece" @selected(old('salary_type', $employee->salary_type ?? '') === 'piece')>Piece based</option>
                             </x-select-field>
                         </div>
-                        <p class="ef-hint mt-2 mb-0">Hours based people go on salary sheets. Piece based people stay on attendance only — salary is not generated for them.</p>
+                        <p class="ef-hint mt-2 mb-0">Hours based people go on salary sheets. Piece based people stay on attendance only — salary is not generated for them. Days without in / out, left blank, uses the company setting. When those days pass, Suspend turns on and the IN device blocks this person.</p>
                         @if($employee)
                             <div class="ef-note">
                                 <div class="g c2">

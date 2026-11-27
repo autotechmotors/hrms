@@ -6,6 +6,7 @@ use App\Models\AttendanceDay;
 use App\Models\AttendancePunch;
 use App\Models\CompanySetting;
 use App\Models\Employee;
+use App\Services\Devices\FaceAccess;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 
@@ -29,10 +30,12 @@ class InactivePunchBlocker
         $blocked = 0;
         $query->get()->each(function (CompanySetting $setting) use (&$blocked): void {
             $this->candidates($setting)->each(function (Employee $employee) use (&$blocked): void {
-                if (! $employee->is_blocked) {
-                    $employee->update(['is_blocked' => true]);
-                    $blocked++;
+                if ($employee->in_suspended) {
+                    return;
                 }
+                $employee->update(['in_suspended' => true]);
+                app(FaceAccess::class)->syncIn($employee);
+                $blocked++;
             });
         });
 
@@ -44,12 +47,12 @@ class InactivePunchBlocker
      */
     public function candidates(CompanySetting $setting): Collection
     {
-        $days = max(1, (int) $setting->block_inactive_days);
+        $companyDays = max(1, (int) $setting->block_inactive_days);
 
         $employees = Employee::query()
             ->with(['role', 'department', 'user.roles', 'employmentStatus'])
             ->where('company_id', $setting->company_id)
-            ->where('is_blocked', false)
+            ->where('in_suspended', false)
             ->whereHas('employmentStatus', fn ($query) => $query->where('is_exit', false))
             ->orderBy('first_name')
             ->get();
@@ -57,9 +60,13 @@ class InactivePunchBlocker
         $this->rememberActivity($employees);
 
         return $employees
-            ->filter(function (Employee $employee) use ($days): bool {
+            ->filter(function (Employee $employee) use ($companyDays): bool {
+                $limit = $employee->block_inactive_days !== null
+                    ? max(1, (int) $employee->block_inactive_days)
+                    : $companyDays;
+
                 return ! $this->isProtected($employee)
-                    && $this->idleDays($employee) >= $days;
+                    && $this->idleDays($employee) >= $limit;
             })
             ->values();
     }

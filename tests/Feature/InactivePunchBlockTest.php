@@ -6,6 +6,7 @@ use App\Models\AttendanceDay;
 use App\Models\AttendancePunch;
 use App\Models\CompanySetting;
 use App\Models\Role;
+use App\Services\Devices\FaceAccess;
 use App\Services\Employees\InactivePunchBlocker;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -79,9 +80,10 @@ class InactivePunchBlockTest extends TestCase
             ])
             ->assertRedirect(route('settings.edit'));
 
-        $this->assertTrue($worker->fresh()->is_blocked);
-        $this->assertFalse($protected->fresh()->is_blocked);
-        $this->assertFalse($fresh->fresh()->is_blocked);
+        $this->assertTrue($worker->fresh()->in_suspended);
+        $this->assertFalse($worker->fresh()->is_blocked);
+        $this->assertFalse($protected->fresh()->in_suspended);
+        $this->assertFalse($fresh->fresh()->in_suspended);
     }
 
     public function test_recent_in_out_keeps_employee_active(): void
@@ -102,7 +104,7 @@ class InactivePunchBlockTest extends TestCase
         ]);
 
         $this->assertSame(0, app(InactivePunchBlocker::class)->apply($org['company']->id));
-        $this->assertFalse($employee->fresh()->is_blocked);
+        $this->assertFalse($employee->fresh()->in_suspended);
     }
 
     public function test_two_full_empty_days_follow_the_saved_setting(): void
@@ -153,11 +155,12 @@ class InactivePunchBlockTest extends TestCase
 
         $this->artisan('employees:block-inactive')->assertSuccessful();
 
-        $this->assertTrue($twoDays->fresh()->is_blocked);
-        $this->assertFalse($oneDay->fresh()->is_blocked);
-        $this->assertTrue($joined->fresh()->is_blocked);
-        $this->assertFalse($joinedYesterday->fresh()->is_blocked);
-        $this->assertFalse($manual->fresh()->is_blocked);
+        $this->assertTrue($twoDays->fresh()->in_suspended);
+        $this->assertFalse($twoDays->fresh()->is_blocked);
+        $this->assertFalse($oneDay->fresh()->in_suspended);
+        $this->assertTrue($joined->fresh()->in_suspended);
+        $this->assertFalse($joinedYesterday->fresh()->in_suspended);
+        $this->assertFalse($manual->fresh()->in_suspended);
 
         $this->artisan('employees:block-inactive')
             ->expectsOutputToContain('Already checked today.')
@@ -180,8 +183,82 @@ class InactivePunchBlockTest extends TestCase
         $worker->update(['joining_date' => '2026-01-01']);
 
         $this->artisan('employees:block-inactive')->assertSuccessful();
-        $this->assertFalse($worker->fresh()->is_blocked);
+        $this->assertFalse($worker->fresh()->in_suspended);
 
         Carbon::setTestNow();
+    }
+
+    public function test_an_employee_day_count_overrides_the_company_count(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-11-18 10:15:00', 'Asia/Kolkata'));
+        Cache::flush();
+
+        $org = $this->makeCompany('ST6');
+        CompanySetting::forCompany($org['company']->id)->update([
+            'block_inactive_enabled' => true,
+            'block_inactive_days' => 10,
+        ]);
+
+        $own = $this->makeEmployee($org, 'OWN');
+        $own->update([
+            'joining_date' => '2026-01-01',
+            'block_inactive_days' => 2,
+        ]);
+        AttendancePunch::query()->create([
+            'employee_id' => $own->id,
+            'punched_at' => '2026-11-15 18:00:00',
+            'direction' => 'out',
+            'external_key' => 'st6-own',
+        ]);
+
+        $company = $this->makeEmployee($org, 'CO');
+        $company->update(['joining_date' => '2026-01-01']);
+        AttendancePunch::query()->create([
+            'employee_id' => $company->id,
+            'punched_at' => '2026-11-15 18:00:00',
+            'direction' => 'out',
+            'external_key' => 'st6-co',
+        ]);
+
+        $this->artisan('employees:block-inactive')->assertSuccessful();
+
+        $this->assertTrue($own->fresh()->in_suspended);
+        $this->assertFalse($own->fresh()->is_blocked);
+        $this->assertFalse($company->fresh()->in_suspended);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_suspend_and_out_door_switches_do_not_use_the_blocked_flag(): void
+    {
+        $org = $this->makeCompany('ST7');
+        $hr = $this->makeUser('hr-admin', $org['company']);
+        $worker = $this->makeEmployee($org, 'SW1');
+
+        $this->actingAsScoped($hr)
+            ->get(route('employees.index'))
+            ->assertOk()
+            ->assertSee('Suspend')
+            ->assertSee('Out Door Closed');
+
+        $this->actingAsScoped($hr)
+            ->patchJson(route('employees.suspended', $worker), ['in_suspended' => 1])
+            ->assertOk()
+            ->assertJson(['in_suspended' => true]);
+
+        $this->actingAsScoped($hr)
+            ->patchJson(route('employees.out-door', $worker), ['out_door_closed' => 1])
+            ->assertOk()
+            ->assertJson(['out_door_closed' => true]);
+
+        $worker->refresh();
+        $this->assertTrue($worker->in_suspended);
+        $this->assertTrue($worker->out_door_closed);
+        $this->assertFalse($worker->is_blocked);
+
+        $this->assertFalse(app(FaceAccess::class)->allowsFace($worker, now()));
+
+        $worker->update(['out_door_closed' => false]);
+        $this->assertTrue(app(FaceAccess::class)->allowsFace($worker->fresh(), now()));
     }
 }

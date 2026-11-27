@@ -5,7 +5,7 @@
         <div class="ph">
             <div>
                 <h1>{{ __('Settings') }}</h1>
-                <p>Company rules for auto-block and for when OUT closes. Super Admin and HR Admin are never auto-blocked.</p>
+                <p>Company rules for the IN device suspend, and for when OUT closes. Super Admin and HR Admin are never auto-suspended.</p>
             </div>
             <div class="ac">
                 <button class="btn pr" type="submit" form="settingsForm">Save settings</button>
@@ -21,14 +21,14 @@
                 <header>
                     <div>
                         <h3>{{ __('Auto-block without in / out') }}</h3>
-                        <p>Anyone else with no punch for the set days is marked Blocked.</p>
+                        <p>Anyone else with no punch for the set days is suspended on the IN device. An employee can have their own day count. A blank count uses this one.</p>
                     </div>
                 </header>
                 <div class="cb">
                     <x-flag-switch
                         name="block_inactive_enabled"
                         label="Turn this rule on"
-                        hint="Off means nobody is auto-blocked."
+                        hint="Off means nobody is auto-suspended on the IN device."
                         :checked="$setting->block_inactive_enabled"
                     />
                     <div class="st-days">
@@ -39,12 +39,12 @@
                             :value="old('block_inactive_days', $setting->block_inactive_days)"
                             required
                         />
-                        <p class="form-text">Full days with no in and no out. Unblock later from Employees.</p>
+                        <p class="form-text">Full days with no in and no out. This turns on Suspend and blocks the IN device. Turn Suspend off on Employees to open it. The Blocked switch on that list stays separate.</p>
                     </div>
                     <ul class="st-notes">
                         <li>The count starts from the last punch, or from the joining date when there is none. Today is not counted until it is over.</li>
-                        <li>Saving while the rule is on blocks everyone already over the limit. The scheduled job does the same once each day.</li>
-                        <li>Super Admin and HR Admin stay active even when they have no punches.</li>
+                        <li>Saving while the rule is on suspends everyone already over their limit. The scheduled job does the same once each day.</li>
+                        <li>Super Admin and HR Admin stay open on the IN device even when they have no punches.</li>
                     </ul>
                     <div class="st-days">
                         <x-text-field
@@ -63,6 +63,11 @@
 
             <aside class="st-side">
                 <section class="card st-stat">
+                    <small>Device clock</small>
+                    <b>{{ now()->timezone(config('app.timezone'))->format('h:i A') }}</b>
+                    <span>IN and OUT follow {{ config('app.timezone') }}. The minute job sets both clocks to this server time.</span>
+                </section>
+                <section class="card st-stat">
                     <small>Rule</small>
                     <b class="{{ $setting->block_inactive_enabled ? 'on' : '' }}">{{ $setting->block_inactive_enabled ? 'On' : 'Off' }}</b>
                     <span>{{ $setting->block_inactive_days }} days without a punch</span>
@@ -70,7 +75,7 @@
                 <section class="card st-stat">
                     <small>Overdue now</small>
                     <b>{{ $overdueTotal }}</b>
-                    <span>{{ $setting->block_inactive_enabled ? 'Blocked on save, and once each day by the scheduled job.' : 'Shown for review. The rule is off.' }}</span>
+                    <span>{{ $setting->block_inactive_enabled ? 'Suspended on the IN device on save, and once each day by the scheduled job.' : 'Shown for review. The rule is off.' }}</span>
                 </section>
             </aside>
         </div>
@@ -81,9 +86,9 @@
                     <h3>{{ __('Currently overdue') }}</h3>
                     <p>
                         @if($setting->block_inactive_enabled)
-                            Already past {{ $setting->block_inactive_days }} days. Saving blocks them. The daily job does the same.
+                            Already past their day limit. Saving suspends them on the IN device. The daily job does the same.
                         @else
-                            Turn the rule on and save to start blocking.
+                            Turn the rule on and save to start suspending the IN device.
                         @endif
                     </p>
                 </div>
@@ -91,7 +96,7 @@
             </header>
             <div class="cb">
                 @if($setting->block_inactive_enabled && $overdueTotal > 0)
-                    <p class="st-alert"><b>{{ $overdueTotal }} people</b> are past {{ $setting->block_inactive_days }} days. Save blocks them now. The daily job blocks anyone who crosses the limit later. Super Admin and HR Admin stay active.</p>
+                    <p class="st-alert"><b>{{ $overdueTotal }} people</b> are past their day limit. Save suspends them on the IN device now. The daily job suspends anyone who crosses their limit later. Super Admin and HR Admin stay open.</p>
                 @endif
                 <form id="stFind" class="st-find" method="get" action="{{ route('settings.edit') }}">
                     <label for="stOverdue">Search overdue</label>

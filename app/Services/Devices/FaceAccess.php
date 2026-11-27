@@ -25,6 +25,10 @@ class FaceAccess
      */
     public function allowsFace(Employee $employee, Carbon $at): bool
     {
+        if ($employee->out_door_closed) {
+            return false;
+        }
+
         $at = $at->copy()->timezone('Asia/Kolkata');
         $workDate = $this->hours->workDateFor($employee, $at);
         $day = AttendanceDay::query()
@@ -69,8 +73,29 @@ class FaceAccess
     }
 
     /**
-     * The OUT attendance terminal is blocked after IN. A gate terminal is too.
-     * The IN terminal stays open.
+     * Suspend blocks this person on the IN terminal only. SetUp keeps the face and the finger.
+     */
+    public function syncIn(Employee $employee): void
+    {
+        if (app()->runningUnitTests()) {
+            return;
+        }
+
+        $allow = ! $employee->in_suspended;
+        foreach ($this->inTerminals((int) $employee->company_id) as $device) {
+            $key = 'face-in.'.$device->id.'.'.$employee->id;
+            $next = $allow ? '1' : '0';
+            if (Cache::get($key) === $next) {
+                continue;
+            }
+            $this->push->faceAccess($employee, $device, $allow);
+            Cache::put($key, $next, now()->addDays(2));
+        }
+    }
+
+    /**
+     * The OUT attendance terminal is blocked after IN, and while Out Door Closed is on.
+     * A gate terminal follows the same out rule. Suspend uses the IN terminal instead.
      *
      * @return \Illuminate\Support\Collection<int, Device>
      */
@@ -80,6 +105,18 @@ class FaceAccess
             ->where('company_id', $companyId)
             ->get()
             ->filter(fn (Device $device) => $device->isHikvision() && ($device->isGate() || $device->punch_role === Device::ROLE_OUT))
+            ->values();
+    }
+
+    /**
+     * @return \Illuminate\Support\Collection<int, Device>
+     */
+    public function inTerminals(int $companyId): \Illuminate\Support\Collection
+    {
+        return Device::query()
+            ->where('company_id', $companyId)
+            ->get()
+            ->filter(fn (Device $device) => $device->isHikvision() && $device->punch_role === Device::ROLE_IN)
             ->values();
     }
 
@@ -97,6 +134,22 @@ class FaceAccess
             $this->sync($employee);
             $count++;
         });
+
+        Employee::query()
+            ->where('out_door_closed', true)
+            ->when($ids->isNotEmpty(), fn ($query) => $query->whereNotIn('id', $ids))
+            ->orderBy('id')
+            ->each(function (Employee $employee) use (&$count): void {
+                $this->sync($employee);
+                $count++;
+            });
+
+        Employee::query()
+            ->where('in_suspended', true)
+            ->orderBy('id')
+            ->each(function (Employee $employee): void {
+                $this->syncIn($employee);
+            });
 
         return $count;
     }

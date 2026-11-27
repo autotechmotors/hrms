@@ -13,7 +13,7 @@
     <link rel="stylesheet" href="{{ asset('assets/vendor/bootstrap/bootstrap.min.css') }}">
     <link rel="stylesheet" href="{{ asset('assets/vendor/select2/select2.min.css') }}">
     <link rel="stylesheet" href="{{ asset('assets/vendor/flatpickr/flatpickr.min.css') }}">
-    <link rel="stylesheet" href="{{ asset('assets/css/app.css') }}?v=162">
+    <link rel="stylesheet" href="{{ asset('assets/css/app.css') }}?v=163">
     @stack('styles')
     <script>
         (function () {

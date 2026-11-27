@@ -78,8 +78,8 @@ class SettingController extends Controller
             : 0;
 
         $message = $setting->block_inactive_enabled
-            ? ($blocked ? "Settings saved. {$blocked} employee(s) blocked for no in/out." : 'Settings saved. No employees needed blocking.')
-            : 'Settings saved. Auto-block is off.';
+            ? ($blocked ? "Settings saved. {$blocked} employee(s) suspended on the IN device." : 'Settings saved. No employees needed suspending.')
+            : 'Settings saved. Auto-suspend is off.';
 
         return redirect()->route('settings.edit')->with('success', $message);
     }

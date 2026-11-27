@@ -35,7 +35,7 @@ Start at `docs/prompts/HRMS-SYSTEM.md`. Then open only the module file for the s
 | `roles` | `NAV-PERMISSIONS.md` | Which role sees which module |
 | `employees` | `PROFILE.md` | Employee profile fields and the attendance card |
 | `employees` | `PARENT-ROLE.md` | Role on the employee form, and who appears as Parent |
-| `employees` | `AUTO-BLOCK.md` | Block people with no in or out for the days set in Settings |
+| `employees` | `AUTO-BLOCK.md` | Suspend the IN device after days without in or out; Out Door Closed holds the OUT device |
 | `attendance` | `REGISTER.md` | Past and current day, phone, worked hours |
 | `attendance` | `GATE-PASS.md` | Gate pass request, approval, and office-work hours |
 | `shifts` | `ROSTERS.md` | Shifts and rosters |

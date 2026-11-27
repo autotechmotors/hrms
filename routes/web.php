@@ -212,6 +212,8 @@ Route::middleware(['auth', 'mfa'])->group(function (): void {
     Route::post('employees/{employee}/exit', [EmployeeExitController::class, 'store'])->name('employees.exit.store');
     Route::post('employees/{employee}/bank-accounts', [EmployeeBankAccountController::class, 'store'])->name('employees.bank-accounts.store');
     Route::patch('employees/{employee}/blocked', [EmployeeController::class, 'toggleBlocked'])->name('employees.blocked');
+    Route::patch('employees/{employee}/suspended', [EmployeeController::class, 'toggleSuspended'])->name('employees.suspended');
+    Route::patch('employees/{employee}/out-door', [EmployeeController::class, 'toggleOutDoor'])->name('employees.out-door');
     Route::post('employees/{employee}/times', [EmployeeController::class, 'updateTimes'])->name('employees.times');
     Route::get('employees/{employee}/shifts', [EmployeeShiftController::class, 'show'])->name('employees.shifts.show');
     Route::post('employees/{employee}/shifts', [EmployeeShiftController::class, 'update'])->name('employees.shifts.update');

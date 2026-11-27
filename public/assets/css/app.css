@@ -275,6 +275,7 @@ tr.el-blocked{background:#fff7f8}
 .el-block-switch input:checked + .el-switch-ui::after{left:16px}
 .el-block-switch:has(input:checked){color:var(--er)}
 .el-block-switch input:disabled + .el-switch-ui{opacity:.6}
+.el-door{white-space:nowrap}
 .el-card-access{display:grid;gap:6px;min-width:0}
 .el-card-access > span{color:var(--mu);font-size:11px;font-weight:650;letter-spacing:.04em;text-transform:uppercase}
 .el-link{color:inherit}
@@ -298,7 +299,7 @@ tr.el-blocked{background:#fff7f8}
 .el-card .ac-item{position:relative;justify-content:center;min-width:0;padding:8px 4px;background:var(--bg);border-radius:10px}
 .el-card .ac-item b{font-size:12px}
 .el-card .ac-x{position:absolute;top:1px;right:4px;padding:0}
-.el-card-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:auto;padding:8px 10px 8px 14px;border-top:1px solid var(--bd);background:#fafafc}
+.el-card-foot{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-top:auto;padding:8px 10px 8px 14px;border-top:1px solid var(--bd);background:#fafafc}
 .el-card-foot .el-ops{border:0;padding:0}
 .el-empty{text-align:center;color:var(--mu);padding:40px 16px}
 .el-pgn{padding:12px 16px}
