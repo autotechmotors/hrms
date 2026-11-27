@@ -48,6 +48,7 @@ class Employee extends Model
         'block_inactive_days',
         'in_suspended',
         'out_door_closed',
+        'out_door_forced',
     ];
 
     public const SALARY_HOURS = 'hours';
@@ -64,6 +65,7 @@ class Employee extends Model
             'block_inactive_days' => 'integer',
             'in_suspended' => 'boolean',
             'out_door_closed' => 'boolean',
+            'out_door_forced' => 'boolean',
         ];
     }
 

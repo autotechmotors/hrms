@@ -401,7 +401,7 @@ class HikvisionEvents
         $position = 0;
         $pages = 0;
         $people = [];
-        while ($pages < 20) {
+        while ($pages < 40) {
             $pages++;
             $response = $this->client->call('POST', $base.'/ISAPI/AccessControl/UserInfo/Search?format=json', $username, $password, [
                 'UserInfoSearchCond' => [
@@ -435,6 +435,25 @@ class HikvisionEvents
         }
 
         return $people;
+    }
+
+    /**
+     * Employee code to terminal person type. blackList cannot scan.
+     *
+     * @return array<string, string>
+     */
+    public function userTypes(string $host, string $username, string $password): array
+    {
+        $types = [];
+        foreach ($this->users($this->baseUrl($host), $username, $password) as $person) {
+            $code = trim((string) ($person['employeeNo'] ?? ''));
+            if ($code === '') {
+                continue;
+            }
+            $types[$code] = (string) ($person['userType'] ?? 'normal');
+        }
+
+        return $types;
     }
 
     public function alignClock(string $host, string $username, string $password): void

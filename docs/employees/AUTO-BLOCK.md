@@ -6,7 +6,7 @@ The employee form has its own day count. A blank count uses the company number. 
 
 This does not use the Blocked switch. Blocked still only removes the person from attendance, leave, shifts, gate pass, pay, and device enrollment. Suspend and Out Door Closed are separate switches on the employee list.
 
-Suspend on blocks that person on the IN terminal. Suspend off opens the IN terminal. The change is UserInfo/SetUp, so the face and the fingerprint stay. Turn Suspend off from Employees. A later punch does not clear it by itself.
+Suspend on blocks that person on the IN terminal. Suspend off opens the IN terminal. The change is UserInfo/SetUp, so the face and the fingerprint stay. Turn Suspend off from Employees. A later punch does not clear it by itself. Each minute the IN and OUT block lists are read back, and the switches are set to match. A person the shift has already blocked on OUT shows Out Door Closed. When that window opens, the switch opens too, unless someone closed it by hand.
 
 Out Door Closed on keeps that person blocked on the OUT terminal even when a gate pass or the minutes-before-out window would open it. Out Door Closed off returns them to that normal OUT rule. The same SetUp call is used. See `docs/attendance/GATE-PASS.md` and `docs/devices/IN-OUT-MACHINES.md`.
 

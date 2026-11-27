@@ -322,13 +322,23 @@ class EmployeeController extends Controller
         $this->authorize('update', $employee);
 
         $previous = (bool) $employee->{$field};
+        $previousForced = (bool) $employee->out_door_forced;
         $next = $request->boolean($field, ! $previous);
-        $employee->update([$field => $next]);
+        if ($inDoor) {
+            $employee->update([$field => $next]);
+        } else {
+            $employee->update([
+                'out_door_forced' => $next,
+                'out_door_closed' => $next,
+            ]);
+        }
 
         try {
             $inDoor ? $faces->syncIn($employee) : $faces->sync($employee);
         } catch (\Throwable $exception) {
-            $employee->update([$field => $previous]);
+            $employee->update($inDoor
+                ? [$field => $previous]
+                : ['out_door_forced' => $previousForced, 'out_door_closed' => $previous]);
 
             if ($request->ajax() || $request->expectsJson()) {
                 return response()->json(['message' => $exception->getMessage() ?: 'The face terminal did not update.'], 422);
@@ -337,6 +347,7 @@ class EmployeeController extends Controller
             return back()->with('error', $exception->getMessage() ?: 'The face terminal did not update.');
         }
 
+        $employee->refresh();
         $message = match ($field) {
             'in_suspended' => $employee->in_suspended ? 'Suspended on the IN device.' : 'IN device opened.',
             default => $employee->out_door_closed ? 'OUT door closed for this person.' : 'OUT door follows the shift again.',

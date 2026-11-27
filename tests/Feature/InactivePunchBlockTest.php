@@ -256,9 +256,35 @@ class InactivePunchBlockTest extends TestCase
         $this->assertTrue($worker->out_door_closed);
         $this->assertFalse($worker->is_blocked);
 
-        $this->assertFalse(app(FaceAccess::class)->allowsFace($worker, now()));
+        $worker->update(['out_door_forced' => true]);
+        $this->assertFalse(app(FaceAccess::class)->allowsFace($worker->fresh(), now()));
 
-        $worker->update(['out_door_closed' => false]);
+        $worker->update(['out_door_forced' => false]);
         $this->assertTrue(app(FaceAccess::class)->allowsFace($worker->fresh(), now()));
+    }
+
+    public function test_door_block_lists_turn_the_matching_switches_on(): void
+    {
+        $org = $this->makeCompany('ST8');
+        $blocked = $this->makeEmployee($org, 'BLK1');
+        $open = $this->makeEmployee($org, 'OPN1');
+
+        $changed = app(FaceAccess::class)->matchSwitches((int) $org['company']->id, [
+            'BLK1' => 'blackList',
+            'OPN1' => 'normal',
+        ], 'in');
+
+        $this->assertSame(1, $changed);
+        $this->assertTrue($blocked->fresh()->in_suspended);
+        $this->assertFalse($open->fresh()->in_suspended);
+
+        app(FaceAccess::class)->matchSwitches((int) $org['company']->id, [
+            'BLK1' => 'blackList',
+            'OPN1' => 'normal',
+        ], 'out');
+
+        $this->assertTrue($blocked->fresh()->out_door_closed);
+        $this->assertTrue($blocked->fresh()->out_door_forced);
+        $this->assertFalse($open->fresh()->out_door_closed);
     }
 }

@@ -16,6 +16,7 @@ class FaceAccess
         private readonly WorkHourResolver $hours,
         private readonly GatePassAccess $passes,
         private readonly EmployeePush $push,
+        private readonly HikvisionEvents $events,
     ) {}
 
     /**
@@ -25,7 +26,7 @@ class FaceAccess
      */
     public function allowsFace(Employee $employee, Carbon $at): bool
     {
-        if ($employee->out_door_closed) {
+        if ($employee->out_door_forced) {
             return false;
         }
 
@@ -69,6 +70,11 @@ class FaceAccess
             }
             $this->push->faceAccess($employee, $device, $allow);
             Cache::put($key, $next, now()->addDays(2));
+        }
+
+        $closed = ! $allow;
+        if ((bool) $employee->out_door_closed !== $closed) {
+            $employee->update(['out_door_closed' => $closed]);
         }
     }
 
@@ -122,6 +128,7 @@ class FaceAccess
 
     public function syncOpen(): int
     {
+        $this->reflectDevices();
         $ids = AttendanceDay::query()
             ->whereDate('work_date', '>=', now()->timezone('Asia/Kolkata')->subDay()->toDateString())
             ->whereNotNull('punch_in')
@@ -152,5 +159,133 @@ class FaceAccess
             });
 
         return $count;
+    }
+
+    /**
+     * Copy each door's block list onto the employee switches.
+     * A person blocked on OUT while the shift would allow them stays closed.
+     */
+    public function reflectDevices(): int
+    {
+        if (app()->runningUnitTests()) {
+            return 0;
+        }
+
+        $changed = 0;
+        $companyIds = Device::query()->pluck('company_id')->unique()->filter();
+        foreach ($companyIds as $companyId) {
+            foreach ($this->inTerminals((int) $companyId) as $device) {
+                $types = $this->readTypes($device);
+                if ($types === null) {
+                    continue;
+                }
+                $changed += $this->matchSwitches((int) $companyId, $types, 'in');
+                $this->rememberDoor($device, $types, 'in');
+            }
+            foreach ($this->gateTerminals((int) $companyId) as $device) {
+                if ($device->punch_role !== Device::ROLE_OUT) {
+                    continue;
+                }
+                $types = $this->readTypes($device);
+                if ($types === null) {
+                    continue;
+                }
+                $changed += $this->matchSwitches((int) $companyId, $types, 'out');
+                $this->rememberDoor($device, $types, 'out');
+            }
+        }
+
+        return $changed;
+    }
+
+    /**
+     * @param  array<string, string>  $types
+     */
+    public function matchSwitches(int $companyId, array $types, string $door): int
+    {
+        $changed = 0;
+        Employee::query()
+            ->where('company_id', $companyId)
+            ->orderBy('id')
+            ->each(function (Employee $employee) use ($types, $door, &$changed): void {
+                $code = trim((string) $employee->employee_code);
+                if ($code === '' || ! array_key_exists($code, $types)) {
+                    return;
+                }
+                $blocked = $types[$code] === 'blackList';
+                if ($door === 'in') {
+                    if ((bool) $employee->in_suspended === $blocked) {
+                        return;
+                    }
+                    $employee->update(['in_suspended' => $blocked]);
+                    $changed++;
+
+                    return;
+                }
+
+                $forced = $blocked && $this->scheduleAllows($employee, now()->timezone('Asia/Kolkata'));
+                $updates = [];
+                if ((bool) $employee->out_door_forced !== $forced) {
+                    $updates['out_door_forced'] = $forced;
+                }
+                if ((bool) $employee->out_door_closed !== $blocked) {
+                    $updates['out_door_closed'] = $blocked;
+                }
+                if ($updates === []) {
+                    return;
+                }
+                $employee->update($updates);
+                $changed++;
+            });
+
+        return $changed;
+    }
+
+    /**
+     * @return array<string, string>|null
+     */
+    private function readTypes(Device $device): ?array
+    {
+        try {
+            return $this->events->userTypes(
+                $device->terminalHost(),
+                $device->terminalUsername(),
+                $device->terminalPassword(),
+            );
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /**
+     * @param  array<string, string>  $types
+     */
+    private function rememberDoor(Device $device, array $types, string $door): void
+    {
+        $codes = Employee::query()
+            ->where('company_id', $device->company_id)
+            ->pluck('id', 'employee_code');
+        foreach ($types as $code => $type) {
+            $id = $codes[$code] ?? null;
+            if (! $id) {
+                continue;
+            }
+            $prefix = $door === 'in' ? 'face-in.' : 'face-pic.';
+            Cache::put($prefix.$device->id.'.'.$id, $type === 'blackList' ? '0' : '1', now()->addDays(2));
+        }
+    }
+
+    private function scheduleAllows(Employee $employee, Carbon $at): bool
+    {
+        $forced = (bool) $employee->out_door_forced;
+        if ($forced) {
+            $employee->out_door_forced = false;
+        }
+        $allow = $this->allowsFace($employee, $at);
+        if ($forced) {
+            $employee->out_door_forced = true;
+        }
+
+        return $allow;
     }
 }
