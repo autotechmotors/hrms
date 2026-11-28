@@ -27,7 +27,7 @@
         <header>
             <div>
                 <h3>{{ __('Working hours') }}</h3>
-                <p>Use the department clocks, or clocks only for {{ $employee->first_name }}. Day and night are both saved.</p>
+                <p>Use the department clocks, or clocks only for {{ $employee->first_name }}. Day and night are both saved. Sunday on or off is set for each.</p>
             </div>
         </header>
         <div class="cb">
@@ -54,19 +54,44 @@
                         <article class="hp-board">
                             <header><h4>Day</h4><small>Department</small></header>
                             <p>Mon–Sat {{ $departmentWindows['weekday_start'] }}–{{ $departmentWindows['weekday_end'] }}</p>
-                            <p>Sunday {{ $departmentWindows['sunday_start'] }}–{{ $departmentWindows['sunday_end'] }}</p>
+                            <p>Sunday {{ $departmentWindows['works_sunday'] ? $departmentWindows['sunday_start'].'–'.$departmentWindows['sunday_end'] : 'Off · paid, no punch' }}</p>
                         </article>
                         <article class="hp-board">
                             <header><h4>Night</h4><small>Department</small></header>
                             <p>Mon–Sat {{ $departmentWindows['night_weekday_start'] }}–{{ $departmentWindows['night_weekday_end'] }}</p>
                             <p>Sunday {{ $departmentWindows['night_works_sunday'] ? $departmentWindows['night_sunday_start'].'–'.$departmentWindows['night_sunday_end'] : 'Off · paid, no punch' }}</p>
                         </article>
+                        <div class="hp-boards">
+                            <section class="hp-board">
+                                <div class="hp-clock" data-person-day>
+                                    <div class="hp-sunday-top">
+                                        <span>Day · Sunday</span>
+                                        <input type="hidden" name="day_works_sunday" value="0" data-dept-sunday-field>
+                                        <label class="et-switch">
+                                            <input type="checkbox" name="day_works_sunday" value="1" data-day-sunday data-dept-sunday-field @checked($daySundayOn)>
+                                            <span class="rl-ui" aria-hidden="true"></span>
+                                            <span class="et-switch-txt" data-day-sunday-label>{{ $daySundayOn ? 'On' : 'Off' }}</span>
+                                        </label>
+                                    </div>
+                                    <p class="hp-night-note" data-day-sunday-off @if($daySundayOn) hidden @endif>Off. Paid Sunday, no punch and no cutoff.</p>
+                                </div>
+                            </section>
+                            <section class="hp-board">
+                                <div class="hp-clock" data-person-night>
+                                    <div class="hp-sunday-top">
+                                        <span>Night · Sunday</span>
+                                        <input type="hidden" name="works_sunday" value="0" data-dept-sunday-field>
+                                        <label class="et-switch">
+                                            <input type="checkbox" name="works_sunday" value="1" data-night-sunday data-dept-sunday-field @checked($nightSundayOn)>
+                                            <span class="rl-ui" aria-hidden="true"></span>
+                                            <span class="et-switch-txt" data-night-sunday-label>{{ $nightSundayOn ? 'On' : 'Off' }}</span>
+                                        </label>
+                                    </div>
+                                    <p class="hp-night-note" data-night-sunday-off @if($nightSundayOn) hidden @endif>Off. Paid Sunday, no punch and no cutoff.</p>
+                                </div>
+                            </section>
+                        </div>
                     </div>
-                    @php
-                        $nightOn = $shiftKind === 'night' && $mode === 'own'
-                            ? (bool) ($employee->workHour?->works_sunday)
-                            : (bool) $departmentWindows['night_works_sunday'];
-                    @endphp
                     <div class="hp-own" data-own-hours @if($mode !== 'own') hidden @endif>
                         <div class="hp-boards">
                         <section class="hp-board">
@@ -86,15 +111,24 @@
                                     <input class="form-control" type="time" name="weekday_break_end" value="{{ $windows['weekday_break_end'] }}" aria-label="Day break end">
                                 </div>
                             </div>
-                            <div class="hp-clock">
-                                <span>Sunday</span>
-                                <div class="hp-line">
-                                    <b>{{ __('Work') }}</b>
-                                    <input class="form-control" type="time" name="sunday_start" value="{{ $windows['sunday_start'] }}" @if($mode === 'own') required @endif aria-label="Sunday start">
-                                    <em>to</em>
-                                    <input class="form-control" type="time" name="sunday_end" value="{{ $windows['sunday_end'] }}" @if($mode === 'own') required @endif aria-label="Sunday end">
+                            <div class="hp-clock" data-person-day>
+                                <div class="hp-sunday-top">
+                                    <span>Sunday</span>
+                                    <input type="hidden" name="day_works_sunday" value="0" data-own-sunday-field>
+                                    <label class="et-switch">
+                                        <input type="checkbox" name="day_works_sunday" value="1" data-day-sunday data-own-sunday-field @checked($daySundayOn)>
+                                        <span class="rl-ui" aria-hidden="true"></span>
+                                        <span class="et-switch-txt" data-day-sunday-label>{{ $daySundayOn ? 'On' : 'Off' }}</span>
+                                    </label>
                                 </div>
-                                <div class="hp-line">
+                                <p class="hp-night-note" data-day-sunday-off @if($daySundayOn) hidden @endif>Off. Paid Sunday, no punch and no cutoff.</p>
+                                <div class="hp-line" data-day-sunday-times @unless($daySundayOn) hidden @endunless>
+                                    <b>{{ __('Work') }}</b>
+                                    <input class="form-control" type="time" name="sunday_start" value="{{ $windows['sunday_start'] }}" aria-label="Sunday start">
+                                    <em>to</em>
+                                    <input class="form-control" type="time" name="sunday_end" value="{{ $windows['sunday_end'] }}" aria-label="Sunday end">
+                                </div>
+                                <div class="hp-line" data-day-sunday-times @unless($daySundayOn) hidden @endunless>
                                     <b>{{ __('Break') }}</b>
                                     <input class="form-control" type="time" name="sunday_break_start" value="{{ $windows['sunday_break_start'] }}" aria-label="Sunday break start">
                                     <em>to</em>
@@ -122,21 +156,21 @@
                             <div class="hp-clock" data-person-night>
                                 <div class="hp-sunday-top">
                                     <span>Sunday</span>
-                                    <input type="hidden" name="works_sunday" value="0">
+                                    <input type="hidden" name="works_sunday" value="0" data-own-sunday-field>
                                     <label class="et-switch">
-                                        <input type="checkbox" name="works_sunday" value="1" data-night-sunday @checked($nightOn)>
+                                        <input type="checkbox" name="works_sunday" value="1" data-night-sunday data-own-sunday-field @checked($nightSundayOn)>
                                         <span class="rl-ui" aria-hidden="true"></span>
-                                        <span class="et-switch-txt" data-night-sunday-label>{{ $nightOn ? 'On' : 'Off' }}</span>
+                                        <span class="et-switch-txt" data-night-sunday-label>{{ $nightSundayOn ? 'On' : 'Off' }}</span>
                                     </label>
                                 </div>
-                                <p class="hp-night-note" data-night-sunday-off @if($nightOn) hidden @endif>Off. Paid Sunday, no punch and no cutoff.</p>
-                                <div class="hp-line" data-night-sunday-times @unless($nightOn) hidden @endunless>
+                                <p class="hp-night-note" data-night-sunday-off @if($nightSundayOn) hidden @endif>Off. Paid Sunday, no punch and no cutoff.</p>
+                                <div class="hp-line" data-night-sunday-times @unless($nightSundayOn) hidden @endunless>
                                     <b>{{ __('Work') }}</b>
                                     <input class="form-control" type="time" name="night_sunday_start" value="{{ $windows['night_sunday_start'] }}" aria-label="Sunday night start">
                                     <em>to</em>
                                     <input class="form-control" type="time" name="night_sunday_end" value="{{ $windows['night_sunday_end'] }}" aria-label="Sunday night end">
                                 </div>
-                                <div class="hp-line" data-night-sunday-times @unless($nightOn) hidden @endunless>
+                                <div class="hp-line" data-night-sunday-times @unless($nightSundayOn) hidden @endunless>
                                     <b>{{ __('Break') }}</b>
                                     <input class="form-control" type="time" name="night_sunday_break_start" value="{{ $windows['night_sunday_break_start'] ?: '01:00' }}" aria-label="Sunday night break start">
                                     <em>to</em>
@@ -189,8 +223,8 @@
                                 <input class="form-control" id="gross_monthly" type="number" name="gross_monthly" min="0.01" step="0.01" inputmode="decimal" value="{{ $current ? $current->gross_monthly : '' }}" required>
                             </div>
                             <div>
-                                <label class="form-label" for="effective_from">Starts on</label>
-                                <input class="form-control" id="effective_from" type="date" name="effective_from" value="{{ $current?->effective_from?->toDateString() ?: now()->toDateString() }}" required>
+                            <label class="form-label" for="effective_from">Starts on</label>
+                            <input class="form-control" id="effective_from" type="date" name="effective_from" value="{{ $current?->effective_from?->toDateString() ?: ($employee->joining_date?->toDateString() ?: now()->toDateString()) }}" required>
                             </div>
                             <button class="btn pr" type="submit">Save salary</button>
                         </div>

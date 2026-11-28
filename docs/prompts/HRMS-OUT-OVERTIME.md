@@ -55,7 +55,7 @@ The shift closes at its scheduled end. If OUT has not come by then, every minute
 
 Example. Day shift 09:00–18:00. Break 13:00–14:00. On 24 Nov the IN is 10:00. The OUT face is 25 Nov at 07:00. Late is still the hour from 09:00 to 10:00. Overtime is 24 Nov 18:00 through 25 Nov 07:00. It is not cut as early leave.
 
-Sunday counts as a full day for this, not as a half day. A Sunday on the 09:00–18:00 shift uses those same 9 hours. Extra time after 18:00 is overtime. Do not use the short Sunday window as the overtime length.
+Sunday on still pays a full day when the Sunday window is filled. Overtime on that Sunday starts at the Sunday window end, not the Monday–Saturday end. Example: Sunday 08:00–13:00, out at 15:00 → full day pay plus overtime from 13:00 to 15:00. The hour rate still uses the Monday–Saturday length (09:00–18:00 is 9 hours). Do not treat the short Sunday window as a half-day salary.
 
 ```
 hour rate = monthly salary / (days in that month × full shift hours)
@@ -102,4 +102,5 @@ Update `docs/attendance/REGISTER.md`, `docs/attendance/GATE-PASS.md`, and `docs/
 - Factory pass at any time: 0 cutoff.
 - Settings 10, shift end 18:00: a face at 17:40 stays IN. A face at 17:50 or later is OUT.
 - IN 24 Nov 10:00, OUT 25 Nov 07:00: overtime from 24 Nov 18:00 to 25 Nov 07:00, on the attendance row and on the overtime section.
-- Sunday uses the full 09:00–18:00 length, not a half day, for the hour rate.
+- Sunday hour rate uses the full 09:00–18:00 length; overtime minutes start after the Sunday window end (for example 13:00).
+- Sunday 08:00–13:00, OUT 15:00: full day pay + 2 hours overtime.

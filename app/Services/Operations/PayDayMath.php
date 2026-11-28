@@ -279,7 +279,17 @@ class PayDayMath
             'window' => $window['label'],
         ];
 
-        if ($kind === 'before_join' || $monthly <= 0) {
+        if ($kind === 'before_join') {
+            $grid['status'] = 'BJ';
+            $grid['holiday'] = 'Before joining date';
+
+            return ['day_pay' => $dayPay, 'net' => 0.0, 'cutoff' => 0.0, 'cuts' => [], 'grid' => $grid];
+        }
+
+        if ($monthly <= 0) {
+            $grid['status'] = 'NS';
+            $grid['holiday'] = 'No salary amount on this date';
+
             return ['day_pay' => $dayPay, 'net' => 0.0, 'cutoff' => 0.0, 'cuts' => [], 'grid' => $grid];
         }
 

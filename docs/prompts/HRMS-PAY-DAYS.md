@@ -18,16 +18,17 @@ Extend these. Do not add a second attendance engine or a second salary column.
 | Company holiday `public` or `cutoff` | `holidays`, `HolidayController` |
 | One person’s paid days | `employee_holidays` |
 | Personal or office gate pass | `gate_passes.work_type` `personal` or `office` |
-| Salary the sheet reads | `employee_salaries.gross_monthly` |
+| Salary the sheet reads | `employee_salaries.gross_monthly` effective on that day |
+| No pay markers | `BJ` = before joining date; `NS` = no salary amount on that day |
 
 ## Department, then the person
 
 Hours & pay holds the department template:
 
 - Day Monday–Saturday start, end, and break
-- Day Sunday start, end, break, and Sunday on or off
+- Day Sunday on or off, and when on: start, end, and break
 - Night Monday–Saturday start, end, and break
-- Night Sunday start, end, break, and Sunday on or off
+- Night Sunday on or off, and when on: start, end, and break
 - Default pattern: all days on Day, or all days on Night
 
 A new person copies that department. After that, the person is separate.
@@ -48,7 +49,7 @@ Save clocks, Sunday, and the shift month with the existing ajax. Do not reload t
 
 A night date groups the evening in with the next morning out. The next date, when it is day, starts at the day clock. A night out is not the next day’s in. A punch outside that clock does not join the shift. The door terminal stays open. Do not block it.
 
-Overtime starts at the Monday–Saturday end of that kind, including on Sunday, and runs until the out face. Arriving before the window does not add pay. Time inside the shift does not add pay. Factory time does not add pay. The hour rate is the monthly salary divided by the days in that month times the full shift hours. Overtime pay is a separate line and does not change late, early, or a personal cutoff. See `docs/salary/SHEETS.md`.
+Overtime starts at that date’s window end and runs until the out face. Monday–Saturday uses the weekday end. Sunday on uses the Sunday window end (for example after 13:00 when Sunday is 08:00–13:00), not the longer Monday–Saturday end. Completing the Sunday window still pays the full day; time after that end is overtime on top. Arriving before the window does not add pay. Time inside the shift does not add pay. Factory time does not add pay. The hour rate is the monthly salary divided by the days in that month times the full Monday–Saturday shift hours. Overtime pay is a separate line and does not change late, early, or a personal cutoff. See `docs/salary/SHEETS.md` and `docs/prompts/HRMS-OUT-OVERTIME.md`.
 
 ## Sunday pay
 
@@ -63,7 +64,7 @@ minute rate = day pay / full-shift minutes
 
 Full-shift minutes are the Monday–Saturday window of the same kind, not the Sunday window.
 
-Example. Day shift 08:00–19:00 is 11 hours, 660 minutes. Sunday window 08:00–13:00. The person punches 08:30–13:00. Short is 30 minutes. They filled 10 hours 30 minutes of the 11. Cut `day pay × 30 / 660`. Completing 08:00–13:00 cuts nothing and pays the same day amount as completing 08:00–19:00 on Monday.
+Example. Day shift 08:00–19:00 is 11 hours, 660 minutes. Sunday window 08:00–13:00. The person punches 08:30–13:00. Short is 30 minutes. They filled 10 hours 30 minutes of the 11. Cut `day pay × 30 / 660`. Completing 08:00–13:00 cuts nothing and pays the same day amount as completing 08:00–19:00 on Monday. Punches 08:00–15:00: full day pay, plus overtime from 13:00 to 15:00 at the Monday–Saturday hour rate.
 
 A person whose Monday–Saturday day is 09:00–18:00 uses 540 minutes, not 660. A night Sunday uses that person’s night Monday–Saturday length. Do not use one company rate for everyone.
 
@@ -127,6 +128,7 @@ Update `docs/salary/HOURS-AND-PAY.md`, `docs/salary/SHEETS.md`, `docs/shifts/SCH
 - Sunday off, any role: that Sunday is paid, no punch, no cutoff.
 - Sunday on, window 08:00–13:00, full day 08:00–19:00, punches 08:30–13:00: 30 minutes, rupees = day pay × 30 / 660.
 - Same Sunday completed 08:00–13:00: no cutoff, full day pay.
+- Same Sunday 08:00–15:00: full day pay, plus 2 hours overtime from 13:00.
 - 25000, 30 days, no cutoff: 25000. 25000, 31 days, no cutoff: 25000.
 - Public holiday: everyone paid. Cutoff holiday: everyone cut, except a person with `employee_holidays` that date.
 - Paid leave: no cutoff. Unpaid leave: full day cut.

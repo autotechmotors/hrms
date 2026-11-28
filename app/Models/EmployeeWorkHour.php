@@ -18,6 +18,7 @@ class EmployeeWorkHour extends Model
         'weekday_end',
         'sunday_start',
         'sunday_end',
+        'day_works_sunday',
         'shift_kind',
         'night_weekday_start',
         'night_weekday_end',

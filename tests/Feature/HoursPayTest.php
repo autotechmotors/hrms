@@ -108,7 +108,7 @@ class HoursPayTest extends TestCase
             'employee_id' => $day->id,
             'uses_department' => true,
             'shift_kind' => 'day',
-            'works_sunday' => false,
+            'day_works_sunday' => false,
         ]);
 
         $hours = app(WorkHourResolver::class);
@@ -121,6 +121,7 @@ class HoursPayTest extends TestCase
             'weekday_end' => '18:00',
             'sunday_start' => '08:00',
             'sunday_end' => '13:00',
+            'works_sunday' => '1',
             'night_weekday_start' => '21:00',
             'night_weekday_end' => '06:00',
             'weekday_break_start' => '13:00',
@@ -132,6 +133,7 @@ class HoursPayTest extends TestCase
         $this->actingAsScoped($user)
             ->get(route('hours-pay.index'))
             ->assertOk()
+            ->assertSee('Day · Sunday')
             ->assertSee('Night · Sunday');
 
         $this->actingAsScoped($user)
@@ -170,6 +172,7 @@ class HoursPayTest extends TestCase
 
         $this->assertDatabaseHas('department_work_hours', [
             'department_id' => $org['department']->id,
+            'works_sunday' => true,
             'night_works_sunday' => true,
         ]);
 
@@ -186,5 +189,77 @@ class HoursPayTest extends TestCase
         $this->assertSame('22:00', $ownWindow['start']);
         $this->assertSame('03:00', $ownWindow['end']);
         $this->assertSame(['start' => '01:00', 'end' => '02:00'], $hours->breakClocks($own, $sunday));
+    }
+
+    public function test_day_sunday_off_at_department_and_own_times(): void
+    {
+        $org = $this->makeCompany('DAY');
+        $user = $this->makeUser('hr-admin', $org['company']);
+        $one = $this->makeEmployee($org, 'D1');
+        $two = $this->makeEmployee($org, 'D2');
+        $hours = app(WorkHourResolver::class);
+        $sunday = Carbon::parse('2026-11-15');
+
+        $clocks = [
+            'weekday_start' => '09:00',
+            'weekday_end' => '18:00',
+            'night_weekday_start' => '21:00',
+            'night_weekday_end' => '06:00',
+            'works_sunday' => '0',
+            'night_works_sunday' => '0',
+        ];
+
+        $this->actingAsScoped($user)
+            ->postJson(route('hours-pay.departments.store', $org['department']), $clocks)
+            ->assertOk();
+
+        $this->assertDatabaseHas('department_work_hours', [
+            'department_id' => $org['department']->id,
+            'works_sunday' => false,
+        ]);
+        $this->assertFalse($hours->dayWorksSunday($one->fresh()));
+        $this->assertFalse($hours->worksSunday($one->fresh(), $sunday));
+
+        $this->actingAsScoped($user)
+            ->postJson(route('hours-pay.departments.store', $org['department']), array_merge($clocks, [
+                'works_sunday' => '1',
+                'sunday_start' => '08:00',
+                'sunday_end' => '13:00',
+            ]))
+            ->assertOk();
+
+        $this->assertDatabaseHas('department_work_hours', [
+            'department_id' => $org['department']->id,
+            'works_sunday' => true,
+        ]);
+        $one->unsetRelation('department');
+        $this->assertTrue($hours->dayWorksSunday($one->fresh()));
+
+        $this->actingAsScoped($user)
+            ->postJson(route('hours-pay.employees.hours', $two), [
+                'mode' => 'own',
+                'shift_kind' => 'day',
+                'weekday_start' => '09:00',
+                'weekday_end' => '18:00',
+                'night_weekday_start' => '21:00',
+                'night_weekday_end' => '06:00',
+                'day_works_sunday' => '0',
+                'works_sunday' => '0',
+            ])
+            ->assertOk();
+
+        $this->assertDatabaseHas('employee_work_hours', [
+            'employee_id' => $two->id,
+            'day_works_sunday' => false,
+            'uses_department' => false,
+        ]);
+        $this->assertFalse($hours->dayWorksSunday($two->fresh()));
+        $this->assertTrue($hours->dayWorksSunday($one->fresh()));
+
+        $this->actingAsScoped($user)
+            ->get(route('hours-pay.show', $two))
+            ->assertOk()
+            ->assertSee('Day · Sunday')
+            ->assertSee('Off. Paid Sunday, no punch and no cutoff.');
     }
 }

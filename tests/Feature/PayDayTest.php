@@ -440,6 +440,33 @@ class PayDayTest extends TestCase
 
         $this->assertSame([], $full['cuts']);
         $this->assertEqualsWithDelta(31000 / 30, $full['earned'], 0.02);
+        $this->assertSame(0, $full['overtime_minutes']);
+
+        AttendanceDay::query()->where('employee_id', $employee->id)->update([
+            'punch_in' => '08:00:00',
+            'punch_out' => '15:00:00',
+        ]);
+        $employee->unsetRelation('workHour');
+        $extra = app(PayDayMath::class)->range($employee->fresh(), Carbon::parse('2026-11-01'), Carbon::parse('2026-11-01'));
+        $this->assertSame([], $extra['cuts']);
+        $this->assertEqualsWithDelta(31000 / 30, $extra['earned'], 0.02);
+        $this->assertSame(120, $extra['overtime_minutes']);
+        $this->assertSame('2h 00m', $extra['overtime'][0]['hours']);
+        $this->assertEqualsWithDelta(round(2 * (31000 / 30) / 11, 2), $extra['overtime_pay'], 0.02);
+
+        AttendanceDay::query()->where('employee_id', $employee->id)->update([
+            'punch_in' => '08:30:00',
+            'punch_out' => '15:00:00',
+        ]);
+        $employee->unsetRelation('workHour');
+        $lateExtra = app(PayDayMath::class)->range($employee->fresh(), Carbon::parse('2026-11-01'), Carbon::parse('2026-11-01'));
+        $this->assertSame(30, $lateExtra['cuts'][0]['minutes']);
+        $this->assertSame(120, $lateExtra['overtime_minutes']);
+        $this->assertEqualsWithDelta(
+            round((31000 / 30) - ((31000 / 30) * 30 / 660) + (2 * (31000 / 30) / 11), 2),
+            round($lateExtra['earned'] + $lateExtra['overtime_pay'], 2),
+            0.02
+        );
 
         $night = $this->makeEmployee($org, 'S2');
         $this->paySalary($night, SalaryStructure::query()->first(), 31000);

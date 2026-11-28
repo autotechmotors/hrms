@@ -68,13 +68,16 @@ class WorkHourResolver
 
     public function dayWorksSunday(Employee $employee): bool
     {
-        $employee->loadMissing('workHour');
+        $employee->loadMissing(['workHour', 'department.workHour']);
         $row = $employee->workHour;
-        if ($row && $row->works_sunday !== null) {
+        if ($row && $row->day_works_sunday !== null) {
+            return (bool) $row->day_works_sunday;
+        }
+        if ($row && $row->works_sunday !== null && ($row->shift_kind ?? 'day') === 'day') {
             return (bool) $row->works_sunday;
         }
 
-        return true;
+        return (bool) ($employee->department?->workHour?->works_sunday ?? true);
     }
 
     /**
@@ -103,6 +106,7 @@ class WorkHourResolver
             'sunday_start' => $night ? $nightSundayStart : $daySundayStart,
             'sunday_end' => $night ? $nightSundayEnd : $daySundayEnd,
             'works_sunday' => $night ? $this->worksSunday($employee) : $this->dayWorksSunday($employee),
+            'day_works_sunday' => $this->dayWorksSunday($employee),
             'night_works_sunday' => (bool) $employee->department?->workHour?->night_works_sunday,
             'department_name' => $employee->department?->name ?? 'this department',
             'department_night_sunday_start' => $this->clock($employee->department?->workHour?->night_sunday_start ?? null, '21:00'),
@@ -455,24 +459,16 @@ class WorkHourResolver
     }
 
     /**
-     * Monday–Saturday end for this kind, including on Sunday.
-     * Overtime starts here. A shorter Sunday clock does not.
+     * Overtime starts at this date’s window end until the out face.
+     * Monday–Saturday uses that kind’s weekday end. Sunday on uses the Sunday
+     * window end (for example 13:00), not the longer Monday–Saturday end.
+     * The hour rate still uses Monday–Saturday length via standard_minutes.
      */
     public function fullShiftEnd(Employee $employee, CarbonInterface $date): Carbon
     {
-        $employee->loadMissing(['workHour', 'department.workHour']);
-        $own = $employee->workHour;
-        $source = ($own && ! $own->uses_department) ? $own : $employee->department?->workHour;
-        $night = $this->shifts->kindOn($employee, $date) === 'night';
-        if ($night) {
-            $start = $this->clock($source?->night_weekday_start ?? null, '21:00');
-            $end = $this->clock($source?->night_weekday_end ?? null, '06:00');
-        } else {
-            $start = $this->clock($source?->weekday_start ?? null, '09:00');
-            $end = $this->clock($source?->weekday_end ?? null, '18:00');
-        }
-        $from = Carbon::parse($date->toDateString().' '.$start, 'Asia/Kolkata');
-        $at = Carbon::parse($date->toDateString().' '.$end, 'Asia/Kolkata');
+        $window = $this->windowFor($employee, $date);
+        $from = Carbon::parse($date->toDateString().' '.$window['start'], 'Asia/Kolkata');
+        $at = Carbon::parse($date->toDateString().' '.$window['end'], 'Asia/Kolkata');
         if ($at->lessThanOrEqualTo($from)) {
             $at->addDay();
         }

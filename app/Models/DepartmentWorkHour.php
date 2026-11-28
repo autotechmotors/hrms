@@ -17,6 +17,7 @@ class DepartmentWorkHour extends Model
         'weekday_end',
         'sunday_start',
         'sunday_end',
+        'works_sunday',
         'night_weekday_start',
         'night_weekday_end',
         'night_sunday_start',
@@ -36,6 +37,7 @@ class DepartmentWorkHour extends Model
     {
         return [
             'hours_per_day' => 'decimal:2',
+            'works_sunday' => 'boolean',
             'night_works_sunday' => 'boolean',
         ];
     }

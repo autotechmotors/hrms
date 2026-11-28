@@ -49,6 +49,23 @@ class SalarySheetBuilder
         });
     }
 
+    public function refreshLine(SalarySheetLine $line): SalarySheetLine
+    {
+        $line->loadMissing('sheet', 'employee');
+        $sheet = $line->sheet;
+        abort_unless($sheet && $line->employee, 404);
+        $payload = $this->line(
+            (int) $sheet->id,
+            $line->employee,
+            Carbon::parse($sheet->starts_on)->startOfDay(),
+            Carbon::parse($sheet->ends_on)->startOfDay(),
+        );
+        unset($payload['salary_sheet_id'], $payload['employee_id']);
+        $line->update($payload);
+
+        return $line->fresh();
+    }
+
     /**
      * @return array<string, mixed>
      */

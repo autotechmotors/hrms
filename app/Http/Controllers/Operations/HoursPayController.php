@@ -67,6 +67,7 @@ class HoursPayController extends Controller
                     'weekday_end' => $this->hours->clock($window?->weekday_end, '18:00'),
                     'sunday_start' => $this->hours->clock($window?->sunday_start, '08:00'),
                     'sunday_end' => $this->hours->clock($window?->sunday_end, '13:00'),
+                    'works_sunday' => $window?->works_sunday !== null ? (bool) $window->works_sunday : true,
                     'night_weekday_start' => $this->hours->clock($window?->night_weekday_start, '21:00'),
                     'night_weekday_end' => $this->hours->clock($window?->night_weekday_end, '06:00'),
                     'weekday_break_start' => $this->hours->clockOrEmpty($window?->weekday_break_start),
@@ -107,7 +108,7 @@ class HoursPayController extends Controller
             404
         );
 
-        $data = $this->windowInput($request) + $this->nightSundayInput($request);
+        $data = $this->windowInput($request) + $this->daySundayInput($request) + $this->nightSundayInput($request);
         $hours = $this->hours->hoursFromWindow($data['weekday_start'], $data['weekday_end']);
 
         $row = DepartmentWorkHour::query()->updateOrCreate(
@@ -131,25 +132,19 @@ class HoursPayController extends Controller
             'shift_kind' => ['required', Rule::in(['day', 'night'])],
         ])['shift_kind'];
 
+        $daySunday = $this->personDaySundayInput($request);
+        $nightSunday = $this->personNightSundayInput($request);
         $payload = [
             'uses_department' => $request->input('mode') === 'department',
             'shift_kind' => $kind,
-        ];
+        ] + $daySunday + $nightSunday;
         if ($request->input('mode') === 'own') {
             $times = $this->windowInput($request);
-            $payload = $times + [
+            $payload = $times + $daySunday + $nightSunday + [
                 'uses_department' => false,
                 'shift_kind' => $kind,
                 'hours_per_day' => $this->hours->hoursFromWindow($times['weekday_start'], $times['weekday_end']),
             ];
-            if ($kind === 'night') {
-                $sunday = $this->nightSundayInput($request);
-                unset($sunday['night_works_sunday']);
-                $payload['works_sunday'] = $request->boolean('works_sunday');
-                if ($payload['works_sunday']) {
-                    $payload = $sunday + $payload;
-                }
-            }
         }
 
         EmployeeWorkHour::query()->updateOrCreate(
@@ -302,32 +297,32 @@ class HoursPayController extends Controller
             'windows' => $this->formWindows($employee),
             'departmentWindows' => $this->windowsFrom($employee->department?->workHour),
             'shiftKind' => $employee->workHour?->shift_kind === 'night' ? 'night' : 'day',
+            'daySundayOn' => $this->hours->dayWorksSunday($employee),
+            'nightSundayOn' => $employee->workHour?->works_sunday !== null
+                ? (bool) $employee->workHour->works_sunday
+                : (bool) ($employee->department?->workHour?->night_works_sunday ?? false),
         ];
     }
 
     /**
-     * @return array{weekday_start: string, weekday_end: string, sunday_start: string, sunday_end: string}
+     * Monday–Saturday clocks for day and night. Sunday clocks come from daySundayInput / nightSundayInput.
+     *
+     * @return array{weekday_start: string, weekday_end: string, night_weekday_start: string, night_weekday_end: string}
      */
     private function windowInput(Request $request): array
     {
         $data = $request->validate([
             'weekday_start' => ['required', 'regex:/^\d{2}:\d{2}(:\d{2})?$/'],
             'weekday_end' => ['required', 'regex:/^\d{2}:\d{2}(:\d{2})?$/'],
-            'sunday_start' => ['required', 'regex:/^\d{2}:\d{2}(:\d{2})?$/'],
-            'sunday_end' => ['required', 'regex:/^\d{2}:\d{2}(:\d{2})?$/'],
             'night_weekday_start' => ['required', 'regex:/^\d{2}:\d{2}(:\d{2})?$/'],
             'night_weekday_end' => ['required', 'regex:/^\d{2}:\d{2}(:\d{2})?$/'],
             'weekday_break_start' => ['nullable', 'regex:/^\d{2}:\d{2}(:\d{2})?$/'],
             'weekday_break_end' => ['nullable', 'regex:/^\d{2}:\d{2}(:\d{2})?$/'],
-            'sunday_break_start' => ['nullable', 'regex:/^\d{2}:\d{2}(:\d{2})?$/'],
-            'sunday_break_end' => ['nullable', 'regex:/^\d{2}:\d{2}(:\d{2})?$/'],
             'night_weekday_break_start' => ['nullable', 'regex:/^\d{2}:\d{2}(:\d{2})?$/'],
             'night_weekday_break_end' => ['nullable', 'regex:/^\d{2}:\d{2}(:\d{2})?$/'],
         ], [
             'weekday_start.required' => 'Enter the day Monday to Saturday start.',
             'weekday_end.required' => 'Enter the day Monday to Saturday end.',
-            'sunday_start.required' => 'Enter the day Sunday start.',
-            'sunday_end.required' => 'Enter the day Sunday end.',
             'night_weekday_start.required' => 'Enter the night Monday to Saturday start.',
             'night_weekday_end.required' => 'Enter the night Monday to Saturday end.',
         ]);
@@ -335,24 +330,53 @@ class HoursPayController extends Controller
         $times = [
             'weekday_start' => $this->hours->clock($data['weekday_start'], '09:00'),
             'weekday_end' => $this->hours->clock($data['weekday_end'], '18:00'),
-            'sunday_start' => $this->hours->clock($data['sunday_start'], '08:00'),
-            'sunday_end' => $this->hours->clock($data['sunday_end'], '13:00'),
             'night_weekday_start' => $this->hours->clock($data['night_weekday_start'], '21:00'),
             'night_weekday_end' => $this->hours->clock($data['night_weekday_end'], '06:00'),
         ];
 
         $this->assertWindow($times['weekday_start'], $times['weekday_end'], 'weekday_end', 'Day Monday to Saturday');
-        $this->assertWindow($times['sunday_start'], $times['sunday_end'], 'sunday_end', 'Day Sunday');
         $this->assertWindow($times['night_weekday_start'], $times['night_weekday_end'], 'night_weekday_end', 'Night Monday to Saturday');
         $times = array_merge($times, $this->breakPair($request, 'weekday_break_start', 'weekday_break_end', $times['weekday_start'], $times['weekday_end'], 'weekday_break_end', 'Day Monday to Saturday break'));
-        $times = array_merge($times, $this->breakPair($request, 'sunday_break_start', 'sunday_break_end', $times['sunday_start'], $times['sunday_end'], 'sunday_break_end', 'Day Sunday break'));
         $times = array_merge($times, $this->breakPair($request, 'night_weekday_break_start', 'night_weekday_break_end', $times['night_weekday_start'], $times['night_weekday_end'], 'night_weekday_break_end', 'Night Monday to Saturday break'));
 
         return $times;
     }
 
     /**
-     * Sunday night on/off belongs to the department. Off leaves the stored clock alone.
+     * Day Sunday on/off for a department. Off leaves the stored clock alone.
+     *
+     * @return array<string, bool|string|null>
+     */
+    private function daySundayInput(Request $request): array
+    {
+        if ($request->has('works_sunday') && ! $request->boolean('works_sunday')) {
+            return ['works_sunday' => false];
+        }
+
+        $data = $request->validate([
+            'sunday_start' => ['required', 'regex:/^\d{2}:\d{2}(:\d{2})?$/'],
+            'sunday_end' => ['required', 'regex:/^\d{2}:\d{2}(:\d{2})?$/'],
+            'sunday_break_start' => ['nullable', 'regex:/^\d{2}:\d{2}(:\d{2})?$/'],
+            'sunday_break_end' => ['nullable', 'regex:/^\d{2}:\d{2}(:\d{2})?$/'],
+        ], [
+            'sunday_start.required' => 'Enter the day Sunday start.',
+            'sunday_end.required' => 'Enter the day Sunday end.',
+        ]);
+
+        $start = $this->hours->clock($data['sunday_start'], '08:00');
+        $end = $this->hours->clock($data['sunday_end'], '13:00');
+        $this->assertWindow($start, $end, 'sunday_end', 'Day Sunday');
+        $break = $this->breakPair($request, 'sunday_break_start', 'sunday_break_end', $start, $end, 'sunday_break_end', 'Day Sunday break');
+
+        return [
+            'works_sunday' => true,
+            'sunday_start' => $start,
+            'sunday_end' => $end,
+        ] + $break;
+    }
+
+    /**
+     * Sunday night on/off for a department. Off leaves the stored clock alone.
      *
      * @return array<string, bool|string|null>
      */
@@ -383,6 +407,102 @@ class HoursPayController extends Controller
             'night_works_sunday' => true,
             'night_sunday_start' => $start,
             'night_sunday_end' => $end,
+        ] + $break;
+    }
+
+    /**
+     * Person day Sunday switch. Own times also store the Sunday clock when On.
+     *
+     * @return array<string, bool|string|null>
+     */
+    private function personDaySundayInput(Request $request): array
+    {
+        if (! $request->has('day_works_sunday')) {
+            if ($request->input('mode') === 'own' && $request->filled('sunday_start') && $request->filled('sunday_end')) {
+                return $this->ownDaySundayTimes($request, true);
+            }
+
+            return [];
+        }
+
+        if (! $request->boolean('day_works_sunday')) {
+            return ['day_works_sunday' => false];
+        }
+
+        if ($request->input('mode') !== 'own') {
+            return ['day_works_sunday' => true];
+        }
+
+        return $this->ownDaySundayTimes($request, true);
+    }
+
+    /**
+     * Person night Sunday switch. Own times also store the Sunday night clock when On.
+     *
+     * @return array<string, bool|string|null>
+     */
+    private function personNightSundayInput(Request $request): array
+    {
+        if (! $request->has('works_sunday')) {
+            return [];
+        }
+
+        if (! $request->boolean('works_sunday')) {
+            return ['works_sunday' => false];
+        }
+
+        if ($request->input('mode') !== 'own') {
+            return ['works_sunday' => true];
+        }
+
+        $data = $request->validate([
+            'night_sunday_start' => ['required', 'regex:/^\d{2}:\d{2}(:\d{2})?$/'],
+            'night_sunday_end' => ['required', 'regex:/^\d{2}:\d{2}(:\d{2})?$/'],
+            'night_sunday_break_start' => ['required', 'regex:/^\d{2}:\d{2}(:\d{2})?$/'],
+            'night_sunday_break_end' => ['required', 'regex:/^\d{2}:\d{2}(:\d{2})?$/'],
+        ], [
+            'night_sunday_start.required' => 'Enter the Sunday night start.',
+            'night_sunday_end.required' => 'Enter the Sunday night end.',
+            'night_sunday_break_start.required' => 'Enter the Sunday night break start.',
+            'night_sunday_break_end.required' => 'Enter the Sunday night break end.',
+        ]);
+
+        $start = $this->hours->clock($data['night_sunday_start'], '21:00');
+        $end = $this->hours->clock($data['night_sunday_end'], '02:00');
+        $this->assertWindow($start, $end, 'night_sunday_end', 'Sunday night');
+        $break = $this->breakPair($request, 'night_sunday_break_start', 'night_sunday_break_end', $start, $end, 'night_sunday_break_end', 'Sunday night break');
+
+        return [
+            'works_sunday' => true,
+            'night_sunday_start' => $start,
+            'night_sunday_end' => $end,
+        ] + $break;
+    }
+
+    /**
+     * @return array<string, bool|string|null>
+     */
+    private function ownDaySundayTimes(Request $request, bool $on): array
+    {
+        $data = $request->validate([
+            'sunday_start' => ['required', 'regex:/^\d{2}:\d{2}(:\d{2})?$/'],
+            'sunday_end' => ['required', 'regex:/^\d{2}:\d{2}(:\d{2})?$/'],
+            'sunday_break_start' => ['nullable', 'regex:/^\d{2}:\d{2}(:\d{2})?$/'],
+            'sunday_break_end' => ['nullable', 'regex:/^\d{2}:\d{2}(:\d{2})?$/'],
+        ], [
+            'sunday_start.required' => 'Enter the day Sunday start.',
+            'sunday_end.required' => 'Enter the day Sunday end.',
+        ]);
+
+        $start = $this->hours->clock($data['sunday_start'], '08:00');
+        $end = $this->hours->clock($data['sunday_end'], '13:00');
+        $this->assertWindow($start, $end, 'sunday_end', 'Day Sunday');
+        $break = $this->breakPair($request, 'sunday_break_start', 'sunday_break_end', $start, $end, 'sunday_break_end', 'Day Sunday break');
+
+        return [
+            'day_works_sunday' => $on,
+            'sunday_start' => $start,
+            'sunday_end' => $end,
         ] + $break;
     }
 
@@ -423,11 +543,14 @@ class HoursPayController extends Controller
 
         $week = $this->hours->clock($row->weekday_start, '09:00').'–'.$this->hours->clock($row->weekday_end, '18:00');
         $night = $this->hours->clock($row->night_weekday_start, '21:00').'–'.$this->hours->clock($row->night_weekday_end, '06:00');
-        $sunday = $row->night_works_sunday
+        $daySunday = ($row->works_sunday ?? true)
+            ? ' · Sunday '.$this->hours->clock($row->sunday_start, '08:00').'–'.$this->hours->clock($row->sunday_end, '13:00')
+            : ' · Sunday off';
+        $nightSunday = $row->night_works_sunday
             ? ' · Sunday night '.$this->hours->clock($row->night_sunday_start, '21:00').'–'.$this->hours->clock($row->night_sunday_end, '02:00')
             : '';
 
-        return 'Day '.$week.' · Night '.$night.$sunday;
+        return 'Day '.$week.$daySunday.' · Night '.$night.$nightSunday;
     }
 
     /**
@@ -450,6 +573,7 @@ class HoursPayController extends Controller
             'weekday_end' => $this->hours->clock($source?->weekday_end ?? null, '18:00'),
             'sunday_start' => $this->hours->clock($source?->sunday_start ?? null, '08:00'),
             'sunday_end' => $this->hours->clock($source?->sunday_end ?? null, '13:00'),
+            'works_sunday' => (bool) ($source?->works_sunday ?? true),
             'night_weekday_start' => $this->hours->clock($source?->night_weekday_start ?? null, '21:00'),
             'night_weekday_end' => $this->hours->clock($source?->night_weekday_end ?? null, '06:00'),
             'night_sunday_start' => $this->hours->clock($source?->night_sunday_start ?? null, '21:00'),

@@ -161,6 +161,7 @@ class PlantTreeSeeder extends Seeder
             'weekday_end' => '18:00:00',
             'sunday_start' => '08:00:00',
             'sunday_end' => '13:00:00',
+            'works_sunday' => true,
             'weekday_break_start' => '13:00:00',
             'weekday_break_end' => '14:00:00',
             'night_weekday_start' => '21:00:00',

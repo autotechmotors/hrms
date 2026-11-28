@@ -35,38 +35,71 @@
         });
     }
 
-    function paintNightSunday(scope) {
-        const box = scope.querySelector('[data-night-sunday]');
-        if (!box) return;
+    function paintSundaySwitch(scope, kind) {
+        const boxes = scope.querySelectorAll('[data-' + kind + '-sunday]');
+        if (!boxes.length) return;
+        const box = Array.from(boxes).find((el) => !el.disabled) || boxes[0];
         const on = box.checked;
-        scope.querySelectorAll('[data-night-sunday-times]').forEach((el) => { el.hidden = !on; });
-        scope.querySelectorAll('[data-night-sunday-off]').forEach((el) => { el.hidden = on; });
-        scope.querySelectorAll('[data-night-sunday-times] input').forEach((input) => {
+        scope.querySelectorAll('[data-' + kind + '-sunday-times]').forEach((el) => { el.hidden = !on; });
+        scope.querySelectorAll('[data-' + kind + '-sunday-off]').forEach((el) => { el.hidden = on; });
+        scope.querySelectorAll('[data-' + kind + '-sunday-times] input').forEach((input) => {
+            if (input.closest('[hidden]')) return;
             input.disabled = !on;
-            input.required = on;
+            if (input.name.indexOf('break') === -1) input.required = on;
         });
-        const label = scope.querySelector('[data-night-sunday-label]');
-        if (label) label.textContent = on ? 'On' : 'Off';
+        scope.querySelectorAll('[data-' + kind + '-sunday-label]').forEach((label) => {
+            label.textContent = on ? 'On' : 'Off';
+        });
+        boxes.forEach((el) => { el.checked = on; });
+    }
+
+    function setEnabled(nodes, on) {
+        nodes.forEach((field) => {
+            field.disabled = !on;
+            if (!on) field.required = false;
+        });
     }
 
     function paintMode(scope) {
         const own = scope.querySelector('[data-own-hours]');
+        const preview = scope.querySelector('[data-dept-preview]');
         const selected = scope.querySelector('input[name="mode"]:checked');
         if (!own || !selected) return;
         const custom = selected.value === 'own';
         own.hidden = !custom;
-        const preview = scope.querySelector('[data-dept-preview]');
         if (preview) preview.hidden = custom;
+
+        setEnabled(scope.querySelectorAll('[data-dept-sunday-field]'), !custom);
+        setEnabled(scope.querySelectorAll('[data-own-sunday-field]'), custom);
+
         own.querySelectorAll('input').forEach((field) => {
-            if (field.closest('[data-night-sunday-times]') || field.name === 'works_sunday') return;
+            if (field.matches('[data-own-sunday-field]') || field.closest('[data-day-sunday-times]') || field.closest('[data-night-sunday-times]')) return;
             field.disabled = false;
             field.required = custom && field.type === 'time' && field.name.indexOf('break') === -1;
         });
-        paintNightSunday(scope);
+
         if (!custom) {
-            own.querySelectorAll('[data-night-sunday-times] input').forEach((field) => {
+            own.querySelectorAll('input[type="time"]').forEach((field) => {
                 field.required = false;
                 field.disabled = true;
+            });
+        }
+
+        paintSundaySwitch(scope, 'day');
+        paintSundaySwitch(scope, 'night');
+
+        if (custom) {
+            const dayOn = scope.querySelector('[data-own-hours] [data-day-sunday]');
+            const nightOn = scope.querySelector('[data-own-hours] [data-night-sunday]');
+            scope.querySelectorAll('[data-own-hours] [data-day-sunday-times] input').forEach((input) => {
+                const on = !!(dayOn && dayOn.checked);
+                input.disabled = !on;
+                if (input.name.indexOf('break') === -1) input.required = on;
+            });
+            scope.querySelectorAll('[data-own-hours] [data-night-sunday-times] input').forEach((input) => {
+                const on = !!(nightOn && nightOn.checked);
+                input.disabled = !on;
+                input.required = on;
             });
         }
     }
@@ -77,7 +110,14 @@
     }
 
     root.addEventListener('change', function (event) {
-        if (event.target.name === 'mode' || event.target.matches('[data-night-sunday]')) paintMode(root);
+        if (event.target.name === 'mode' || event.target.matches('[data-day-sunday], [data-night-sunday]')) {
+            if (event.target.matches('[data-day-sunday], [data-night-sunday]')) {
+                const kind = event.target.matches('[data-day-sunday]') ? 'day' : 'night';
+                const on = event.target.checked;
+                root.querySelectorAll('[data-' + kind + '-sunday]').forEach((el) => { el.checked = on; });
+            }
+            paintMode(root);
+        }
     });
 
     root.addEventListener('submit', function (event) {
